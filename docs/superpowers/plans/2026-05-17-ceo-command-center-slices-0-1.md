@@ -2161,7 +2161,7 @@ git commit -m "feat: wire live market panels + ticker into dashboard"
 `test/perf/render-isolation.test.tsx`:
 ```tsx
 import { describe, it, expect, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { render, act } from "@testing-library/react";
 import { useQuotes, selectQuote } from "@/store/quotes";
 import type { Quote } from "@/lib/market/types";
 
@@ -2186,7 +2186,9 @@ describe("render isolation", () => {
     render(<><Cell symbol="AAPL" onRender={() => aapl++} />
             <Cell symbol="MSFT" onRender={() => msft++} /></>);
     const baseMsft = msft;
-    useQuotes.getState().ingest([mk("AAPL", 999)]);
+    act(() => {
+      useQuotes.getState().ingest([mk("AAPL", 999)]);
+    });
     expect(aapl).toBeGreaterThan(1);   // AAPL cell re-rendered
     expect(msft).toBe(baseMsft);       // MSFT cell did NOT
   });
