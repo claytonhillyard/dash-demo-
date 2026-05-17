@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/claytonhillyard/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir \"/Users/claytonhillyard/Downloads/dashboard project /root\")",
+      "Bash([ -f \"$SD/server-stopped\" ])",
+      "Bash([ -f \"$SD/server-info\" ])"
+    ]
+  }
+}

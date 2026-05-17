@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 220 26% 6%;
+  --surface: 222 24% 9%;
+  --gold: 41 78% 64%;
+  --teal: 168 64% 52%;
+  --text: 210 20% 90%;
+  --gold-intensity: 0.8;
+}
+[data-amoled="true"] { --bg: 0 0% 0%; --surface: 0 0% 4%; }
+[data-reduce-motion="true"] * { animation: none !important; transition: none !important; }
+html, body { background: hsl(var(--bg)); color: hsl(var(--text)); }
