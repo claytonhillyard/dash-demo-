@@ -1551,7 +1551,12 @@ export async function resolveQuotes(
     byClass.set(s.assetClass, [...(byClass.get(s.assetClass) ?? []), s]);
   }
   for (const [assetClass, syms] of byClass) {
-    const chain = chainOverride ?? CHAINS[assetClass];
+    const base = chainOverride ?? CHAINS[assetClass];
+    // simulatedProvider is always the guaranteed terminal fallback so a
+    // panel is never blank (spec §5.5), even with a custom override chain.
+    const chain = base.includes(simulatedProvider)
+      ? base
+      : [...base, simulatedProvider];
     const pending = new Map(syms.map((s) => [s.symbol, s]));
     for (const provider of chain) {
       if (pending.size === 0) break;
