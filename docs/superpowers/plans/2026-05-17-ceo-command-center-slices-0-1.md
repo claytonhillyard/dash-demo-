@@ -1311,6 +1311,7 @@ describe("finnhubProvider", () => {
     expect(finnhubProvider.supports("commodity")).toBe(false);
   });
   it("maps /quote response", async () => {
+    process.env.FINNHUB_API_KEY = "k";
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       c: 195.84, d: 2.17, dp: 1.12,
     }))));
