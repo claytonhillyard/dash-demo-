@@ -112,6 +112,11 @@ the cache, so upstream call rate is constant regardless of viewer count. Per-pro
 request budgets are tracked; near exhaustion, the router skips to the next provider
 rather than getting throttled.
 
+**Client vs upstream cadence are independent.** The browser revalidates the
+`/api/quotes` endpoint at a settings-controlled interval; that endpoint only reads
+the server cache, so client refresh can be frequent (and is decoupled from) the
+upstream provider poll cadence — viewer activity never consumes provider budget.
+
 ### 5.4 Honest freshness labeling
 
 Every value carries `freshness`. UI shows a dot/label: green = live, amber = delayed,
@@ -130,18 +135,20 @@ honest provenance.
   intensity scale, teal, status colors). A **`Panel` primitive** with built-in
   `loading / empty / error / live / stale / simulated` states and the freshness dot.
   Dense grid layout matching the mockup. Type system wired.
-- **Full shell, honestly unwired:** left nav (all sections), top bar (logo + live
-  header ticker + search + notifications + profile + session clock), right rail
-  (quick access, shortcuts, theme/display), footer status bar. Every non-market panel
-  is a styled placeholder explicitly labeled "not yet wired" — **no fake numbers**.
+- **Full shell, honestly unwired:** left nav (all sections), top bar (logo + header
+  ticker + search + notifications + profile + session clock), right rail (quick
+  access, shortcuts, theme/display), footer status bar. The header ticker is the one
+  top-bar element wired live in slice #1; every other non-market panel and control is
+  a styled placeholder explicitly labeled "not yet wired" — **no fake numbers**.
 - **Settings subsystem:** a typed settings store persisted to `localStorage` (DB
   later), a Settings panel exposing theme/accent/gold-intensity/amoled/reduce-motion/
   UI-scale/data-density/per-panel show-hide/refresh-rate. A `useSetting` hook so
   panels react live. Density and reduce-motion genuinely alter rendering.
 - **Auth scaffold:** a real session gate protecting the dashboard. **Decision
-  (default):** single-user credential + secure HTTP-only session cookie,
-  passkey-ready. Hardening to passkey/MFA ("biometric" in the mockup footer) is a
-  later slice. Swappable to Clerk if multi-user is ever needed.
+  (default):** a single environment-configured credential (no public signup) + secure
+  HTTP-only session cookie, passkey-ready. Hardening to passkey/MFA ("biometric" in
+  the mockup footer) is a later slice. Swappable to Clerk if multi-user is ever
+  needed.
 
 ## 7. Slice #1 — Live Market Data
 
