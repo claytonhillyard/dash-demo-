@@ -13,6 +13,11 @@
 # brainstorming visual companion artifacts
 .superpowers/
 
+# browser verification artifacts
+.playwright-mcp/
+*.jpeg
+*.png
+
 # misc
 .DS_Store
 *.pem
