@@ -16,4 +16,13 @@ describe("simulatedProvider", () => {
     expect(typeof q.changePct).toBe("number");
     expect(q.asOf).toBeGreaterThan(0);
   });
+  it("uses realistic reference prices for known symbols", async () => {
+    const out = await simulatedProvider.fetchQuotes([
+      { symbol: "SPX", assetClass: "index", display: "S&P 500", currency: "USD" },
+      { symbol: "AAPL", assetClass: "equity", display: "Apple Inc.", currency: "USD" },
+    ]);
+    // simulated index/equity values must be plausible, not the old 10..110 seed
+    expect(out.get("SPX")!.price).toBeGreaterThan(1000);
+    expect(out.get("AAPL")!.price).toBeGreaterThan(100);
+  });
 });

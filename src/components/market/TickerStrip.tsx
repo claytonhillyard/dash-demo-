@@ -1,5 +1,6 @@
 "use client";
 import { useQuotes } from "@/store/quotes";
+import { FreshnessDot } from "@/components/FreshnessDot";
 
 const TICKER = ["SPX", "NDX", "DJI", "VIX", "BTC", "ETH"];
 
@@ -15,7 +16,8 @@ export function TickerStrip() {
             <span>{q ? q.price.toFixed(2) : "—"}</span>{" "}
             <span className={(q?.changePct ?? 0) >= 0 ? "text-ok" : "text-bad"}>
               {q ? `${q.changePct.toFixed(2)}%` : ""}
-            </span>
+            </span>{" "}
+            {q && <FreshnessDot freshness={q.freshness} />}
           </span>
         );
       })}
