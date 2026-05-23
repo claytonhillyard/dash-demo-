@@ -1578,7 +1578,7 @@ The admin section lives under the `(admin)` route group at `/company/*` (a route
 
 ```tsx
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { ClientsAdmin } from "@/components/company/ClientsAdmin";
 
 describe("ClientsAdmin", () => {
@@ -1610,7 +1610,8 @@ describe("ClientsAdmin", () => {
       />
     );
     expect(screen.getByText("Acme")).toBeInTheDocument();
-    expect(screen.getByText("active")).toBeInTheDocument();
+    // Scope to the client list: "active" also appears as a <select> option in the form.
+    expect(within(screen.getByRole("list")).getByText("active")).toBeInTheDocument();
     expect(screen.queryByText(/add your first client/i)).not.toBeInTheDocument();
   });
 });
