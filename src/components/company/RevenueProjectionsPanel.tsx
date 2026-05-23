@@ -39,7 +39,7 @@ export function RevenueProjectionsPanel({
           <BarChart data={data}>
             <XAxis dataKey="year" tick={{ fill: "rgb(180 190 200)", fontSize: 11 }} />
             <YAxis hide />
-            <Tooltip formatter={(v: number) => `$${v.toLocaleString()}`} labelStyle={{ color: "#111" }} />
+            <Tooltip formatter={(v) => `$${Number(v).toLocaleString()}`} labelStyle={{ color: "#111" }} />
             <Bar dataKey="dollars" fill="hsl(41 78% 64%)" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
