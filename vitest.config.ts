@@ -6,4 +6,5 @@ export default defineConfig({
   plugins: [react()],
   test: { environment: "jsdom", globals: true, setupFiles: ["./test/setup.ts"] },
   resolve: { alias: { "@": resolve(__dirname, "src") } },
+  optimizeDeps: { exclude: ["@electric-sql/pglite"] },
 });
