@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FormStatus } from "./FormStatus";
 import type { ActionResult } from "@/lib/company/actions";
 
@@ -29,6 +30,7 @@ export function ProjectionsAdmin({
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [pending, setPending] = useState(false);
+  const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,8 +57,12 @@ export function ProjectionsAdmin({
       perYearOverrides: overrides,
     });
     setPending(false);
-    if (res.ok) setOk(true);
-    else setError(res.error);
+    if (res.ok) {
+      setOk(true);
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
   }
 
   return (

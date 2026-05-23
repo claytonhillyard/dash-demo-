@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ProjectionsAdmin } from "@/components/company/ProjectionsAdmin";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 describe("ProjectionsAdmin", () => {
   it("prefills from existing assumptions and saves cents", async () => {
     const save = vi.fn(async () => ({ ok: true as const }));

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FormStatus } from "./FormStatus";
 import type { ActionResult } from "@/lib/company/actions";
 
@@ -26,6 +27,7 @@ export function EmployeesAdmin({
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [pending, setPending] = useState(false);
+  const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +41,17 @@ export function EmployeesAdmin({
       setName("");
       setRole("");
       setHiredOn("");
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
+  }
+
+  async function remove(id: number) {
+    setError(null);
+    const res = await deleteAction(id);
+    if (res.ok) {
+      router.refresh();
     } else {
       setError(res.error);
     }
@@ -87,7 +100,7 @@ export function EmployeesAdmin({
               <span>{e.name}</span>
               <span className="text-text/60">{e.role}</span>
               <span className="text-text/40">{e.hiredOn}</span>
-              <button className="text-bad" onClick={() => deleteAction(e.id)} aria-label={`delete ${e.name}`}>
+              <button className="text-bad" onClick={() => remove(e.id)} aria-label={`delete ${e.name}`}>
                 Delete
               </button>
             </li>

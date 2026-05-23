@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { ClientsAdmin } from "@/components/company/ClientsAdmin";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 describe("ClientsAdmin", () => {
   it("shows an 'Add your first' empty state when there are no clients", () => {
     const create = vi.fn(async () => ({ ok: true as const }));
@@ -34,5 +38,20 @@ describe("ClientsAdmin", () => {
     // Scope to the client list: "active" also appears as a <select> option in the form.
     expect(within(screen.getByRole("list")).getByText("active")).toBeInTheDocument();
     expect(screen.queryByText(/add your first client/i)).not.toBeInTheDocument();
+  });
+
+  it("surfaces a failed delete instead of failing silently", async () => {
+    const create = vi.fn(async () => ({ ok: true as const }));
+    const del = vi.fn(async () => ({ ok: false as const, error: "Unauthorized" }));
+    render(
+      <ClientsAdmin
+        clients={[{ id: 1, name: "Acme", status: "active", valueCents: 500_00, acquiredOn: "2026-01-01" }]}
+        createAction={create}
+        deleteAction={del}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /delete acme/i }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/unauthorized/i));
+    expect(del).toHaveBeenCalledWith(1);
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FormStatus } from "./FormStatus";
 import type { ActionResult } from "@/lib/company/actions";
 import { formatCents } from "@/lib/company/format";
@@ -27,6 +28,7 @@ export function MonthAmountAdmin({
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [pending, setPending] = useState(false);
+  const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,6 +44,7 @@ export function MonthAmountAdmin({
     if (res.ok) {
       setOk(true);
       setAmountDollars("");
+      router.refresh();
     } else {
       setError(res.error);
     }

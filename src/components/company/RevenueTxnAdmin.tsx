@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FormStatus } from "./FormStatus";
 import type { ActionResult } from "@/lib/company/actions";
 import { formatCents } from "@/lib/company/format";
@@ -27,6 +28,7 @@ export function RevenueTxnAdmin({
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [pending, setPending] = useState(false);
+  const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,6 +46,17 @@ export function RevenueTxnAdmin({
       setOccurredOn("");
       setAmountDollars("");
       setMemo("");
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
+  }
+
+  async function remove(id: number) {
+    setError(null);
+    const res = await deleteAction(id);
+    if (res.ok) {
+      router.refresh();
     } else {
       setError(res.error);
     }
@@ -100,7 +113,7 @@ export function RevenueTxnAdmin({
               <span className="text-text/40">{t.memo ?? ""}</span>
               <button
                 className="text-bad"
-                onClick={() => deleteAction(t.id)}
+                onClick={() => remove(t.id)}
                 aria-label={`delete transaction ${t.id}`}
               >
                 Delete
