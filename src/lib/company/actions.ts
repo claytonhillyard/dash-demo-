@@ -52,7 +52,10 @@ async function run<T>(
     revalidatePath("/");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Database error" };
+    // Never leak DB internals (schema/constraint/column detail) to the client.
+    // Log the real error server-side; return a generic message to the UI.
+    console.error("[company action] database error:", e);
+    return { ok: false, error: "Database error" };
   }
 }
 

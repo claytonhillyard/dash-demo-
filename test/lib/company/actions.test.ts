@@ -87,4 +87,13 @@ describe("company server actions", () => {
     ).toEqual({ ok: true });
     await close();
   });
+
+  it("maps a database failure to a generic error (no internal leak) and logs it server-side", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await close(); // closing the pglite db makes subsequent queries throw
+    const res = await saveRevenueMonth({ year: 2026, month: 4, amountCents: 100_00 });
+    expect(res).toEqual({ ok: false, error: "Database error" });
+    expect(errSpy).toHaveBeenCalled(); // raw error logged server-side, not returned
+    errSpy.mockRestore();
+  });
 });
