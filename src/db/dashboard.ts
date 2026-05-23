@@ -7,6 +7,7 @@ import {
   getEmployeeCount,
   getTrailingTwelveMonths,
   getProjection,
+  getCompanyUpdatedAt,
   type MonthPoint,
   type Projection,
 } from "./queries";
@@ -24,6 +25,8 @@ export interface CompanyDashboard {
   kpis: DashboardKpis;
   series: MonthPoint[];
   projection: Projection | null;
+  /** Most-recent write across the KPI/series company tables (not the projection); null when none. */
+  companyUpdatedAt: Date | null;
   hasAnyData: boolean;
 }
 
@@ -32,16 +35,25 @@ export async function readCompanyDashboard(
   year: number,
   month: number
 ): Promise<CompanyDashboard> {
-  const [revenueCents, profitCents, marginPct, counts, employeeCount, series, projection] =
-    await Promise.all([
-      getCurrentMonthRevenueCents(db, year, month),
-      getCurrentMonthProfitCents(db, year, month),
-      getCurrentOperatingMarginPct(db, year, month),
-      getClientCounts(db),
-      getEmployeeCount(db),
-      getTrailingTwelveMonths(db, year, month),
-      getProjection(db),
-    ]);
+  const [
+    revenueCents,
+    profitCents,
+    marginPct,
+    counts,
+    employeeCount,
+    series,
+    projection,
+    companyUpdatedAt,
+  ] = await Promise.all([
+    getCurrentMonthRevenueCents(db, year, month),
+    getCurrentMonthProfitCents(db, year, month),
+    getCurrentOperatingMarginPct(db, year, month),
+    getClientCounts(db),
+    getEmployeeCount(db),
+    getTrailingTwelveMonths(db, year, month),
+    getProjection(db),
+    getCompanyUpdatedAt(db),
+  ]);
 
   const hasAnyData =
     revenueCents > 0 || profitCents > 0 || counts.total > 0 || employeeCount > 0 || projection !== null;
@@ -57,6 +69,7 @@ export async function readCompanyDashboard(
     },
     series,
     projection,
+    companyUpdatedAt,
     hasAnyData,
   };
 }

@@ -144,6 +144,38 @@ export async function getTrailingTwelveMonths(
   );
 }
 
+/**
+ * Most-recent `updatedAt` across the company-data tables that feed the KPIs and
+ * growth series (revenue_months, profit_months, clients, employees). Null when
+ * none of those tables have any rows. Deliberately excludes the projection so
+ * KPI/series provenance reflects only its own underlying data.
+ */
+export async function getCompanyUpdatedAt(db: Db): Promise<Date | null> {
+  const rows = await Promise.all([
+    db
+      .select({ updatedAt: revenueMonths.updatedAt })
+      .from(revenueMonths)
+      .orderBy(desc(revenueMonths.updatedAt))
+      .limit(1),
+    db
+      .select({ updatedAt: profitMonths.updatedAt })
+      .from(profitMonths)
+      .orderBy(desc(profitMonths.updatedAt))
+      .limit(1),
+    db.select({ updatedAt: clients.updatedAt }).from(clients).orderBy(desc(clients.updatedAt)).limit(1),
+    db
+      .select({ updatedAt: employees.updatedAt })
+      .from(employees)
+      .orderBy(desc(employees.updatedAt))
+      .limit(1),
+  ]);
+  const latest = rows
+    .map((r) => r[0]?.updatedAt ?? null)
+    .filter((d): d is Date => d !== null)
+    .reduce<Date | null>((max, d) => (max === null || d > max ? d : max), null);
+  return latest;
+}
+
 export interface Projection {
   points: ProjectionPoint[];
   updatedAt: Date;

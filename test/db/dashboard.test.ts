@@ -34,4 +34,21 @@ describe("readCompanyDashboard", () => {
     expect(out.hasAnyData).toBe(true);
     await close();
   });
+
+  it("derives companyUpdatedAt from company-table writes, independent of the projection", async () => {
+    const { db, close } = await createTestDb();
+    // Company KPI data exists, but no projection has ever been saved.
+    await db.insert(employees).values({ name: "E", role: "eng", hiredOn: "2025-01-01" });
+    const out = await readCompanyDashboard(db, 2026, 4);
+    expect(out.projection).toBeNull();
+    expect(out.companyUpdatedAt).toBeInstanceOf(Date);
+    await close();
+  });
+
+  it("returns null companyUpdatedAt when no company-table data exists", async () => {
+    const { db, close } = await createTestDb();
+    const out = await readCompanyDashboard(db, 2026, 4);
+    expect(out.companyUpdatedAt).toBeNull();
+    await close();
+  });
 });

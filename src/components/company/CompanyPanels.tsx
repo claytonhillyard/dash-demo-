@@ -7,17 +7,19 @@ import type { CompanyDashboard } from "@/db/dashboard";
 
 export function CompanyPanels({
   data,
-  updatedLabel,
+  companyUpdatedLabel,
+  projectionUpdatedLabel,
 }: {
   data: CompanyDashboard;
-  updatedLabel: string | null;
+  companyUpdatedLabel: string | null;
+  projectionUpdatedLabel: string | null;
 }) {
   return (
     <>
-      <CompanyOverviewPanel kpis={data.kpis} hasAnyData={data.hasAnyData} updatedLabel={updatedLabel} />
-      <RevenueProjectionsPanel projection={data.projection} updatedLabel={updatedLabel} />
+      <CompanyOverviewPanel kpis={data.kpis} hasAnyData={data.hasAnyData} updatedLabel={companyUpdatedLabel} />
+      <RevenueProjectionsPanel projection={data.projection} updatedLabel={projectionUpdatedLabel} />
       <div className="col-span-2">
-        <GrowthAnalyticsPanel series={data.series} updatedLabel={updatedLabel} />
+        <GrowthAnalyticsPanel series={data.series} updatedLabel={companyUpdatedLabel} />
       </div>
     </>
   );

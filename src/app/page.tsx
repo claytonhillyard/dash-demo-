@@ -15,7 +15,10 @@ export default async function Home() {
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth() + 1;
   const data = await readCompanyDashboard(getDb(), year, month);
-  const updatedLabel = updatedAgo(data.projection?.updatedAt ?? null);
+  // Per-panel provenance: KPI/series panels reflect their own company-table
+  // writes; the projections panel reflects the projection's own timestamp.
+  const companyUpdatedLabel = updatedAgo(data.companyUpdatedAt);
+  const projectionUpdatedLabel = updatedAgo(data.projection?.updatedAt ?? null);
 
   return (
     <QuotesProvider>
@@ -24,7 +27,11 @@ export default async function Home() {
           <div className="col-span-2">
             <MarketAnalysisPanel />
           </div>
-          <CompanyPanels data={data} updatedLabel={updatedLabel} />
+          <CompanyPanels
+            data={data}
+            companyUpdatedLabel={companyUpdatedLabel}
+            projectionUpdatedLabel={projectionUpdatedLabel}
+          />
           <Panel title="Work Orders" state="unwired" />
           <Panel title="Client Satisfaction" state="unwired" />
         </div>

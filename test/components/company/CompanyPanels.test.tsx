@@ -13,12 +13,13 @@ const empty: CompanyDashboard = {
     clientsAdded: 0,
   })),
   projection: null,
+  companyUpdatedAt: null,
   hasAnyData: false,
 };
 
 describe("CompanyPanels", () => {
   it("renders all three company panels in their empty states", () => {
-    render(<CompanyPanels data={empty} updatedLabel={null} />);
+    render(<CompanyPanels data={empty} companyUpdatedLabel={null} projectionUpdatedLabel={null} />);
     expect(screen.getByText("Company Overview")).toBeInTheDocument();
     expect(screen.getByText("Revenue Projections")).toBeInTheDocument();
     expect(screen.getByText("Company Growth Analytics")).toBeInTheDocument();
