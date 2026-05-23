@@ -8,9 +8,13 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./test/setup.ts"],
-    // pglite (real Postgres in WASM) has a heavy ~5s cold start; with several
-    // DB test files running in parallel that exceeds vitest's 5s default and
-    // flakes. Raise the ceiling to match the tool's real startup cost.
+    // pglite (real Postgres in WASM) has a heavy CPU-bound cold start. Booting
+    // one instance per test across many parallel workers starves each other of
+    // CPU, so a ~5s start balloons past any timeout. Cap worker concurrency so
+    // only a couple of instances boot at once; keep a generous timeout as a
+    // backstop. Reliability over raw speed.
+    pool: "forks",
+    poolOptions: { forks: { minForks: 1, maxForks: 2 } },
     testTimeout: 20000,
     hookTimeout: 20000,
   },
