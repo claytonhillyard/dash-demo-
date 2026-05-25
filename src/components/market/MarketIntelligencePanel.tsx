@@ -4,11 +4,11 @@ import { Panel } from "@/components/Panel";
 import { useQuotes } from "@/store/quotes";
 import { FreshnessDot } from "@/components/FreshnessDot";
 
-const TABS = ["Spot Gold", "Metals", "Crypto", "Diamonds", "Gas", "News"] as const;
+const TABS = ["Gold", "Metals", "Crypto", "Diamonds", "Gas", "News"] as const;
 type Tab = (typeof TABS)[number];
 
 const ROWS: Record<string, string[]> = {
-  "Spot Gold": ["XAU"],
+  "Gold": ["XAU"],
   Metals: ["XAU", "XAG", "XPT"],
   Crypto: ["BTC", "ETH"],
 };
@@ -38,7 +38,7 @@ function LiveRows({ symbols }: { symbols: string[] }) {
 }
 
 export function MarketIntelligencePanel() {
-  const [tab, setTab] = useState<Tab>("Spot Gold");
+  const [tab, setTab] = useState<Tab>("Gold");
   const liveSymbols = ROWS[tab];
   return (
     <Panel title="Market Intelligence" state="ready">

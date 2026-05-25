@@ -24,7 +24,9 @@ describe("MarketIntelligencePanel", () => {
 
   it("shows live metals rows with freshness dots by default", () => {
     render(<MarketIntelligencePanel />);
-    expect(screen.getByText("Gold")).toBeInTheDocument();
+    // "Gold" is both the default tab label and the row's display name; target the
+    // row cell specifically so the assertion isn't ambiguous with the tab button.
+    expect(screen.getByRole("cell", { name: "Gold" })).toBeInTheDocument();
     expect(screen.getByText(/2386\.45/)).toBeInTheDocument();
     expect(screen.getAllByTestId("freshness-dot").length).toBeGreaterThanOrEqual(1);
   });
