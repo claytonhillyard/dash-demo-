@@ -5,10 +5,13 @@
 :root {
   --bg: 220 26% 6%;
   --surface: 222 24% 9%;
-  --gold: 41 78% 64%;
+  --gold: 43 74% 60%;
   --teal: 168 64% 52%;
   --text: 210 20% 90%;
   --gold-intensity: 0.8;
+  --accent-purple: 268 60% 62%;
+  --accent-blue: 205 80% 58%;
+  --accent-pink: 330 70% 64%;
 }
 [data-amoled="true"] { --bg: 0 0% 0%; --surface: 0 0% 4%; }
 [data-reduce-motion="true"] * { animation: none !important; transition: none !important; }
