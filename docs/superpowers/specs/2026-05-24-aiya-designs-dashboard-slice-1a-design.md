@@ -117,7 +117,7 @@ widget. Only **Dashboard** is a built page in 1a; other nav entries link to hone
 | Top KPI ticker — Natural Diamond Index, Lab Diamond Index | **Placeholder** (owner price-list → 1b) |
 | Market Intelligence — Gold / Metals / Crypto tabs | **LIVE**; Diamonds / Gas / News tabs → placeholder |
 | Price Trend Analytics — Gold + Bitcoin series, range selector | **LIVE**; Diamond Index series → placeholder |
-| Unit Converter — Metals / Currency | **LIVE** (client-computed from live quotes); Diamonds / Gas / Weight tabs → placeholder or static where no live source |
+| Unit Converter — Metals / Currency | **LIVE** (client-computed from live rates). **Currency tab offers a broad list (~30+ currencies)** — see §7.1. Weight tab = static unit math. Diamonds / Gas tabs → placeholder where no live source |
 | Clock + month calendar widget | **Real** (client local time; static current month) |
 | Footer status ticker — Gold / Diamond Index / Bitcoin | **LIVE** for Gold + Bitcoin; Diamond Index → placeholder cell |
 | Inventory Overview (category tiles + counts) | **Placeholder** (1b) |
@@ -142,6 +142,24 @@ widget. Only **Dashboard** is a built page in 1a; other nav entries link to hone
 - Where a live value is briefly unavailable, the existing graceful-degradation chain
   (primary → fallback → stale cache → labeled simulated) applies; the panel shows the
   best available value with an honest dot.
+
+### 7.1 Broad currency coverage (Unit Converter)
+
+The Converter's **Currency tab supports a broad set (~30+ currencies)**, distinct from
+the small curated KPI-ticker FX set. Source and behavior:
+
+- Driven by **Frankfurter** (keyless, ECB daily reference rates), which exposes the
+  full supported-currency list and conversion between any pair (USD, EUR, GBP, AED,
+  INR, JPY, CHF, CNY, AUD, CAD, SGD, HKD, …). India (INR) and Italy (EUR) sourcing
+  make those especially relevant for AIYA.
+- The converter fetches the currency list + rates **on demand** through a server route
+  (keys stay server-side; Frankfurter is keyless but the call still proxies through our
+  layer for caching/consistency). This is independent of the single market poller, so
+  the broad list never inflates the ticker's upstream budget.
+- Honest freshness applies: ECB rates are daily, so converter currency results are
+  labeled accordingly (delayed/daily), never implied to be real-time tick data.
+- Metals conversion in the converter continues to use the **live** XAU/XAG/XPT quotes
+  from the store.
 
 ## 8. Honest Placeholder Treatment
 
