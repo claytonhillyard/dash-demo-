@@ -8,7 +8,8 @@ const REFERENCE: Record<string, number> = {
   BTC: 67842.11, ETH: 3412.89, SOL: 164.52,
   EURUSD: 1.0856, GBPUSD: 1.2713,
   SPX: 5303.27, NDX: 18512.53, DJI: 39869.38, VIX: 12.48,
-  XAU: 2389.25, XAG: 28.56,
+  XAU: 2389.25, XAG: 28.56, XPT: 1021.30,
+  USDAED: 3.6725,
 };
 
 function seeded(symbol: string): number {

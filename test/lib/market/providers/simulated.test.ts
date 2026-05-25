@@ -25,4 +25,14 @@ describe("simulatedProvider", () => {
     expect(out.get("SPX")!.price).toBeGreaterThan(1000);
     expect(out.get("AAPL")!.price).toBeGreaterThan(100);
   });
+  it("uses plausible reference levels for platinum and the AED peg", async () => {
+    const out = await simulatedProvider.fetchQuotes([
+      { symbol: "XPT", assetClass: "commodity", display: "Platinum", currency: "USD" },
+      { symbol: "USDAED", assetClass: "fx", display: "USD/AED", currency: "AED" },
+    ]);
+    // Platinum near ~$1000/oz, not the 10..110 seeded fallback.
+    expect(out.get("XPT")!.price).toBeGreaterThan(800);
+    // AED is a hard USD peg around 3.6725.
+    expect(out.get("USDAED")!.price).toBeCloseTo(3.6725, 1);
+  });
 });
