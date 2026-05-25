@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Panel } from "@/components/Panel";
+import { FreshnessDot } from "@/components/FreshnessDot";
 import { useQuotes, selectQuote } from "@/store/quotes";
+import type { Freshness } from "@/lib/market/types";
 
 const TABS = ["Metals", "Currency", "Weight", "Diamonds", "Gas"] as const;
 type Tab = (typeof TABS)[number];
@@ -46,6 +48,7 @@ function CurrencyTab() {
   const [to, setTo] = useState("EUR");
   const [amount, setAmount] = useState(1000);
   const [result, setResult] = useState<number | null>(null);
+  const [freshness, setFreshness] = useState<Freshness | null>(null);
 
   useEffect(() => {
     void fetch("/api/convert")
@@ -56,7 +59,10 @@ function CurrencyTab() {
   useEffect(() => {
     void fetch(`/api/convert?from=${from}&to=${to}&amount=${amount}`)
       .then((r) => r.json())
-      .then((d) => setResult(d.result ?? null));
+      .then((d) => {
+        setResult(d.result ?? null);
+        setFreshness(d.freshness ?? null);
+      });
   }, [from, to, amount]);
 
   const codes = Object.keys(currencies);
@@ -75,10 +81,15 @@ function CurrencyTab() {
           {codes.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
-      <div className="font-mono text-lg text-gold">
-        {result != null ? result.toFixed(2) : "—"} {to}
+      <div className="flex items-center gap-2 font-mono text-lg text-gold">
+        <span>{result != null ? result.toFixed(2) : "—"} {to}</span>
+        {freshness && <FreshnessDot freshness={freshness} />}
       </div>
-      <div className="text-[10px] italic text-text/40">ECB daily reference rates</div>
+      <div className="text-[10px] italic text-text/40">
+        {freshness === "simulated"
+          ? "estimate — live rate unavailable"
+          : "ECB daily reference rates"}
+      </div>
     </div>
   );
 }

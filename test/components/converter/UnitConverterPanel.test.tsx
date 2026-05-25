@@ -37,4 +37,24 @@ describe("UnitConverterPanel", () => {
     // 1 troy oz of gold at $2400 => $2400 market value
     expect(screen.getByTestId("metal-value").textContent).toContain("2400");
   });
+
+  it("labels a simulated conversion honestly (provenance dot, no ECB claim)", async () => {
+    // The conversion call (URL has ?from=) degraded to a simulated estimate; the
+    // list call (no params) returns the currency map. The UI must NOT present a
+    // fabricated estimate as a real ECB rate.
+    vi.stubGlobal("fetch", async (url: string) => ({
+      ok: true,
+      json: async () =>
+        url.includes("from=")
+          ? { result: 1000, freshness: "simulated" }
+          : { currencies: { USD: "United States Dollar", EUR: "Euro" } },
+    } as Response));
+    render(<UnitConverterPanel />);
+    await waitFor(() => {
+      const dots = screen.getAllByTestId("freshness-dot");
+      expect(dots.some((d) => d.getAttribute("data-freshness") === "simulated")).toBe(true);
+    });
+    expect(screen.getByText(/live rate unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ECB daily reference rates/i)).not.toBeInTheDocument();
+  });
 });
