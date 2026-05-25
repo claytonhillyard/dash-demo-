@@ -2,7 +2,7 @@ import type { QuoteProvider, RawQuote, SymbolDef } from "../types";
 
 const TD_SYMBOL: Record<string, string> = {
   SPX: "SPX", NDX: "NDX", DJI: "DJI", VIX: "VIX",
-  XAU: "XAU/USD", XAG: "XAG/USD",
+  XAU: "XAU/USD", XAG: "XAG/USD", XPT: "XPT/USD",
 };
 
 export const twelvedataProvider: QuoteProvider = {
