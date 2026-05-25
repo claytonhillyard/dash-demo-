@@ -44,4 +44,15 @@ describe("currency convert helper", () => {
     const r = await convertCurrency("USD", "AED", 100);
     expect(r.freshness).toBe("simulated");
   });
+
+  it("reports rate 0 (not NaN) for a zero amount", async () => {
+    vi.stubGlobal("fetch", async () => ({
+      ok: true,
+      json: async () => ({ rates: { INR: 0 } }),
+    } as Response));
+    const r = await convertCurrency("USD", "INR", 0);
+    expect(r.result).toBe(0);
+    expect(Number.isNaN(r.rate)).toBe(false);
+    expect(r.rate).toBe(0);
+  });
 });

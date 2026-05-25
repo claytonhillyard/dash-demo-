@@ -38,7 +38,10 @@ export async function convertCurrency(
     const data = (await res.json()) as { rates?: Record<string, number> };
     const result = data.rates?.[to];
     if (result == null) throw new Error("rate missing");
-    return { from, to, amount, rate: result / amount, result, asOf: now, freshness: "delayed" };
+    // Guard divide-by-zero: a zero amount has a defined result (0) but no
+    // meaningful unit rate, so report rate 0 rather than a silent NaN.
+    const rate = amount === 0 ? 0 : result / amount;
+    return { from, to, amount, rate, result, asOf: now, freshness: "delayed" };
   } catch {
     // Honest degradation: pegged/last-resort estimate, clearly labeled simulated.
     return { from, to, amount, rate: 1, result: amount, asOf: now, freshness: "simulated" };
