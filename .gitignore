@@ -11,6 +11,9 @@
 .env
 .env*.local
 
+# git worktrees (isolated workspaces)
+.worktrees/
+
 # brainstorming visual companion artifacts
 .superpowers/
 
