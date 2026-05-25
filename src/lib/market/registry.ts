@@ -19,6 +19,8 @@ export const ALL_SYMBOLS: SymbolDef[] = [
   { symbol: "VIX", assetClass: "index", display: "VIX", currency: "USD" },
   { symbol: "XAU", assetClass: "commodity", display: "Gold", currency: "USD" },
   { symbol: "XAG", assetClass: "commodity", display: "Silver", currency: "USD" },
+  { symbol: "XPT", assetClass: "commodity", display: "Platinum", currency: "USD" },
+  { symbol: "USDAED", assetClass: "fx", display: "USD/AED", currency: "AED" },
 ];
 
 const BY_SYMBOL = new Map(ALL_SYMBOLS.map((s) => [s.symbol, s]));

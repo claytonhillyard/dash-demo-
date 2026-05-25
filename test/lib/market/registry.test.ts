@@ -15,4 +15,12 @@ describe("registry", () => {
   it("exports a non-empty symbol list", () => {
     expect(ALL_SYMBOLS.length).toBeGreaterThan(10);
   });
+  it("registers platinum as a commodity", () => {
+    expect(lookup("XPT")?.assetClass).toBe("commodity");
+    expect(lookup("XPT")?.display).toBe("Platinum");
+  });
+  it("registers USD/AED as fx", () => {
+    expect(lookup("USDAED")?.assetClass).toBe("fx");
+    expect(lookup("USDAED")?.currency).toBe("AED");
+  });
 });
