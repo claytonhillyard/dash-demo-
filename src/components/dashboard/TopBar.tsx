@@ -2,18 +2,47 @@ import type { ReactNode } from "react";
 
 export function TopBar({ ticker }: { ticker?: ReactNode }) {
   return (
-    <header className="flex items-center gap-4 bg-surface px-4 py-2">
-      <div className="flex flex-col leading-tight">
-        <span className="font-display text-gold text-lg tracking-[0.3em]">AIYA DESIGNS</span>
-        <span className="text-text/40 text-[10px] tracking-wider">
-          Crafting Brilliance. Building Trust.
-        </span>
+    <header className="flex items-center gap-4 border-b border-border bg-surface/80 px-4 py-2 backdrop-blur">
+      <div className="leading-tight">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-text">
+          Good Morning, AIYA
+          <span className="text-gold" aria-hidden>
+            ♛
+          </span>
+        </div>
+        <div className="text-xs text-text/50">
+          Here&apos;s what&apos;s happening with your business today.
+        </div>
       </div>
-      <div className="ml-2">
-        <div className="text-sm text-text">Good Morning, AIYA</div>
-        <div className="text-xs text-text/50">Here&apos;s what&apos;s happening with your business today.</div>
+
+      {/* Search */}
+      <label className="ml-4 hidden min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-surface-2/60 px-3 py-1.5 text-text/40 md:flex">
+        <span aria-hidden>⌕</span>
+        <input
+          type="text"
+          placeholder="Search anything…"
+          aria-label="Search"
+          className="min-w-0 flex-1 bg-transparent text-xs text-text placeholder:text-text/30 focus:outline-none"
+        />
+      </label>
+
+      <div className="ml-auto flex items-center gap-3">
+        <div className="hidden items-center gap-3 text-text/40 lg:flex" aria-hidden>
+          <span className="relative">
+            🔔
+            <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-gold" />
+          </span>
+          <span>✉</span>
+        </div>
+        <div className="hidden h-6 w-px bg-border lg:block" />
+        {ticker}
+        <div className="flex items-center gap-2 rounded-full border border-border bg-surface-2/60 py-1 pl-1 pr-3">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gold/15 text-[10px] font-semibold text-gold">
+            AD
+          </span>
+          <span className="hidden text-xs text-text/70 sm:block">AIYA Designs</span>
+        </div>
       </div>
-      <div className="ml-auto flex items-center gap-4">{ticker}</div>
     </header>
   );
 }

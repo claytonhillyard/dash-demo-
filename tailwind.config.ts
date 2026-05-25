@@ -7,7 +7,11 @@ const config: Config = {
       colors: {
         bg: "hsl(var(--bg))",
         surface: "hsl(var(--surface))",
+        "surface-2": "hsl(var(--surface-2))",
+        border: "hsl(var(--border))",
         gold: "hsl(var(--gold))",
+        "gold-deep": "hsl(var(--gold-deep))",
+        "gold-soft": "hsl(var(--gold-soft))",
         teal: "hsl(var(--teal))",
         ok: "hsl(142 60% 45%)",
         warn: "hsl(41 90% 55%)",
@@ -19,7 +23,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-inter)", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
-        display: ["var(--font-display)", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
       },
     },
   },

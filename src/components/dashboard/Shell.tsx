@@ -15,14 +15,14 @@ export function Shell({ children, ticker }: { children: ReactNode; ticker?: Reac
   }, [amoled, reduceMotion]);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <TopBar ticker={ticker} />
-      <div className="flex flex-1">
-        <Nav />
+    <div className="flex h-screen overflow-hidden">
+      <Nav />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar ticker={ticker} />
         <main className="flex-1 overflow-auto p-4">{children}</main>
-        <RightRail><SettingsPanel /></RightRail>
+        <FooterBar />
       </div>
-      <FooterBar />
+      <RightRail><SettingsPanel /></RightRail>
     </div>
   );
 }

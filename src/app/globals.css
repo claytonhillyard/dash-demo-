@@ -3,9 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --bg: 220 26% 6%;
-  --surface: 222 24% 9%;
+  --bg: 222 30% 5%;
+  --surface: 222 24% 8%;
+  --surface-2: 220 22% 11%;
+  --border: 220 18% 16%;
   --gold: 43 74% 60%;
+  --gold-deep: 38 65% 46%;
+  --gold-soft: 43 60% 70%;
   --teal: 168 64% 52%;
   --text: 210 20% 90%;
   --gold-intensity: 0.8;
@@ -13,6 +17,68 @@
   --accent-blue: 205 80% 58%;
   --accent-pink: 330 70% 64%;
 }
-[data-amoled="true"] { --bg: 0 0% 0%; --surface: 0 0% 4%; }
-[data-reduce-motion="true"] * { animation: none !important; transition: none !important; }
-html, body { background: hsl(var(--bg)); color: hsl(var(--text)); }
+[data-amoled="true"] {
+  --bg: 0 0% 0%;
+  --surface: 0 0% 4%;
+  --surface-2: 0 0% 6%;
+  --border: 0 0% 14%;
+}
+[data-reduce-motion="true"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+html, body {
+  background: hsl(var(--bg));
+  color: hsl(var(--text));
+}
+
+/* Atmospheric depth: a faint gold aurora top-left + cool depth bottom-right,
+   fixed so the dense grid floats over a lit room rather than flat black. */
+body {
+  min-height: 100vh;
+  background-image:
+    radial-gradient(120% 80% at 0% -10%, hsl(var(--gold) / 0.06), transparent 55%),
+    radial-gradient(90% 70% at 100% 110%, hsl(var(--accent-blue) / 0.05), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Gold-foil text for the wordmark / hero numerals. */
+.text-foil {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--gold-soft)) 0%,
+    hsl(var(--gold)) 45%,
+    hsl(var(--gold-deep)) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Hairline-bordered, faintly elevated panel surface with a top sheen. */
+.surface-card {
+  background:
+    linear-gradient(180deg, hsl(var(--surface-2) / 0.7), hsl(var(--surface))) ,
+    hsl(var(--surface));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 0 0 hsl(0 0% 100% / 0.03) inset, 0 8px 24px -16px hsl(0 0% 0% / 0.8);
+}
+.surface-card:hover {
+  border-color: hsl(var(--gold) / 0.25);
+}
+
+/* A thin gold rule used under section headers. */
+.rule-gold {
+  background: linear-gradient(90deg, hsl(var(--gold) / 0.5), transparent);
+}
+
+/* Refined thin scrollbars for the dense rails. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
+*::-webkit-scrollbar-track { background: transparent; }
