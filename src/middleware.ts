@@ -12,4 +12,6 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/", "/api/quotes", "/company/:path*"] };
+export const config = {
+  matcher: ["/", "/api/quotes", "/api/convert", "/api/history", "/company/:path*"],
+};

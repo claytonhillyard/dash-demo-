@@ -23,6 +23,11 @@ describe("middleware matcher", () => {
     expect(isMatched("/api/quotes")).toBe(true);
   });
 
+  it("guards the convert and history data APIs (slice-1a)", () => {
+    expect(isMatched("/api/convert")).toBe(true);
+    expect(isMatched("/api/history")).toBe(true);
+  });
+
   it("guards every /company admin route (slice-2)", () => {
     for (const route of [
       "/company/clients",
