@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 const orbitron = Orbitron({ subsets: ["latin"], variable: "--font-display" });
 
-export const metadata = { title: "CEO Command Center" };
+export const metadata = { title: "AIYA Designs — Command Center" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
