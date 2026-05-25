@@ -2,7 +2,7 @@
 import { useQuotes } from "@/store/quotes";
 import { FreshnessDot } from "@/components/FreshnessDot";
 
-const TICKER = ["SPX", "NDX", "DJI", "VIX", "BTC", "ETH"];
+const TICKER = ["XAU", "XAG", "XPT", "BTC", "USDAED", "EURUSD"];
 
 export function TickerStrip() {
   const bySymbol = useQuotes((s) => s.bySymbol);

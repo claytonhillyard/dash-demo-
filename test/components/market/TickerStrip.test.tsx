@@ -16,7 +16,13 @@ const sim: Quote = {
 };
 
 describe("TickerStrip", () => {
-  beforeEach(() => useQuotes.setState({ bySymbol: { BTC: live, SPX: sim } }));
+  beforeEach(() =>
+    useQuotes.setState({
+      bySymbol: {
+        BTC: live,
+        XAU: { ...sim, symbol: "XAU", assetClass: "commodity", display: "Gold" },
+      },
+    }));
 
   it("shows a freshness dot for every present quote (spec §5.4 honesty)", () => {
     render(<TickerStrip />);
