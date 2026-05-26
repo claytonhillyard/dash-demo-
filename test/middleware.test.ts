@@ -28,6 +28,10 @@ describe("middleware matcher", () => {
     expect(isMatched("/api/history")).toBe(true);
   });
 
+  it("guards the inventory admin route (slice-1b-1)", () => {
+    expect(isMatched("/inventory")).toBe(true);
+  });
+
   it("guards every /company admin route (slice-2)", () => {
     for (const route of [
       "/company/clients",
