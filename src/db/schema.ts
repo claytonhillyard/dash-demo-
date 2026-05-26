@@ -75,3 +75,30 @@ export const projectionAssumptions = pgTable("projection_assumptions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const inventoryItems = pgTable("inventory_items", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().default(1), // 1 = AIYA; orgs table arrives with multi-tenant slice
+  category: text("category", {
+    enum: [
+      "Rings", "Necklaces", "Earrings", "Bracelets", "Pendants",
+      "Chains", "Watch Bands", "Diamonds", "Gems",
+    ],
+  }).notNull(),
+  name: text("name").notNull(),
+  sku: text("sku"),
+  quantity: integer("quantity").notNull().default(1),
+  status: text("status", { enum: ["in_stock", "reserved", "sold"] })
+    .notNull()
+    .default("in_stock"),
+  unitCostCents: integer("unit_cost_cents").notNull().default(0),
+  retailPriceCents: integer("retail_price_cents").notNull().default(0),
+  metal: text("metal", { enum: ["gold", "silver", "platinum", "other"] }),
+  weightMg: integer("weight_mg"),
+  caratX100: integer("carat_x100"),
+  cut: text("cut"),
+  color: text("color"),
+  clarity: text("clarity"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
