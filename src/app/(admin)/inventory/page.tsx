@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { ensureDbReady } from "@/db/client";
 import { inventoryItems } from "@/db/schema";
 import { InventoryAdmin, type InventoryRow } from "@/components/inventory/InventoryAdmin";
 import { createInventoryItem, deleteInventoryItem } from "@/lib/inventory/actions";
@@ -8,7 +8,8 @@ import { createInventoryItem, deleteInventoryItem } from "@/lib/inventory/action
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const rows = await getDb()
+  const db = await ensureDbReady();
+  const rows = await db
     .select({
       id: inventoryItems.id,
       category: inventoryItems.category,

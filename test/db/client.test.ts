@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { createTestDb } from "@/db/client";
-import { revenueMonths } from "@/db/schema";
+import { createTestDb, ensureDbReady } from "@/db/client";
+import { revenueMonths, inventoryItems } from "@/db/schema";
 
 describe("db client", () => {
   it("createTestDb gives an isolated, migrated pglite db", async () => {
@@ -19,5 +19,13 @@ describe("db client", () => {
 
     await a.close();
     await b.close();
+  });
+
+  it("ensureDbReady returns a fully-migrated db (no first-query race)", async () => {
+    // Awaiting readiness must guarantee the schema exists — querying a table
+    // immediately afterward must not throw "relation does not exist".
+    const db = await ensureDbReady();
+    const rows = await db.select({ id: inventoryItems.id }).from(inventoryItems);
+    expect(Array.isArray(rows)).toBe(true);
   });
 });
