@@ -5,8 +5,16 @@ import { PriceTrendPanel } from "@/components/market/PriceTrendPanel";
 import { UnitConverterPanel } from "@/components/converter/UnitConverterPanel";
 import { ClockCalendar } from "@/components/dashboard/ClockCalendar";
 import { BusinessPlaceholder } from "@/components/dashboard/BusinessPlaceholder";
+import { InventoryOverviewPanel } from "@/components/dashboard/InventoryOverviewPanel";
+import type { InventoryCategory } from "@/lib/inventory/validation";
 
-export function DashboardGrid() {
+export interface InventoryView {
+  counts: Record<InventoryCategory, number>;
+  total: number;
+  updatedLabel: string | null;
+}
+
+export function DashboardGrid({ inventory }: { inventory?: InventoryView }) {
   return (
     <div className="space-y-3" data-testid="dashboard-root">
       <KpiTicker />
@@ -17,7 +25,15 @@ export function DashboardGrid() {
 
         <BusinessPlaceholder title="AI Insights" testid="panel-ai-insights" />
         <BusinessPlaceholder title="Today's Schedule" testid="panel-todays-schedule" />
-        <BusinessPlaceholder title="Inventory Overview" testid="panel-inventory-overview" />
+        {inventory ? (
+          <InventoryOverviewPanel
+            counts={inventory.counts}
+            total={inventory.total}
+            updatedLabel={inventory.updatedLabel}
+          />
+        ) : (
+          <BusinessPlaceholder title="Inventory Overview" testid="panel-inventory-overview" />
+        )}
         <BusinessPlaceholder title="TradeNet Exchange" testid="panel-tradenet-exchange" />
 
         <BusinessPlaceholder title="Orders & Pipeline" testid="panel-orders-pipeline" />

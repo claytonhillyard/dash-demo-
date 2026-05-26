@@ -12,14 +12,22 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("DashboardGrid", () => {
   it("renders the live panels and honest business placeholders", () => {
-    render(<DashboardGrid />);
+    const inventory = {
+      counts: {
+        Rings: 5, Necklaces: 0, Earrings: 0, Bracelets: 0, Pendants: 0,
+        Chains: 0, "Watch Bands": 0, Diamonds: 10, Gems: 0,
+      },
+      total: 15,
+      updatedLabel: "updated today",
+    };
+    render(<DashboardGrid inventory={inventory} />);
     // Live panels present:
     expect(screen.getByText("Market Intelligence")).toBeInTheDocument();
     expect(screen.getByText("Price Trend Analytics")).toBeInTheDocument();
     expect(screen.getByText("Unit Converter (Advanced)")).toBeInTheDocument();
-    // Business placeholders present and honest:
-    const inventory = screen.getByTestId("panel-inventory-overview");
-    expect(within(inventory).getByText(/not yet wired/i)).toBeInTheDocument();
+    // Inventory is now REAL (not a placeholder):
+    expect(screen.getByTestId("inv-tile-Diamonds")).toBeInTheDocument();
+    // Remaining business placeholders still honest:
     for (const id of [
       "panel-orders-pipeline", "panel-portfolio-snapshot", "panel-financial-overview",
       "panel-crypto-wallet", "panel-tradenet-exchange", "panel-ai-insights",
