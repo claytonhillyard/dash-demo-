@@ -14,4 +14,9 @@ describe("Nav", () => {
     render(<Nav />);
     expect(screen.getByText("Dashboard")).toHaveAttribute("aria-current", "page");
   });
+  it("links the Inventory section to /inventory", () => {
+    render(<Nav />);
+    const link = screen.getByRole("link", { name: "Inventory" });
+    expect(link).toHaveAttribute("href", "/inventory");
+  });
 });

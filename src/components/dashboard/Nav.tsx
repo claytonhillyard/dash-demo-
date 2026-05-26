@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AiyaLogo } from "./AiyaLogo";
 import { LogoutButton } from "./LogoutButton";
 
@@ -8,6 +9,8 @@ const SECTIONS = [
   "Reports & Analytics", "Marketing Suite", "Social & Inbox", "Calendar & Tasks",
   "Documents", "Settings",
 ];
+
+const ROUTES: Record<string, string> = { Inventory: "/inventory" };
 
 export function Nav() {
   return (
@@ -38,17 +41,24 @@ export function Nav() {
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3" aria-label="Primary">
         {SECTIONS.map((s) => {
           const active = s === "Dashboard";
+          const href = ROUTES[s];
+          const className = `flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+            active
+              ? "border border-gold/30 bg-gold/10 text-gold"
+              : "border border-transparent text-text/65 hover:bg-surface-2 hover:text-gold"
+          }`;
+          const dot = <span className={`h-1 w-1 rounded-full ${active ? "bg-gold" : "bg-text/20"}`} />;
+          if (href) {
+            return (
+              <Link key={s} href={href} className={className}>
+                {dot}
+                {s}
+              </Link>
+            );
+          }
           return (
-            <div
-              key={s}
-              aria-current={active ? "page" : undefined}
-              className={`flex cursor-default items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                active
-                  ? "border border-gold/30 bg-gold/10 text-gold"
-                  : "border border-transparent text-text/65 hover:bg-surface-2 hover:text-gold"
-              }`}
-            >
-              <span className={`h-1 w-1 rounded-full ${active ? "bg-gold" : "bg-text/20"}`} />
+            <div key={s} aria-current={active ? "page" : undefined} className={`${className} cursor-default`}>
+              {dot}
               {s}
             </div>
           );
