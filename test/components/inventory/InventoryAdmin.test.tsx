@@ -7,8 +7,9 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 const rows: InventoryRow[] = [];
 
 it("shows an empty state and submits a new item", async () => {
-  const createAction = vi.fn(async () => ({ ok: true as const }));
-  const deleteAction = vi.fn(async () => ({ ok: true as const }));
+  // Typed args so `mock.calls[0][0]` (the submitted payload) is introspectable.
+  const createAction = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
+  const deleteAction = vi.fn(async (_id: number) => ({ ok: true as const }));
   render(<InventoryAdmin items={rows} createAction={createAction} deleteAction={deleteAction} />);
 
   expect(screen.getByText(/add your first item/i)).toBeInTheDocument();
