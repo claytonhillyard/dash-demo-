@@ -36,4 +36,12 @@ describe("KpiTicker", () => {
     expect(within(natural).getByText("—")).toBeInTheDocument();
     expect(within(natural).getByText(/awaiting price list/i)).toBeInTheDocument();
   });
+
+  it("shows the diamond index value + change when provided", () => {
+    render(<KpiTicker diamond={{ naturalIndex: { cents: 800000, change24hPct: 1.5 }, labIndex: null }} />);
+    const natural = screen.getByTestId("kpi-natural-diamond");
+    expect(within(natural).getByText(/8000\.00/)).toBeInTheDocument();
+    const lab = screen.getByTestId("kpi-lab-diamond");
+    expect(within(lab).getByText(/awaiting price list/i)).toBeInTheDocument();
+  });
 });
