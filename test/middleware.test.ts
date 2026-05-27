@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { config } from "@/middleware";
+import { middleware } from "@/middleware";
 
 // Translate a Next.js middleware matcher string into a RegExp the same way
 // Next does (the `:path*` segment is path-to-regexp syntax).
@@ -51,5 +52,15 @@ describe("middleware matcher", () => {
 
   it("does not guard the public login page", () => {
     expect(isMatched("/login")).toBe(false);
+  });
+});
+
+describe("demo mode auth bypass", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("lets an unauthenticated request through when demo is on", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const req = { cookies: { get: () => undefined }, nextUrl: { clone: () => ({}) } } as never;
+    const res = await middleware(req);
+    expect((res as { status?: number }).status).not.toBe(307);
   });
 });

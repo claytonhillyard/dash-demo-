@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifySession } from "@/lib/auth/session";
+import { isDemoMode } from "@/lib/demo/mode";
 
 export async function middleware(req: NextRequest) {
+  if (isDemoMode()) return NextResponse.next();
   const token = req.cookies.get("ccc_session")?.value;
   const session = token ? await verifySession(token, process.env.SESSION_SECRET!) : null;
   if (!session) {
