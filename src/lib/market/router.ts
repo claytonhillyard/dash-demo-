@@ -4,6 +4,7 @@ import { coingeckoProvider } from "./providers/coingecko";
 import { frankfurterProvider } from "./providers/frankfurter";
 import { finnhubProvider } from "./providers/finnhub";
 import { twelvedataProvider } from "./providers/twelvedata";
+import { metalsProvider } from "./providers/metals";
 import { simulatedProvider } from "./providers/simulated";
 
 export const CHAINS: Record<AssetClass, QuoteProvider[]> = {
@@ -11,7 +12,7 @@ export const CHAINS: Record<AssetClass, QuoteProvider[]> = {
   fx: [frankfurterProvider, finnhubProvider, simulatedProvider],
   equity: [finnhubProvider, twelvedataProvider, simulatedProvider],
   index: [twelvedataProvider, finnhubProvider, simulatedProvider],
-  commodity: [twelvedataProvider, simulatedProvider],
+  commodity: [twelvedataProvider, metalsProvider, simulatedProvider],
   bond: [twelvedataProvider, simulatedProvider],
 };
 
