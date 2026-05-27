@@ -10,7 +10,7 @@ const SECTIONS = [
   "Documents", "Settings",
 ];
 
-const ROUTES: Record<string, string> = { Inventory: "/inventory" };
+const ROUTES: Record<string, string> = { Inventory: "/inventory", Diamonds: "/diamonds" };
 
 export function Nav() {
   return (

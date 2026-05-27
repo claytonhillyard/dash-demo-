@@ -10,7 +10,7 @@ function matcherToRegExp(pattern: string): RegExp {
       .replace(/\/:path\*/g, "(?:/.*)?")
       .replace(/\/:path\+/g, "/.+") +
     "$";
-  return new RegExp(source);
+  return new RegExp(source); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
 }
 
 function isMatched(pathname: string): boolean {
@@ -42,6 +42,11 @@ describe("middleware matcher", () => {
     ]) {
       expect(isMatched(route)).toBe(true);
     }
+  });
+
+  it("guards the diamonds admin + history API (slice-1b-3)", () => {
+    expect(isMatched("/diamonds")).toBe(true);
+    expect(isMatched("/api/diamond-history")).toBe(true);
   });
 
   it("does not guard the public login page", () => {
