@@ -52,18 +52,25 @@ export async function importMatrix(raw: unknown): Promise<ImportResult> {
   if (!parsed.ok) return { ok: false, error: parsed.error };
   try {
     const d = db();
-    await d.delete(diamondMatrixPrices).where(and(
-      eq(diamondMatrixPrices.orgId, AIYA_ORG_ID),
-      eq(diamondMatrixPrices.sheet, sheet),
-      eq(diamondMatrixPrices.shape, shape)
-    ));
-    await d.insert(diamondMatrixPrices).values(
-      parsed.rows.map((r) => ({
-        orgId: AIYA_ORG_ID, sheet, shape,
-        color: r.color, clarity: r.clarity, caratBand: r.caratBand,
-        pricePerCaratCents: r.pricePerCaratCents,
-      }))
-    );
+    // Atomic replace: delete the old sheet/shape cells and insert the new ones
+    // inside one transaction, so an infra failure mid-insert can't leave the
+    // sheet/shape with no pricing. Both drivers (pglite + neon-http) support a
+    // transaction over statements whose values are known upfront (no reads
+    // inside). The index snapshot is append-only and runs after, outside the tx.
+    await d.transaction(async (tx) => {
+      await tx.delete(diamondMatrixPrices).where(and(
+        eq(diamondMatrixPrices.orgId, AIYA_ORG_ID),
+        eq(diamondMatrixPrices.sheet, sheet),
+        eq(diamondMatrixPrices.shape, shape)
+      ));
+      await tx.insert(diamondMatrixPrices).values(
+        parsed.rows.map((r) => ({
+          orgId: AIYA_ORG_ID, sheet, shape,
+          color: r.color, clarity: r.clarity, caratBand: r.caratBand,
+          pricePerCaratCents: r.pricePerCaratCents,
+        }))
+      );
+    });
     await snapshotIndices(d, AIYA_ORG_ID);
     revalidatePath("/");
     revalidatePath("/diamonds");
