@@ -1,20 +1,13 @@
 // @vitest-environment node
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { createTestDb } from "@/db/client";
-import { diamondIndexHistory } from "@/db/schema";
-import { GET, __setHistoryTestDb } from "@/app/api/diamond-history/route";
+import { describe, it, expect, vi } from "vitest";
 
-let close: () => Promise<void>;
-beforeEach(async () => {
-  const t = await createTestDb();
-  __setHistoryTestDb(t.db);
-  close = t.close;
-  await t.db.insert(diamondIndexHistory).values([
-    { series: "natural_index", valueCents: 700000 },
-    { series: "natural_index", valueCents: 720000 },
-  ]);
-});
-afterEach(async () => { __setHistoryTestDb(null); await close(); });
+// Route files may only export GET/POST/dynamic/etc. (Next.js validates route
+// exports at build time — no test seam allowed), so we mock the route's data
+// dependencies instead of injecting a db.
+vi.mock("@/db/client", () => ({ ensureDbReady: vi.fn(async () => ({})) }));
+vi.mock("@/db/diamonds", () => ({ getDiamondTrend: vi.fn(async () => [700000, 720000]) }));
+
+import { GET } from "@/app/api/diamond-history/route";
 
 describe("/api/diamond-history", () => {
   it("returns the natural index series", async () => {
