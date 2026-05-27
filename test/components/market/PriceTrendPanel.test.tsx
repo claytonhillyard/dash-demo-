@@ -34,4 +34,15 @@ describe("PriceTrendPanel", () => {
     await waitFor(() => expect(calls.length).toBeGreaterThan(before));
     expect(calls.some((u) => u.includes("range=1Y"))).toBe(true);
   });
+
+  it("also fetches the diamond index history", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(url);
+      return { ok: true, json: async () => ({ points: [1, 2, 3], freshness: "delayed" }) } as Response;
+    });
+    render(<PriceTrendPanel />);
+    await waitFor(() => expect(screen.getByTestId("trend-loaded")).toBeInTheDocument());
+    expect(calls.some((u) => u.includes("/api/diamond-history"))).toBe(true);
+  });
 });

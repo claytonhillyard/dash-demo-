@@ -17,24 +17,31 @@ async function load(symbol: string, range: Range): Promise<Series> {
   return { points: data.points ?? [], freshness: data.freshness };
 }
 
+async function loadDiamond(): Promise<number[]> {
+  const res = await fetch(`/api/diamond-history`, { cache: "no-store" });
+  if (!res.ok) return [];
+  const data = (await res.json()) as { points?: number[] };
+  return data.points ?? [];
+}
+
 export function PriceTrendPanel() {
   const [range, setRange] = useState<Range>("1M");
   const [gold, setGold] = useState<Series | null>(null);
   const [btc, setBtc] = useState<Series | null>(null);
+  const [diamond, setDiamond] = useState<number[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([load("XAU", range), load("BTC", range)]).then(([g, b]) => {
+    void Promise.all([load("XAU", range), load("BTC", range), loadDiamond()]).then(([g, b, d]) => {
       if (cancelled) return;
-      setGold(g);
-      setBtc(b);
+      setGold(g); setBtc(b); setDiamond(d);
     });
     return () => { cancelled = true; };
   }, [range]);
 
   const loaded = gold != null && btc != null;
   const data = loaded
-    ? gold!.points.map((g, i) => ({ i, gold: g, btc: btc!.points[i] ?? null }))
+    ? gold!.points.map((g, i) => ({ i, gold: g, btc: btc!.points[i] ?? null, diamond: diamond[i] ?? null }))
     : [];
 
   return (
@@ -59,9 +66,11 @@ export function PriceTrendPanel() {
             <XAxis dataKey="i" hide />
             <YAxis yAxisId="gold" hide domain={["auto", "auto"]} />
             <YAxis yAxisId="btc" orientation="right" hide domain={["auto", "auto"]} />
+            <YAxis yAxisId="diamond" hide domain={["auto", "auto"]} />
             <Tooltip />
             <Line yAxisId="gold" type="monotone" dataKey="gold" stroke="hsl(var(--gold))" dot={false} isAnimationActive={false} />
             <Line yAxisId="btc" type="monotone" dataKey="btc" stroke="hsl(var(--accent-blue))" dot={false} isAnimationActive={false} />
+            <Line yAxisId="diamond" type="monotone" dataKey="diamond" stroke="hsl(var(--accent-pink))" dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
