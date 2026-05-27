@@ -42,4 +42,14 @@ describe("MarketIntelligencePanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Diamonds" }));
     expect(screen.getByText(/not yet wired/i)).toBeInTheDocument();
   });
+
+  it("renders diamond rows on the Diamonds tab when provided", () => {
+    render(<MarketIntelligencePanel diamondRows={[
+      { label: "Natural 1ct", cents: 800000, change24hPct: 1.2 },
+      { label: "Pink Diamond 1ct", cents: 1500000, change24hPct: null },
+    ]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Diamonds" }));
+    expect(screen.getByText("Natural 1ct")).toBeInTheDocument();
+    expect(screen.getByText("Pink Diamond 1ct")).toBeInTheDocument();
+  });
 });
