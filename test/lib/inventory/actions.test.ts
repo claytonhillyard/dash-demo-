@@ -71,3 +71,15 @@ describe("inventory server actions", () => {
     expect(res).toEqual({ ok: false, error: "Unauthorized" });
   });
 });
+
+describe("inventory writes disabled in demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("createInventoryItem returns the disabled error and writes nothing", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const res = await createInventoryItem({
+      category: "Rings", name: "X", quantity: 1, status: "in_stock",
+      unitCostCents: 0, retailPriceCents: 0,
+    });
+    expect(res).toEqual({ ok: false, error: "Demo mode — changes are disabled" });
+  });
+});
