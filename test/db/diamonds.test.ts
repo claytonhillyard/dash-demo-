@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { createTestDb, type Db } from "@/db/client";
 import { diamondMatrixPrices, diamondPricePoints, diamondIndexHistory } from "@/db/schema";
 import { getDiamondSummary, getDiamondTrend } from "@/db/diamonds";
@@ -46,5 +46,15 @@ describe("diamond data-access", () => {
     ]);
     const trend = await getDiamondTrend(t.db, "natural_index");
     expect(trend).toEqual([700000, 720000]);
+  });
+});
+
+describe("getDiamondSummary demo mode", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("returns seeded indices without touching the db when demo is on", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const s = await getDiamondSummary(null as never);
+    expect(s.naturalIndex?.cents).toBeGreaterThan(0);
+    expect(s.points.length).toBeGreaterThan(0);
   });
 });
