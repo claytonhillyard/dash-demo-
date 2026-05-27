@@ -1,13 +1,21 @@
 import type { Quote } from "./types";
 import { ALL_SYMBOLS } from "./registry";
 import { resolveQuotes } from "./router";
+import { simulatedProvider } from "./providers/simulated";
+import { isDemoMode } from "@/lib/demo/mode";
+
+/** Default poller fetcher: real provider chain, or forced-simulated in demo mode. */
+export function defaultQuoteFetcher(): Promise<Quote[]> {
+  return isDemoMode()
+    ? resolveQuotes(ALL_SYMBOLS, [simulatedProvider])
+    : resolveQuotes(ALL_SYMBOLS);
+}
 
 export class QuoteCache {
   private data = new Map<string, Quote>();
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private fetcher: () => Promise<Quote[]> =
-    () => resolveQuotes(ALL_SYMBOLS)) {}
+  constructor(private fetcher: () => Promise<Quote[]> = defaultQuoteFetcher) {}
 
   snapshot(): Quote[] {
     return [...this.data.values()];

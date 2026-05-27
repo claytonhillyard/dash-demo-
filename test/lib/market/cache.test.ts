@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { QuoteCache } from "@/lib/market/cache";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { QuoteCache, defaultQuoteFetcher } from "@/lib/market/cache";
 import type { Quote } from "@/lib/market/types";
 
 const q: Quote = {
@@ -31,5 +31,15 @@ describe("QuoteCache", () => {
     await c.refresh();
     await c.refresh(); // throws internally, swallowed
     expect(c.snapshot()).toHaveLength(1);
+  });
+});
+
+describe("demo market feed", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("forces the simulated provider for every symbol in demo mode", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const quotes = await defaultQuoteFetcher();
+    expect(quotes.length).toBeGreaterThan(0);
+    expect(quotes.every((q) => q.freshness === "simulated")).toBe(true);
   });
 });
