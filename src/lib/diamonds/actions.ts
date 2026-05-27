@@ -1,0 +1,125 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import { getDb, type Db } from "@/db/client";
+import { diamondMatrixPrices, diamondPricePoints, diamondIndexHistory } from "@/db/schema";
+import { AIYA_ORG_ID } from "@/db/org";
+import { requireSession } from "@/lib/auth/requireSession";
+import { BENCHMARK } from "@/lib/diamonds/constants";
+import { parseMatrixCsv } from "@/lib/diamonds/csv";
+import {
+  matrixCellInput, pricePointInput, pricePointUpdateInput, importInput, firstZodError,
+} from "./validation";
+
+export type ActionResult = { ok: true } | { ok: false; error: string };
+type ImportResult = { ok: true; imported: number } | { ok: false; error: string };
+
+let testDb: Db | null = null;
+export async function __setTestDb(db: Db | null): Promise<void> { testDb = db; }
+function db(): Db { return testDb ?? getDb(); }
+
+async function assertSession(): Promise<string | null> {
+  try { await requireSession(); return null; } catch { return "Unauthorized"; }
+}
+
+/** Append a snapshot of the natural/lab benchmark indices to history. */
+async function snapshotIndices(d: Db, orgId: number): Promise<void> {
+  for (const [sheet, series] of [["natural", "natural_index"], ["lab", "lab_index"]] as const) {
+    const rows = await d
+      .select({ cents: diamondMatrixPrices.pricePerCaratCents })
+      .from(diamondMatrixPrices)
+      .where(and(
+        eq(diamondMatrixPrices.orgId, orgId), eq(diamondMatrixPrices.sheet, sheet),
+        eq(diamondMatrixPrices.shape, BENCHMARK.shape), eq(diamondMatrixPrices.color, BENCHMARK.color),
+        eq(diamondMatrixPrices.clarity, BENCHMARK.clarity), eq(diamondMatrixPrices.caratBand, BENCHMARK.caratBand)
+      ))
+      .limit(1);
+    if (rows[0]) {
+      await d.insert(diamondIndexHistory).values({ orgId, series, valueCents: rows[0].cents });
+    }
+  }
+}
+
+export async function importMatrix(raw: unknown): Promise<ImportResult> {
+  const unauth = await assertSession();
+  if (unauth) return { ok: false, error: unauth };
+  const parsedInput = importInput.safeParse(raw);
+  if (!parsedInput.success) return { ok: false, error: firstZodError(parsedInput.error) };
+  const { sheet, shape, csv } = parsedInput.data;
+  const parsed = parseMatrixCsv(csv);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  try {
+    const d = db();
+    await d.delete(diamondMatrixPrices).where(and(
+      eq(diamondMatrixPrices.orgId, AIYA_ORG_ID),
+      eq(diamondMatrixPrices.sheet, sheet),
+      eq(diamondMatrixPrices.shape, shape)
+    ));
+    await d.insert(diamondMatrixPrices).values(
+      parsed.rows.map((r) => ({
+        orgId: AIYA_ORG_ID, sheet, shape,
+        color: r.color, clarity: r.clarity, caratBand: r.caratBand,
+        pricePerCaratCents: r.pricePerCaratCents,
+      }))
+    );
+    await snapshotIndices(d, AIYA_ORG_ID);
+    revalidatePath("/");
+    revalidatePath("/diamonds");
+    return { ok: true, imported: parsed.rows.length };
+  } catch (e) {
+    console.error("[diamond import] database error:", e);
+    return { ok: false, error: "Database error" };
+  }
+}
+
+async function run<T>(schema: z.ZodType<T>, raw: unknown, fn: (input: T) => Promise<void>): Promise<ActionResult> {
+  const unauth = await assertSession();
+  if (unauth) return { ok: false, error: unauth };
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: firstZodError(parsed.error) };
+  try {
+    await fn(parsed.data);
+    revalidatePath("/");
+    revalidatePath("/diamonds");
+    return { ok: true };
+  } catch (e) {
+    console.error("[diamond action] database error:", e);
+    return { ok: false, error: "Database error" };
+  }
+}
+
+export async function upsertMatrixCell(raw: unknown): Promise<ActionResult> {
+  return run(matrixCellInput, raw, async (input) => {
+    await db().insert(diamondMatrixPrices).values({ orgId: AIYA_ORG_ID, ...input })
+      .onConflictDoUpdate({
+        target: [
+          diamondMatrixPrices.orgId, diamondMatrixPrices.sheet, diamondMatrixPrices.shape,
+          diamondMatrixPrices.color, diamondMatrixPrices.clarity, diamondMatrixPrices.caratBand,
+        ],
+        set: { pricePerCaratCents: input.pricePerCaratCents, updatedAt: new Date() },
+      });
+    await snapshotIndices(db(), AIYA_ORG_ID);
+  });
+}
+
+export async function savePricePoint(raw: unknown): Promise<ActionResult> {
+  const isUpdate = typeof (raw as { id?: unknown })?.id === "number";
+  if (isUpdate) {
+    return run(pricePointUpdateInput, raw, async (input) => {
+      await db().update(diamondPricePoints)
+        .set({ label: input.label, kind: input.kind, pricePerCaratCents: input.pricePerCaratCents, updatedAt: new Date() })
+        .where(eq(diamondPricePoints.id, input.id));
+    });
+  }
+  return run(pricePointInput, raw, async (input) => {
+    await db().insert(diamondPricePoints).values({ orgId: AIYA_ORG_ID, ...input });
+  });
+}
+
+export async function deletePricePoint(id: number): Promise<ActionResult> {
+  return run(z.number().int(), id, async (rid) => {
+    await db().delete(diamondPricePoints).where(eq(diamondPricePoints.id, rid));
+  });
+}
