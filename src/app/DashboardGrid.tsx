@@ -1,6 +1,8 @@
 "use client";
 import { KpiTicker } from "@/components/market/KpiTicker";
+import type { DiamondKpis } from "@/components/market/KpiTicker";
 import { MarketIntelligencePanel } from "@/components/market/MarketIntelligencePanel";
+import type { DiamondRow } from "@/components/market/MarketIntelligencePanel";
 import { PriceTrendPanel } from "@/components/market/PriceTrendPanel";
 import { UnitConverterPanel } from "@/components/converter/UnitConverterPanel";
 import { ClockCalendar } from "@/components/dashboard/ClockCalendar";
@@ -14,12 +16,14 @@ export interface InventoryView {
   updatedLabel: string | null;
 }
 
-export function DashboardGrid({ inventory }: { inventory?: InventoryView }) {
+export interface DiamondView { kpis: DiamondKpis; rows: DiamondRow[] }
+
+export function DashboardGrid({ inventory, diamond }: { inventory?: InventoryView; diamond?: DiamondView }) {
   return (
     <div className="space-y-3" data-testid="dashboard-root">
-      <KpiTicker />
+      <KpiTicker diamond={diamond?.kpis} />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-        <div className="xl:col-span-1"><MarketIntelligencePanel /></div>
+        <div className="xl:col-span-1"><MarketIntelligencePanel diamondRows={diamond?.rows} /></div>
         <div className="xl:col-span-2"><PriceTrendPanel /></div>
         <div className="xl:col-span-1"><ClockCalendar /></div>
 
