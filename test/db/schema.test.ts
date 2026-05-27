@@ -32,4 +32,12 @@ describe("db schema", () => {
     expect(schema.inventoryItems.caratX100.columnType).toBe("PgInteger");
     expect(schema.inventoryItems.orgId.columnType).toBe("PgInteger");
   });
+
+  it("exports the diamond pricing tables with integer cents + org scoping", () => {
+    expect(schema.diamondMatrixPrices).toBeDefined();
+    expect(schema.diamondMatrixPrices.pricePerCaratCents.columnType).toBe("PgInteger");
+    expect(schema.diamondMatrixPrices.orgId.columnType).toBe("PgInteger");
+    expect(schema.diamondPricePoints.pricePerCaratCents.columnType).toBe("PgInteger");
+    expect(schema.diamondIndexHistory.valueCents.columnType).toBe("PgInteger");
+  });
 });

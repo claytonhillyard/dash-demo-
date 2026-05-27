@@ -102,3 +102,42 @@ export const inventoryItems = pgTable("inventory_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const diamondMatrixPrices = pgTable(
+  "diamond_matrix_prices",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().default(1),
+    sheet: text("sheet", { enum: ["natural", "lab"] }).notNull(),
+    shape: text("shape", { enum: ["round", "fancy"] }).notNull(),
+    color: text("color").notNull(),
+    clarity: text("clarity").notNull(),
+    caratBand: text("carat_band").notNull(),
+    pricePerCaratCents: integer("price_per_carat_cents").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    uniqCell: unique("diamond_matrix_cell_uniq").on(
+      t.orgId, t.sheet, t.shape, t.color, t.clarity, t.caratBand
+    ),
+  })
+);
+
+export const diamondPricePoints = pgTable("diamond_price_points", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().default(1),
+  label: text("label").notNull(),
+  kind: text("kind", { enum: ["fancy_diamond", "gem"] }).notNull(),
+  pricePerCaratCents: integer("price_per_carat_cents").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const diamondIndexHistory = pgTable("diamond_index_history", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().default(1),
+  series: text("series").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+  valueCents: integer("value_cents").notNull(),
+});
