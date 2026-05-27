@@ -20,8 +20,12 @@ export default defineConfig({
     // backstop. Reliability over raw speed.
     pool: "forks",
     poolOptions: { forks: { minForks: 1, maxForks: 2 } },
-    testTimeout: 20000,
-    hookTimeout: 20000,
+    // Per-test pglite boots are ~5-6s; under 2-way fork contention a single
+    // boot can cross 20s as the number of DB test files grows. Raise the
+    // backstop to 30s. (Durable fix = share one pglite instance per test file;
+    // tracked as separate tech-debt.)
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
   resolve: { alias: { "@": resolve(__dirname, "src") } },
   optimizeDeps: { exclude: ["@electric-sql/pglite"] },
