@@ -68,3 +68,14 @@ describe("diamond actions", () => {
     expect(res).toEqual({ ok: false, error: "Unauthorized" });
   });
 });
+
+describe("diamond writes disabled in demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("importMatrix and savePricePoint return the disabled error", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    expect(await importMatrix({ sheet: "natural", shape: "round", csv: "x" }))
+      .toEqual({ ok: false, error: "Demo mode — changes are disabled" });
+    expect(await savePricePoint({ label: "X", kind: "gem", pricePerCaratCents: 1 }))
+      .toEqual({ ok: false, error: "Demo mode — changes are disabled" });
+  });
+});
