@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { ensureDbReady } from "@/db/client";
 import { diamondPricePoints } from "@/db/schema";
+import { AIYA_ORG_ID } from "@/db/org";
 import { DiamondAdmin, type PricePointRow } from "@/components/diamonds/DiamondAdmin";
 import { importMatrix, savePricePoint, deletePricePoint } from "@/lib/diamonds/actions";
 
@@ -17,6 +18,7 @@ export default async function DiamondsPage() {
       pricePerCaratCents: diamondPricePoints.pricePerCaratCents,
     })
     .from(diamondPricePoints)
+    .where(eq(diamondPricePoints.orgId, AIYA_ORG_ID))
     .orderBy(asc(diamondPricePoints.label));
 
   return (

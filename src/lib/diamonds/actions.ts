@@ -110,7 +110,7 @@ export async function savePricePoint(raw: unknown): Promise<ActionResult> {
     return run(pricePointUpdateInput, raw, async (input) => {
       await db().update(diamondPricePoints)
         .set({ label: input.label, kind: input.kind, pricePerCaratCents: input.pricePerCaratCents, updatedAt: new Date() })
-        .where(eq(diamondPricePoints.id, input.id));
+        .where(and(eq(diamondPricePoints.id, input.id), eq(diamondPricePoints.orgId, AIYA_ORG_ID)));
     });
   }
   return run(pricePointInput, raw, async (input) => {
@@ -120,6 +120,7 @@ export async function savePricePoint(raw: unknown): Promise<ActionResult> {
 
 export async function deletePricePoint(id: number): Promise<ActionResult> {
   return run(z.number().int(), id, async (rid) => {
-    await db().delete(diamondPricePoints).where(eq(diamondPricePoints.id, rid));
+    await db().delete(diamondPricePoints)
+      .where(and(eq(diamondPricePoints.id, rid), eq(diamondPricePoints.orgId, AIYA_ORG_ID)));
   });
 }
