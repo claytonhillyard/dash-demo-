@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { QuoteCache } from "@/lib/market/cache";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { QuoteCache, defaultQuoteFetcher } from "@/lib/market/cache";
+import { ALL_SYMBOLS } from "@/lib/market/registry";
 import type { Quote } from "@/lib/market/types";
 
 const q: Quote = {
@@ -42,5 +43,15 @@ describe("QuoteCache", () => {
       { symbol: "XAU", assetClass: "commodity", display: "Gold", currency: "USD" },
     ]);
     expect(seen).toEqual([["XAU"]]);
+  });
+});
+
+describe("demo market feed", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("forces the simulated provider for every symbol in demo mode", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const quotes = await defaultQuoteFetcher(ALL_SYMBOLS);
+    expect(quotes.length).toBeGreaterThan(0);
+    expect(quotes.every((q) => q.freshness === "simulated")).toBe(true);
   });
 });

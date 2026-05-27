@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { createTestDb, type Db } from "@/db/client";
 import { inventoryItems } from "@/db/schema";
 import { getInventorySummary } from "@/db/inventory";
@@ -38,5 +38,16 @@ describe("getInventorySummary", () => {
     expect(s.total).toBe(0);
     expect(s.counts.Rings).toBe(0);
     expect(s.updatedAt).toBeNull();
+  });
+});
+
+describe("getInventorySummary demo mode", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("returns seeded counts without touching the db when demo is on", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    // pass a db that would throw if used, proving the guard returns first
+    const s = await getInventorySummary(null as never);
+    expect(s.counts.Rings).toBe(1240);
+    expect(s.total).toBeGreaterThan(0);
   });
 });

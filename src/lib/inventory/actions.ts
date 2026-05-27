@@ -7,6 +7,7 @@ import { getDb, type Db } from "@/db/client";
 import { inventoryItems } from "@/db/schema";
 import { AIYA_ORG_ID } from "@/db/org";
 import { requireSession } from "@/lib/auth/requireSession";
+import { isDemoMode } from "@/lib/demo/mode";
 import {
   inventoryItemInput,
   inventoryItemUpdateInput,
@@ -31,6 +32,7 @@ async function run<T>(
   raw: unknown,
   fn: (input: T) => Promise<void>
 ): Promise<ActionResult> {
+  if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
   try {
     await requireSession();
   } catch {

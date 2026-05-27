@@ -6,6 +6,7 @@ import { TopBar } from "./TopBar";
 import { RightRail } from "./RightRail";
 import { FooterBar } from "./FooterBar";
 import { SettingsPanel } from "./SettingsPanel";
+import { DemoBanner } from "./DemoBanner";
 
 export function Shell({ children, ticker }: { children: ReactNode; ticker?: ReactNode }) {
   const { amoled, reduceMotion } = useSettings((s) => s.settings);
@@ -18,6 +19,7 @@ export function Shell({ children, ticker }: { children: ReactNode; ticker?: Reac
     <div className="flex h-screen overflow-hidden">
       <Nav />
       <div className="flex min-w-0 flex-1 flex-col">
+        <DemoBanner />
         <TopBar ticker={ticker} />
         <main className="flex-1 overflow-auto p-4">{children}</main>
         <FooterBar />

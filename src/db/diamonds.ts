@@ -3,6 +3,8 @@ import type { Db } from "./client";
 import { diamondMatrixPrices, diamondPricePoints, diamondIndexHistory } from "./schema";
 import { AIYA_ORG_ID } from "./org";
 import { BENCHMARK, type Sheet } from "@/lib/diamonds/constants";
+import { isDemoMode } from "@/lib/demo/mode";
+import { seedDiamondSummary } from "@/lib/demo/seed";
 
 export interface IndexValue { cents: number; change24hPct: number | null }
 export interface NamedPoint { label: string; kind: string; cents: number }
@@ -53,6 +55,7 @@ async function indexValue(db: Db, orgId: number, sheet: Sheet, series: string): 
 }
 
 export async function getDiamondSummary(db: Db, orgId: number = AIYA_ORG_ID): Promise<DiamondSummary> {
+  if (isDemoMode()) return seedDiamondSummary();
   const [naturalIndex, labIndex, pointRows] = await Promise.all([
     indexValue(db, orgId, "natural", "natural_index"),
     indexValue(db, orgId, "lab", "lab_index"),

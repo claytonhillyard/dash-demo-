@@ -9,6 +9,7 @@ import { AIYA_ORG_ID } from "@/db/org";
 import { requireSession } from "@/lib/auth/requireSession";
 import { BENCHMARK } from "@/lib/diamonds/constants";
 import { parseMatrixCsv } from "@/lib/diamonds/csv";
+import { isDemoMode } from "@/lib/demo/mode";
 import {
   matrixCellInput, pricePointInput, pricePointUpdateInput, importInput, firstZodError,
 } from "./validation";
@@ -43,6 +44,7 @@ async function snapshotIndices(d: Db, orgId: number): Promise<void> {
 }
 
 export async function importMatrix(raw: unknown): Promise<ImportResult> {
+  if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
   const unauth = await assertSession();
   if (unauth) return { ok: false, error: unauth };
   const parsedInput = importInput.safeParse(raw);
@@ -82,6 +84,7 @@ export async function importMatrix(raw: unknown): Promise<ImportResult> {
 }
 
 async function run<T>(schema: z.ZodType<T>, raw: unknown, fn: (input: T) => Promise<void>): Promise<ActionResult> {
+  if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
   const unauth = await assertSession();
   if (unauth) return { ok: false, error: unauth };
   const parsed = schema.safeParse(raw);
