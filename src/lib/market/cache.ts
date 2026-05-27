@@ -1,31 +1,53 @@
-import type { Quote } from "./types";
+import type { Quote, SymbolDef } from "./types";
 import { ALL_SYMBOLS } from "./registry";
 import { resolveQuotes } from "./router";
 
+// Twelve Data backs the index + commodity classes on a metered free tier
+// (8 credits/min, 1 credit per symbol). Refresh those classes on a slow cadence
+// so we stay within budget; the free / real-time sources (equity via Finnhub,
+// crypto via CoinGecko, fx via Frankfurter) refresh fast. Spot metals move
+// slowly, so ~90s latency is imperceptible.
+const SLOW_CLASSES = new Set<SymbolDef["assetClass"]>(["index", "commodity"]);
+const FAST_SYMBOLS = ALL_SYMBOLS.filter((s) => !SLOW_CLASSES.has(s.assetClass));
+const SLOW_SYMBOLS = ALL_SYMBOLS.filter((s) => SLOW_CLASSES.has(s.assetClass));
+
 export class QuoteCache {
   private data = new Map<string, Quote>();
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timers: ReturnType<typeof setInterval>[] = [];
 
-  constructor(private fetcher: () => Promise<Quote[]> =
-    () => resolveQuotes(ALL_SYMBOLS)) {}
+  constructor(private fetcher: (symbols: SymbolDef[]) => Promise<Quote[]> = resolveQuotes) {}
 
   snapshot(): Quote[] {
     return [...this.data.values()];
   }
 
-  async refresh(): Promise<void> {
+  private apply(quotes: Quote[]): void {
+    for (const q of quotes) this.data.set(q.symbol, q);
+  }
+
+  /** Refresh a specific symbol subset. Never wipes the snapshot on failure. */
+  async refreshSymbols(symbols: SymbolDef[]): Promise<void> {
     try {
-      const quotes = await this.fetcher();
-      for (const q of quotes) this.data.set(q.symbol, q);
+      this.apply(await this.fetcher(symbols));
     } catch {
       // keep last good snapshot — never wipe on failure
     }
   }
 
-  start(intervalMs = 15_000): void {
-    if (this.timer) return;
+  /** Full refresh of every symbol. */
+  async refresh(): Promise<void> {
+    await this.refreshSymbols(ALL_SYMBOLS);
+  }
+
+  /**
+   * One immediate full refresh, then split timers: fast sources every `fastMs`,
+   * metered Twelve Data classes every `slowMs` (keeps the free-tier credit budget).
+   */
+  start(fastMs = 15_000, slowMs = 90_000): void {
+    if (this.timers.length) return;
     void this.refresh();
-    this.timer = setInterval(() => void this.refresh(), intervalMs);
+    this.timers.push(setInterval(() => void this.refreshSymbols(FAST_SYMBOLS), fastMs));
+    this.timers.push(setInterval(() => void this.refreshSymbols(SLOW_SYMBOLS), slowMs));
   }
 }
 

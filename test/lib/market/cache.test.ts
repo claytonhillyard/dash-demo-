@@ -32,4 +32,15 @@ describe("QuoteCache", () => {
     await c.refresh(); // throws internally, swallowed
     expect(c.snapshot()).toHaveLength(1);
   });
+  it("refreshSymbols fetches only the requested subset (per-class budget)", async () => {
+    const seen: string[][] = [];
+    const c = new QuoteCache(async (syms) => {
+      seen.push(syms.map((s) => s.symbol));
+      return [];
+    });
+    await c.refreshSymbols([
+      { symbol: "XAU", assetClass: "commodity", display: "Gold", currency: "USD" },
+    ]);
+    expect(seen).toEqual([["XAU"]]);
+  });
 });
