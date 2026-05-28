@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, type Db } from "@/db/client";
 import {
@@ -154,6 +154,7 @@ export async function saveProjection(raw: unknown): Promise<ActionResult> {
     const existing = await db()
       .select({ id: projectionAssumptions.id })
       .from(projectionAssumptions)
+      .orderBy(desc(projectionAssumptions.updatedAt))
       .limit(1);
     if (existing.length) {
       await db()

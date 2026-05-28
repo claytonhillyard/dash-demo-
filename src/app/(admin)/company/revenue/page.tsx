@@ -1,4 +1,4 @@
-import { getDb } from "@/db/client";
+import { ensureDbReady } from "@/db/client";
 import { revenueMonths, revenueTransactions } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { MonthAmountAdmin, type MonthRow } from "@/components/company/MonthAmountAdmin";
@@ -8,7 +8,7 @@ import { saveRevenueMonth, addRevenueTransaction, deleteRevenueTransaction } fro
 export const dynamic = "force-dynamic";
 
 export default async function RevenuePage() {
-  const db = getDb();
+  const db = await ensureDbReady();
   const months = (await db
     .select({
       year: revenueMonths.year,

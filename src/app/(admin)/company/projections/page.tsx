@@ -1,4 +1,4 @@
-import { getDb } from "@/db/client";
+import { ensureDbReady } from "@/db/client";
 import { projectionAssumptions } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { ProjectionsAdmin, type ProjectionInitial } from "@/components/company/ProjectionsAdmin";
@@ -7,7 +7,7 @@ import { saveProjection } from "@/lib/company/actions";
 export const dynamic = "force-dynamic";
 
 export default async function ProjectionsPage() {
-  const rows = await getDb()
+  const rows = await (await ensureDbReady())
     .select({
       baseYear: projectionAssumptions.baseYear,
       baseRevenueCents: projectionAssumptions.baseRevenueCents,

@@ -1,4 +1,4 @@
-import { getDb } from "@/db/client";
+import { ensureDbReady } from "@/db/client";
 import { profitMonths } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { MonthAmountAdmin, type MonthRow } from "@/components/company/MonthAmountAdmin";
@@ -7,7 +7,7 @@ import { saveProfitMonth } from "@/lib/company/actions";
 export const dynamic = "force-dynamic";
 
 export default async function ProfitPage() {
-  const rows = (await getDb()
+  const rows = (await (await ensureDbReady())
     .select({
       year: profitMonths.year,
       month: profitMonths.month,

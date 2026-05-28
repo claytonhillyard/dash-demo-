@@ -1,4 +1,4 @@
-import { getDb } from "@/db/client";
+import { ensureDbReady } from "@/db/client";
 import { employees } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { EmployeesAdmin, type EmployeeRow } from "@/components/company/EmployeesAdmin";
@@ -7,7 +7,7 @@ import { createEmployee, deleteEmployee } from "@/lib/company/actions";
 export const dynamic = "force-dynamic";
 
 export default async function EmployeesPage() {
-  const rows = (await getDb()
+  const rows = (await (await ensureDbReady())
     .select({
       id: employees.id,
       name: employees.name,
