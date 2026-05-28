@@ -4,7 +4,6 @@ import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
 import { deals } from "@/db/schema";
 import { getActiveDeals, getAllDeals } from "@/lib/deals/queries";
-import { AIYA_ORG_ID } from "@/db/org";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); });
@@ -13,7 +12,7 @@ afterAll(async () => { await closeSharedDb(); });
 
 async function insert(overrides: Partial<typeof deals.$inferInsert> = {}) {
   await db.insert(deals).values({
-    orgId: AIYA_ORG_ID,
+    orgId: 1,
     kind: "SELL",
     category: "Diamond",
     subject: "test",
@@ -30,18 +29,18 @@ describe("getActiveDeals", () => {
     await insert({ subject: "newer open" });
     await insert({ subject: "filled", status: "Filled" });
     await insert({ subject: "withdrawn", status: "Withdrawn" });
-    const rows = await getActiveDeals(db, AIYA_ORG_ID);
+    const rows = await getActiveDeals(db, 1);
     expect(rows.map((r) => r.subject)).toEqual(["newer open", "older open"]);
   });
 
   it("respects the limit", async () => {
     for (let i = 0; i < 8; i++) await insert({ subject: `d${i}` });
-    const rows = await getActiveDeals(db, AIYA_ORG_ID, 3);
+    const rows = await getActiveDeals(db, 1, 3);
     expect(rows).toHaveLength(3);
   });
 
   it("returns [] when the table is empty", async () => {
-    const rows = await getActiveDeals(db, AIYA_ORG_ID);
+    const rows = await getActiveDeals(db, 1);
     expect(rows).toEqual([]);
   });
 });
@@ -51,28 +50,28 @@ describe("getAllDeals", () => {
     await insert({ subject: "a" });
     await insert({ subject: "b", status: "Filled" });
     await insert({ subject: "c", status: "Withdrawn" });
-    const rows = await getAllDeals(db, AIYA_ORG_ID);
+    const rows = await getAllDeals(db, 1);
     expect(rows).toHaveLength(3);
   });
 
   it("filters by status", async () => {
     await insert({ subject: "open" });
     await insert({ subject: "filled", status: "Filled" });
-    const rows = await getAllDeals(db, AIYA_ORG_ID, { status: "Filled" });
+    const rows = await getAllDeals(db, 1, { status: "Filled" });
     expect(rows.map((r) => r.subject)).toEqual(["filled"]);
   });
 
   it("filters by kind", async () => {
     await insert({ subject: "sell", kind: "SELL" });
     await insert({ subject: "buy", kind: "BUY" });
-    const rows = await getAllDeals(db, AIYA_ORG_ID, { kind: "BUY" });
+    const rows = await getAllDeals(db, 1, { kind: "BUY" });
     expect(rows.map((r) => r.subject)).toEqual(["buy"]);
   });
 
   it("filters by category", async () => {
     await insert({ subject: "diamond", category: "Diamond" });
     await insert({ subject: "gem", category: "Gem" });
-    const rows = await getAllDeals(db, AIYA_ORG_ID, { category: "Gem" });
+    const rows = await getAllDeals(db, 1, { category: "Gem" });
     expect(rows.map((r) => r.subject)).toEqual(["gem"]);
   });
 
@@ -114,20 +113,20 @@ describe("demo-mode short-circuit", () => {
 
   it("getActiveDeals returns seed slice without DB access", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
-    const rows = await getActiveDeals(db, AIYA_ORG_ID, 5);
+    const rows = await getActiveDeals(db, 1, 5);
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) expect(r.subject).toMatch(/demo · simulated/);
   });
 
   it("getActiveDeals respects limit in demo mode", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
-    const rows = await getActiveDeals(db, AIYA_ORG_ID, 2);
+    const rows = await getActiveDeals(db, 1, 2);
     expect(rows).toHaveLength(2);
   });
 
   it("getAllDeals returns full seed in demo mode", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
-    const rows = await getAllDeals(db, AIYA_ORG_ID);
+    const rows = await getAllDeals(db, 1);
     expect(rows).toHaveLength(5);
   });
 });

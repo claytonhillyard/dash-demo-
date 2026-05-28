@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vites
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth/requireSession", () => ({
-  requireSession: vi.fn(async () => ({ user: "boss" })),
+  requireSession: vi.fn(async () => ({ user: "boss", orgId: 1 })),
 }));
 
 import { createTestDb, type Db } from "@/db/client";

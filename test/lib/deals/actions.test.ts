@@ -14,7 +14,6 @@ import {
 } from "@/lib/deals/actions";
 import { getActiveDeals, getAllDeals } from "@/lib/deals/queries";
 import { requireSession } from "@/lib/auth/requireSession";
-import { AIYA_ORG_ID } from "@/db/org";
 import { revalidatePath } from "next/cache";
 
 let db: Db;
@@ -38,7 +37,7 @@ describe("postDeal", () => {
       subject: "Round 1.02ct G/VS1", quantity: 1, priceCents: 1240000,
     });
     expect(res).toEqual({ ok: true });
-    const rows = await getActiveDeals(db, AIYA_ORG_ID);
+    const rows = await getActiveDeals(db, 1);
     expect(rows).toHaveLength(1);
     expect(rows[0].subject).toBe("Round 1.02ct G/VS1");
     expect(rows[0].postedByLabel).toBe("boss");
@@ -51,7 +50,7 @@ describe("postDeal", () => {
     });
     expect(res.ok).toBe(false);
     if (res.ok === false) expect(res.error).toMatch(/subject/);
-    expect(await getAllDeals(db, AIYA_ORG_ID)).toHaveLength(0);
+    expect(await getAllDeals(db, 1)).toHaveLength(0);
   });
 
   it("surfaces unauthorized as a typed error (no insert)", async () => {
@@ -63,7 +62,7 @@ describe("postDeal", () => {
       subject: "x", quantity: 1, priceCents: 100,
     });
     expect(res).toEqual({ ok: false, error: "Unauthorized" });
-    expect(await getAllDeals(db, AIYA_ORG_ID)).toHaveLength(0);
+    expect(await getAllDeals(db, 1)).toHaveLength(0);
   });
 
   it("revalidates / and /deals on success", async () => {
@@ -84,7 +83,7 @@ describe("markDealFilled", () => {
     const [row] = await db.select({ id: deals.id }).from(deals);
     const res = await markDealFilled(row.id);
     expect(res).toEqual({ ok: true });
-    const all = await getAllDeals(db, AIYA_ORG_ID);
+    const all = await getAllDeals(db, 1);
     expect(all[0].status).toBe("Filled");
   });
 });
@@ -97,7 +96,7 @@ describe("withdrawDeal", () => {
     const [row] = await db.select({ id: deals.id }).from(deals);
     const res = await withdrawDeal(row.id);
     expect(res).toEqual({ ok: true });
-    const all = await getAllDeals(db, AIYA_ORG_ID);
+    const all = await getAllDeals(db, 1);
     expect(all[0].status).toBe("Withdrawn");
   });
 
