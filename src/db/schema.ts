@@ -7,6 +7,7 @@ import {
   timestamp,
   jsonb,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const revenueMonths = pgTable(
@@ -141,3 +142,34 @@ export const diamondIndexHistory = pgTable("diamond_index_history", {
   recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
   valueCents: integer("value_cents").notNull(),
 });
+
+export const deals = pgTable(
+  "deals",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().default(1), // 1 = AIYA; orgs table arrives with multi-tenant slice
+    kind: text("kind", { enum: ["BUY", "SELL"] }).notNull(),
+    category: text("category", {
+      enum: ["Diamond", "Gem", "Metal", "Finished", "Other"],
+    }).notNull(),
+    subject: text("subject").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    priceCents: integer("price_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    status: text("status", { enum: ["Open", "Filled", "Withdrawn"] })
+      .notNull()
+      .default("Open"),
+    postedByLabel: text("posted_by_label").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgStatusCreatedIdx: index("deals_org_status_created_idx").on(
+      t.orgId,
+      t.status,
+      t.createdAt.desc()
+    ),
+    orgKindIdx: index("deals_org_kind_idx").on(t.orgId, t.kind),
+    orgCategoryIdx: index("deals_org_category_idx").on(t.orgId, t.category),
+  })
+);

@@ -40,4 +40,11 @@ describe("db schema", () => {
     expect(schema.diamondPricePoints.pricePerCaratCents.columnType).toBe("PgInteger");
     expect(schema.diamondIndexHistory.valueCents.columnType).toBe("PgInteger");
   });
+
+  it("exports the deals table with integer cents + org scoping", () => {
+    expect(schema.deals).toBeDefined();
+    expect(schema.deals.orgId.columnType).toBe("PgInteger");
+    expect(schema.deals.priceCents.columnType).toBe("PgInteger");
+    expect(schema.deals.quantity.columnType).toBe("PgInteger");
+  });
 });
