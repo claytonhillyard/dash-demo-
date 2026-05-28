@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { DashboardGrid } from "@/app/DashboardGrid";
+import { useSettings } from "@/store/settings";
 
 // PriceTrendPanel and UnitConverterPanel fetch on mount; stub so the grid test is quiet.
 beforeEach(() =>
@@ -40,5 +41,20 @@ describe("DashboardGrid", () => {
     ]) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
+  });
+
+  it("renders the edit-mode controls when editMode is on", () => {
+    useSettings.setState({ editMode: true, dashboardLayout: null } as never);
+    const inventory = {
+      counts: {
+        Rings: 5, Necklaces: 0, Earrings: 0, Bracelets: 0, Pendants: 0,
+        Chains: 0, "Watch Bands": 0, Diamonds: 10, Gems: 0,
+      },
+      total: 15,
+      updatedLabel: "updated today",
+    };
+    render(<DashboardGrid inventory={inventory} />);
+    expect(screen.getByLabelText(/move panel price-trend/i)).toBeInTheDocument();
+    useSettings.setState({ editMode: false } as never);
   });
 });

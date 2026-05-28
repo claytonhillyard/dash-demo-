@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CustomizeButton } from "./CustomizeButton";
 
 export function TopBar({ ticker }: { ticker?: ReactNode }) {
   return (
@@ -27,6 +28,7 @@ export function TopBar({ ticker }: { ticker?: ReactNode }) {
       </label>
 
       <div className="ml-auto flex items-center gap-3">
+        <CustomizeButton />
         <div className="hidden items-center gap-3 text-text/40 lg:flex" aria-hidden>
           <span className="relative">
             🔔

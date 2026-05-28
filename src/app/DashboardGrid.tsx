@@ -1,53 +1,73 @@
 "use client";
+import { useMemo } from "react";
+import {
+  DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, sortableKeyboardCoordinates, rectSortingStrategy,
+} from "@dnd-kit/sortable";
 import { KpiTicker } from "@/components/market/KpiTicker";
-import type { DiamondKpis } from "@/components/market/KpiTicker";
-import { MarketIntelligencePanel } from "@/components/market/MarketIntelligencePanel";
-import type { DiamondRow } from "@/components/market/MarketIntelligencePanel";
-import { PriceTrendPanel } from "@/components/market/PriceTrendPanel";
-import { UnitConverterPanel } from "@/components/converter/UnitConverterPanel";
-import { ClockCalendar } from "@/components/dashboard/ClockCalendar";
-import { BusinessPlaceholder } from "@/components/dashboard/BusinessPlaceholder";
-import { InventoryOverviewPanel } from "@/components/dashboard/InventoryOverviewPanel";
-import type { InventoryCategory } from "@/lib/inventory/validation";
+import type { PanelSize, InventoryView, DiamondView } from "@/lib/layout/types";
+import { getPanel, getEffectiveLayout } from "@/lib/layout/registry";
+import { useSettings } from "@/store/settings";
+import { SortablePanel } from "@/components/dashboard/SortablePanel";
+import { LayoutEditBar } from "@/components/dashboard/LayoutEditBar";
 
-export interface InventoryView {
-  counts: Record<InventoryCategory, number>;
-  total: number;
-  updatedLabel: string | null;
-}
+// Re-export the view types so callers that previously imported them from
+// DashboardGrid (e.g. page.tsx) keep working without an extra import path.
+export type { InventoryView, DiamondView } from "@/lib/layout/types";
 
-export interface DiamondView { kpis: DiamondKpis; rows: DiamondRow[] }
+const NEXT_SIZE: Record<PanelSize, PanelSize> = { 1: 2, 2: 4, 4: 1 };
 
 export function DashboardGrid({ inventory, diamond }: { inventory?: InventoryView; diamond?: DiamondView }) {
+  const editMode = useSettings((s) => s.editMode);
+  const persisted = useSettings((s) => s.dashboardLayout);
+  const reorderLayout = useSettings((s) => s.reorderLayout);
+  const setPanelSize = useSettings((s) => s.setPanelSize);
+  const togglePanelHidden = useSettings((s) => s.togglePanelHidden);
+
+  const layout = useMemo(() => getEffectiveLayout(persisted), [persisted]);
+  const visible = layout.filter((i) => !i.hidden);
+  const ctx = { inventory, diamond };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    reorderLayout(String(active.id), String(over.id));
+  }
+
   return (
     <div className="space-y-3" data-testid="dashboard-root">
       <KpiTicker diamond={diamond?.kpis} />
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-        <div className="xl:col-span-1"><MarketIntelligencePanel diamondRows={diamond?.rows} /></div>
-        <div className="xl:col-span-2"><PriceTrendPanel /></div>
-        <div className="xl:col-span-1"><ClockCalendar /></div>
-
-        <BusinessPlaceholder title="AI Insights" testid="panel-ai-insights" />
-        <BusinessPlaceholder title="Today's Schedule" testid="panel-todays-schedule" />
-        {inventory ? (
-          <InventoryOverviewPanel
-            counts={inventory.counts}
-            total={inventory.total}
-            updatedLabel={inventory.updatedLabel}
-          />
-        ) : (
-          <BusinessPlaceholder title="Inventory Overview" testid="panel-inventory-overview" />
-        )}
-        <BusinessPlaceholder title="TradeNet Exchange" testid="panel-tradenet-exchange" />
-
-        <BusinessPlaceholder title="Orders & Pipeline" testid="panel-orders-pipeline" />
-        <BusinessPlaceholder title="Portfolio Snapshot" testid="panel-portfolio-snapshot" />
-        <div className="xl:col-span-1"><UnitConverterPanel /></div>
-        <BusinessPlaceholder title="Crypto Wallet" testid="panel-crypto-wallet" />
-
-        <div className="xl:col-span-2"><BusinessPlaceholder title="Financial Overview" testid="panel-financial-overview" /></div>
-        <div className="xl:col-span-2"><BusinessPlaceholder title="Social & Inbox" testid="panel-social-inbox" /></div>
-      </div>
+      <LayoutEditBar />
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={visible.map((i) => i.id)} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+            {visible.map((item) => {
+              const panel = getPanel(item.id);
+              if (!panel) return null;
+              return (
+                <SortablePanel
+                  key={item.id}
+                  id={item.id}
+                  size={item.size}
+                  editMode={editMode}
+                  onCycleSize={() => setPanelSize(item.id, NEXT_SIZE[item.size])}
+                  onToggleHidden={() => togglePanelHidden(item.id)}
+                >
+                  {panel.render(ctx)}
+                </SortablePanel>
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }
