@@ -19,9 +19,14 @@ describe("requireSession", () => {
     process.env.SESSION_SECRET = SECRET;
   });
 
-  it("returns the session user for a valid cookie", async () => {
-    cookieStore.value = await createSession("boss", SECRET);
-    expect(await requireSession()).toEqual({ user: "boss" });
+  it("returns { user, orgId } for a valid cookie", async () => {
+    cookieStore.value = await createSession("boss", 1, SECRET);
+    expect(await requireSession()).toEqual({ user: "boss", orgId: 1 });
+  });
+
+  it("returns the correct orgId for a non-AIYA session", async () => {
+    cookieStore.value = await createSession("alice", 42, SECRET);
+    expect(await requireSession()).toEqual({ user: "alice", orgId: 42 });
   });
 
   it("throws when no cookie is present", async () => {
