@@ -1,9 +1,19 @@
 import type { ReactNode } from "react";
 import { CustomizeButton } from "./CustomizeButton";
 
-export function TopBar({ ticker }: { ticker?: ReactNode }) {
+export function TopBar({ ticker, onMenuClick }: { ticker?: ReactNode; onMenuClick?: () => void }) {
   return (
     <header className="flex items-center gap-4 border-b border-border bg-surface/80 px-4 py-2 backdrop-blur">
+      {onMenuClick && (
+        <button
+          type="button"
+          aria-label="Open navigation"
+          onClick={onMenuClick}
+          className="-ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-text/70 hover:bg-surface-2 hover:text-gold md:hidden"
+        >
+          <span aria-hidden className="text-lg leading-none">☰</span>
+        </button>
+      )}
       <div className="leading-tight">
         <div className="flex items-center gap-1.5 text-sm font-medium text-text">
           Good Morning, AIYA
