@@ -1,27 +1,32 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth/requireSession", () => ({
   requireSession: vi.fn(async () => ({ user: "boss" })),
 }));
 
-import { createTestDb, type Db } from "@/db/client";
+import type { Db } from "@/db/client";
+import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
 import { getDiamondSummary } from "@/db/diamonds";
 import {
   importMatrix, upsertMatrixCell, savePricePoint, deletePricePoint, __setTestDb,
 } from "@/lib/diamonds/actions";
 import { diamondPricePoints } from "@/db/schema";
 
-let close: () => Promise<void>;
 let db: Db;
+beforeAll(async () => {
+  db = await getSharedDb();
+  await __setTestDb(db);
+});
 beforeEach(async () => {
   vi.clearAllMocks();
-  const t = await createTestDb();
-  await __setTestDb(t.db);
-  db = t.db; close = t.close;
+  await resetSharedDb();
 });
-afterEach(async () => { await close(); });
+afterAll(async () => {
+  await __setTestDb(null);
+  await closeSharedDb();
+});
 
 const HEADER = "carat_band,color,clarity,price_per_carat";
 
