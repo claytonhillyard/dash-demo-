@@ -6,7 +6,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 describe("PostDealForm", () => {
   it("submits trimmed + cents-converted payload to the action", async () => {
-    const postAction = vi.fn(async () => ({ ok: true as const }));
+    const postAction = vi.fn(async (_input: unknown) => ({ ok: true as const }));
     render(<PostDealForm postAction={postAction} />);
     fireEvent.change(screen.getByLabelText("kind"), { target: { value: "BUY" } });
     fireEvent.change(screen.getByLabelText("category"), { target: { value: "Metal" } });
@@ -37,7 +37,7 @@ describe("PostDealForm", () => {
   });
 
   it("clears the form on success", async () => {
-    const postAction = vi.fn(async () => ({ ok: true as const }));
+    const postAction = vi.fn(async (_input: unknown) => ({ ok: true as const }));
     render(<PostDealForm postAction={postAction} />);
     const subject = screen.getByLabelText("subject") as HTMLInputElement;
     fireEvent.change(subject, { target: { value: "Emerald" } });
