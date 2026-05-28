@@ -110,13 +110,13 @@ describe("withdrawDeal", () => {
 describe("tenancy isolation on mutation", () => {
   it("withdrawDeal does not touch other-org rows", async () => {
     await db.insert(deals).values({
-      orgId: 2, kind: "SELL", category: "Diamond", subject: "other",
+      orgId: 999, kind: "SELL", category: "Diamond", subject: "other",
       quantity: 1, priceCents: 100, postedByLabel: "x",
     });
     const [otherRow] = await db.select({ id: deals.id }).from(deals);
     const res = await withdrawDeal(otherRow.id);
     expect(res).toEqual({ ok: true }); // no error, no match
-    const orgTwo = await getAllDeals(db, 2);
+    const orgTwo = await getAllDeals(db, 999);
     expect(orgTwo[0].status).toBe("Open"); // unchanged
   });
 });

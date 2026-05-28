@@ -16,12 +16,36 @@ import { type Db } from "@/db/client";
  * re-imports this module per test file, so the module-level singleton is
  * naturally file-scoped — no cross-file leakage.
  *
+ * Multi-tenant seeding (slice 3): the migration's hand-edited block already
+ * seeds AIYA at id=1, but the post-migrate `seedOrgs()` step below also
+ * inserts a fixture second org at id=999 so cross-org isolation tests work
+ * out of the box. After every `resetSharedDb()` we re-insert both rows
+ * (TRUNCATE CASCADE wipes them) so every test starts from the same baseline.
+ *
  * Tests that specifically verify per-instance isolation or migration behavior
- * (e.g. test/db/client.test.ts) should keep using `createTestDb()`.
+ * (e.g. test/db/client.test.ts, test/db/orgs-migration.test.ts) should keep
+ * using `createTestDb()` so they observe the seeded id=1 (and no 999) state.
  */
 
 let cached: { client: PGlite; db: Db } | null = null;
 let tableNames: string[] | null = null;
+
+async function seedOrgs(db: Db): Promise<void> {
+  // Idempotent: re-inserting AIYA after the migration is a no-op via ON CONFLICT.
+  // id=999 is the fixture org used by cross-org isolation tests (slice 3 spec §5.5).
+  await db.execute(sql`
+    INSERT INTO orgs (id, name, slug) VALUES
+      (1, 'AIYA Designs', 'aiya'),
+      (999, 'Fixture Org', 'fixture')
+    ON CONFLICT (id) DO NOTHING;
+  `);
+  await db.execute(sql`
+    SELECT setval(
+      pg_get_serial_sequence('orgs', 'id'),
+      GREATEST(999, (SELECT COALESCE(MAX(id), 1) FROM orgs))
+    );
+  `);
+}
 
 export async function getSharedDb(): Promise<Db> {
   if (cached) return cached.db;
@@ -38,14 +62,18 @@ export async function getSharedDb(): Promise<Db> {
   `);
   const rows = (res as unknown as { rows: { tablename: string }[] }).rows;
   tableNames = rows.map((r) => r.tablename);
+  await seedOrgs(db);
   return db;
 }
 
-/** Wipe every user table; preserves schema + sequences are reset to 1. Sub-ms. */
+/** Wipe every user table; preserves schema + sequences are reset to 1. Sub-ms.
+ *  Re-seeds orgs immediately after the truncate because the FK on every
+ *  tenanted table needs id=1 and id=999 to exist before the next test runs. */
 export async function resetSharedDb(): Promise<void> {
   if (!cached || !tableNames || tableNames.length === 0) return;
   const quoted = tableNames.map((t) => `"${t}"`).join(", ");
   await cached.db.execute(sql.raw(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`));
+  await seedOrgs(cached.db);
 }
 
 /** Close the underlying pglite instance. Call in afterAll. */

@@ -11,7 +11,7 @@ async function seed(db: Db) {
     { category: "Rings", name: "B", quantity: 2, status: "reserved" },
     { category: "Rings", name: "C", quantity: 5, status: "sold" },      // excluded
     { category: "Diamonds", name: "D", quantity: 10, status: "in_stock" },
-    { category: "Necklaces", name: "E", quantity: 1, status: "in_stock", orgId: 2 }, // other org
+    { category: "Necklaces", name: "E", quantity: 1, status: "in_stock", orgId: 999 }, // other org
   ]);
 }
 
@@ -28,7 +28,7 @@ describe("getInventorySummary", () => {
     const s = await getInventorySummary(db); // defaults to AIYA org (1)
     expect(s.counts.Rings).toBe(5);        // 3 + 2, sold excluded
     expect(s.counts.Diamonds).toBe(10);
-    expect(s.counts.Necklaces).toBe(0);    // the qty-1 row is org 2
+    expect(s.counts.Necklaces).toBe(0);    // the qty-1 row is org 999
     expect(s.counts.Earrings).toBe(0);     // zero-filled
     expect(s.total).toBe(15);
     expect(s.updatedAt).not.toBeNull();

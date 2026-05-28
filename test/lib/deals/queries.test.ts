@@ -78,11 +78,11 @@ describe("getAllDeals", () => {
 
   it("scopes to the supplied org (tenancy isolation)", async () => {
     await insert({ subject: "aiya", orgId: 1 });
-    await insert({ subject: "otherOrg", orgId: 2 });
+    await insert({ subject: "otherOrg", orgId: 999 });
     expect((await getActiveDeals(db, 1)).map((r) => r.subject)).toEqual(["aiya"]);
-    expect((await getActiveDeals(db, 2)).map((r) => r.subject)).toEqual(["otherOrg"]);
+    expect((await getActiveDeals(db, 999)).map((r) => r.subject)).toEqual(["otherOrg"]);
     expect((await getAllDeals(db, 1)).map((r) => r.subject)).toEqual(["aiya"]);
-    expect((await getAllDeals(db, 2)).map((r) => r.subject)).toEqual(["otherOrg"]);
+    expect((await getAllDeals(db, 999)).map((r) => r.subject)).toEqual(["otherOrg"]);
   });
 });
 
