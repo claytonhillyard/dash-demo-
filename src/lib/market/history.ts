@@ -1,4 +1,5 @@
 import type { Freshness } from "./types";
+import { isBuildPhase } from "./buildPhase";
 
 export type Range = "1D" | "7D" | "1M" | "3M" | "1Y" | "ALL";
 
@@ -24,26 +25,36 @@ const CG_ID: Record<string, string> = { BTC: "bitcoin", ETH: "ethereum", SOL: "s
 async function cryptoHistory(symbol: string, days: number): Promise<number[]> {
   const id = CG_ID[symbol];
   if (!id) return [];
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) return [];
-  const data = (await res.json()) as { prices?: [number, number][] };
-  return (data.prices ?? []).map(([, v]) => v);
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { prices?: [number, number][] };
+    return (data.prices ?? []).map(([, v]) => v);
+  } catch {
+    // Network failure or malformed JSON (truncated body, HTML error page, …).
+    // Caller treats [] as "no live data → fall back to simulated".
+    return [];
+  }
 }
 
 async function tdHistory(tdSymbol: string, days: number): Promise<number[]> {
   const key = process.env.TWELVEDATA_API_KEY;
   if (!key) return [];
-  const res = await fetch(
-    `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSymbol)}` +
-      `&interval=1day&outputsize=${days}&apikey=${key}`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) return [];
-  const data = (await res.json()) as { values?: { close: string }[] };
-  return (data.values ?? []).map((v) => Number(v.close)).reverse();
+  try {
+    const res = await fetch(
+      `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSymbol)}` +
+        `&interval=1day&outputsize=${days}&apikey=${key}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { values?: { close: string }[] };
+    return (data.values ?? []).map((v) => Number(v.close)).reverse();
+  } catch {
+    return [];
+  }
 }
 
 function simulatedSeries(base: number, days: number): number[] {
@@ -53,13 +64,18 @@ function simulatedSeries(base: number, days: number): number[] {
 
 export async function fetchHistory(symbol: string, range: Range): Promise<HistorySeries> {
   const days = rangeToDays(range);
-  if (CG_ID[symbol]) {
+  // Never hit the network during `next build` — the build must be deterministic
+  // and offline-safe. cryptoHistory/tdHistory still get exercised at runtime.
+  const offline = isBuildPhase();
+  if (CG_ID[symbol] && !offline) {
     const points = await cryptoHistory(symbol, days);
     if (points.length) return { symbol, points, freshness: "live" };
   }
   if (symbol === "XAU" || symbol === "XAG" || symbol === "XPT") {
-    const points = await tdHistory(`${symbol}/USD`, days);
-    if (points.length) return { symbol, points, freshness: "live" };
+    if (!offline) {
+      const points = await tdHistory(`${symbol}/USD`, days);
+      if (points.length) return { symbol, points, freshness: "live" };
+    }
     const base = symbol === "XAU" ? 2389.25 : symbol === "XPT" ? 1021.3 : 28.56;
     return { symbol, points: simulatedSeries(base, days), freshness: "simulated" };
   }
