@@ -8,7 +8,7 @@ import {
   SortableContext, sortableKeyboardCoordinates, rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { KpiTicker } from "@/components/market/KpiTicker";
-import type { PanelSize, InventoryView, DiamondView } from "@/lib/layout/types";
+import type { PanelSize, InventoryView, DiamondView, DealView } from "@/lib/layout/types";
 import { getPanel, getEffectiveLayout } from "@/lib/layout/registry";
 import { useSettings } from "@/store/settings";
 import { SortablePanel } from "@/components/dashboard/SortablePanel";
@@ -16,11 +16,17 @@ import { LayoutEditBar } from "@/components/dashboard/LayoutEditBar";
 
 // Re-export the view types so callers that previously imported them from
 // DashboardGrid (e.g. page.tsx) keep working without an extra import path.
-export type { InventoryView, DiamondView } from "@/lib/layout/types";
+export type { InventoryView, DiamondView, DealView } from "@/lib/layout/types";
 
 const NEXT_SIZE: Record<PanelSize, PanelSize> = { 1: 2, 2: 4, 4: 1 };
 
-export function DashboardGrid({ inventory, diamond }: { inventory?: InventoryView; diamond?: DiamondView }) {
+export function DashboardGrid({
+  inventory, diamond, deals,
+}: {
+  inventory?: InventoryView;
+  diamond?: DiamondView;
+  deals?: DealView;
+}) {
   const editMode = useSettings((s) => s.editMode);
   const persisted = useSettings((s) => s.dashboardLayout);
   const reorderLayout = useSettings((s) => s.reorderLayout);
@@ -30,7 +36,7 @@ export function DashboardGrid({ inventory, diamond }: { inventory?: InventoryVie
   const layout = useMemo(() => getEffectiveLayout(persisted), [persisted]);
   const visible = useMemo(() => layout.filter((i) => !i.hidden), [layout]);
   // Memoize so panel children don't reconcile on every store change.
-  const ctx = useMemo(() => ({ inventory, diamond }), [inventory, diamond]);
+  const ctx = useMemo(() => ({ inventory, diamond, deals }), [inventory, diamond, deals]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

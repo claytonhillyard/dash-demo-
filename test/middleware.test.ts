@@ -50,6 +50,10 @@ describe("middleware matcher", () => {
     expect(isMatched("/api/diamond-history")).toBe(true);
   });
 
+  it("guards /deals (slice-2)", () => {
+    expect(isMatched("/deals")).toBe(true);
+  });
+
   it("does not guard the public login page", () => {
     expect(isMatched("/login")).toBe(false);
   });

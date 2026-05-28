@@ -19,4 +19,9 @@ describe("Nav", () => {
     const link = screen.getByRole("link", { name: "Inventory" });
     expect(link).toHaveAttribute("href", "/inventory");
   });
+  it("links Orders & Deals to /deals", () => {
+    render(<Nav />);
+    const link = screen.getByRole("link", { name: "Orders & Deals" });
+    expect(link).toHaveAttribute("href", "/deals");
+  });
 });
