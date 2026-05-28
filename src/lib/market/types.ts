@@ -1,6 +1,6 @@
 export type AssetClass = "equity" | "crypto" | "fx" | "index" | "commodity" | "bond";
 export type ProviderId =
-  | "finnhub" | "twelvedata" | "coingecko" | "frankfurter" | "metals" | "simulated";
+  | "finnhub" | "twelvedata" | "coingecko" | "frankfurter" | "metals" | "index-etf" | "simulated";
 export type Freshness = "live" | "delayed" | "stale" | "simulated";
 
 export interface SymbolDef {

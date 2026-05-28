@@ -5,13 +5,14 @@ import { frankfurterProvider } from "./providers/frankfurter";
 import { finnhubProvider } from "./providers/finnhub";
 import { twelvedataProvider } from "./providers/twelvedata";
 import { metalsProvider } from "./providers/metals";
+import { indexEtfProxyProvider } from "./providers/index-etf";
 import { simulatedProvider } from "./providers/simulated";
 
 export const CHAINS: Record<AssetClass, QuoteProvider[]> = {
   crypto: [coingeckoProvider, finnhubProvider, simulatedProvider],
   fx: [frankfurterProvider, finnhubProvider, simulatedProvider],
   equity: [finnhubProvider, twelvedataProvider, simulatedProvider],
-  index: [twelvedataProvider, finnhubProvider, simulatedProvider],
+  index: [indexEtfProxyProvider, twelvedataProvider, simulatedProvider],
   commodity: [twelvedataProvider, metalsProvider, simulatedProvider],
   bond: [twelvedataProvider, simulatedProvider],
 };
