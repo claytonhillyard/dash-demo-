@@ -7,5 +7,12 @@ const nextConfig = {
   // migrates. Keeping it external lets it load from node_modules normally.
   // (Tests use vitest, not the bundler, so they were unaffected.)
   serverExternalPackages: ["@electric-sql/pglite"],
+  // Drizzle's migrator reads ./drizzle/* at runtime (not via static import), so
+  // Next's file-tracer doesn't auto-bundle it. Without this, the deployed
+  // function instance can't migrate the local pglite DB and any page that
+  // touches the DB throws (e.g. the dashboard / page on Netlify).
+  outputFileTracingIncludes: {
+    "/**": ["./drizzle/**/*"],
+  },
 };
 export default nextConfig;
