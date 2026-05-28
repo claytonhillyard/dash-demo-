@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { ensureDbReady } from "@/db/client";
 import { inventoryItems } from "@/db/schema";
+import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { InventoryAdmin, type InventoryRow } from "@/components/inventory/InventoryAdmin";
 import { createInventoryItem, deleteInventoryItem } from "@/lib/inventory/actions";
 
@@ -9,6 +10,11 @@ export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
   const db = await ensureDbReady();
+  const orgId = await getCurrentOrgId();
+  // Tenancy: this page was previously selecting ALL inventory rows across orgs
+  // because it bypassed the centralized query module (which is what carries the
+  // org filter). Filter explicitly here. Worth a follow-up lint rule banning
+  // `.from(tenantedTable)` outside the per-table query module.
   const rows = await db
     .select({
       id: inventoryItems.id,
@@ -20,6 +26,7 @@ export default async function InventoryPage() {
       retailPriceCents: inventoryItems.retailPriceCents,
     })
     .from(inventoryItems)
+    .where(eq(inventoryItems.orgId, orgId))
     .orderBy(desc(inventoryItems.updatedAt));
 
   return (
