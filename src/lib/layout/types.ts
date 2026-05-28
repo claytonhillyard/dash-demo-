@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { DiamondKpis } from "@/components/market/KpiTicker";
 import type { DiamondRow } from "@/components/market/MarketIntelligencePanel";
 import type { InventoryCategory } from "@/lib/inventory/validation";
+import type { DealRow } from "@/lib/deals/queries";
 
 export type PanelSize = 1 | 2 | 4;
 
@@ -24,10 +25,15 @@ export interface DiamondView {
   rows: DiamondRow[];
 }
 
+export interface DealView {
+  deals: DealRow[];
+}
+
 /** Server-read context the page passes into each panel's render. */
 export interface PanelCtx {
   inventory?: InventoryView;
   diamond?: DiamondView;
+  deals?: DealView;
 }
 
 export interface PanelEntry {

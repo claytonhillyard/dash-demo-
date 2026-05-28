@@ -4,6 +4,7 @@ import { UnitConverterPanel } from "@/components/converter/UnitConverterPanel";
 import { ClockCalendar } from "@/components/dashboard/ClockCalendar";
 import { BusinessPlaceholder } from "@/components/dashboard/BusinessPlaceholder";
 import { InventoryOverviewPanel } from "@/components/dashboard/InventoryOverviewPanel";
+import { DealRoomPanel } from "@/components/dashboard/DealRoomPanel";
 import type { LayoutItem, PanelEntry, PanelSize } from "./types";
 
 export const PANEL_REGISTRY: PanelEntry[] = [
@@ -54,9 +55,12 @@ export const PANEL_REGISTRY: PanelEntry[] = [
   },
   {
     id: "tradenet-exchange",
-    title: "TradeNet Exchange",
+    title: "Deal Room",
     defaultSize: 1,
-    render: () => <BusinessPlaceholder title="TradeNet Exchange" testid="panel-tradenet-exchange" />,
+    render: (ctx) =>
+      ctx.deals
+        ? <DealRoomPanel deals={ctx.deals.deals} />
+        : <BusinessPlaceholder title="Deal Room" testid="panel-tradenet-exchange" />,
   },
   {
     id: "orders-pipeline",

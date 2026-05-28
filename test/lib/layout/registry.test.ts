@@ -34,4 +34,10 @@ describe("panel registry + effective layout", () => {
     expect(new Set(ids).size).toBe(ids.length);
     for (const p of PANEL_REGISTRY) expect(ids).toContain(p.id);
   });
+
+  it("the tradenet-exchange entry is retitled 'Deal Room' (id preserved)", () => {
+    const entry = PANEL_REGISTRY.find((p) => p.id === "tradenet-exchange");
+    expect(entry).toBeDefined();
+    expect(entry!.title).toBe("Deal Room");
+  });
 });
