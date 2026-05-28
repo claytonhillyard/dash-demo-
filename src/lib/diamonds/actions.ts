@@ -5,7 +5,6 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, type Db } from "@/db/client";
 import { diamondMatrixPrices, diamondPricePoints, diamondIndexHistory } from "@/db/schema";
-import { AIYA_ORG_ID } from "@/db/org";
 import { requireSession } from "@/lib/auth/requireSession";
 import { BENCHMARK } from "@/lib/diamonds/constants";
 import { parseMatrixCsv } from "@/lib/diamonds/csv";
@@ -21,11 +20,7 @@ let testDb: Db | null = null;
 export async function __setTestDb(db: Db | null): Promise<void> { testDb = db; }
 function db(): Db { return testDb ?? getDb(); }
 
-async function assertSession(): Promise<string | null> {
-  try { await requireSession(); return null; } catch { return "Unauthorized"; }
-}
-
-/** Append a snapshot of the natural/lab benchmark indices to history. */
+/** Append a snapshot of the natural/lab benchmark indices to history for `orgId`. */
 async function snapshotIndices(d: Db, orgId: number): Promise<void> {
   for (const [sheet, series] of [["natural", "natural_index"], ["lab", "lab_index"]] as const) {
     const rows = await d
@@ -45,8 +40,13 @@ async function snapshotIndices(d: Db, orgId: number): Promise<void> {
 
 export async function importMatrix(raw: unknown): Promise<ImportResult> {
   if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
-  const unauth = await assertSession();
-  if (unauth) return { ok: false, error: unauth };
+  let orgId: number;
+  try {
+    const session = await requireSession();
+    orgId = session.orgId;
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
   const parsedInput = importInput.safeParse(raw);
   if (!parsedInput.success) return { ok: false, error: firstZodError(parsedInput.error) };
   const { sheet, shape, csv } = parsedInput.data;
@@ -61,19 +61,19 @@ export async function importMatrix(raw: unknown): Promise<ImportResult> {
     // inside). The index snapshot is append-only and runs after, outside the tx.
     await d.transaction(async (tx) => {
       await tx.delete(diamondMatrixPrices).where(and(
-        eq(diamondMatrixPrices.orgId, AIYA_ORG_ID),
+        eq(diamondMatrixPrices.orgId, orgId),
         eq(diamondMatrixPrices.sheet, sheet),
         eq(diamondMatrixPrices.shape, shape)
       ));
       await tx.insert(diamondMatrixPrices).values(
         parsed.rows.map((r) => ({
-          orgId: AIYA_ORG_ID, sheet, shape,
+          orgId, sheet, shape,
           color: r.color, clarity: r.clarity, caratBand: r.caratBand,
           pricePerCaratCents: r.pricePerCaratCents,
         }))
       );
     });
-    await snapshotIndices(d, AIYA_ORG_ID);
+    await snapshotIndices(d, orgId);
     revalidatePath("/");
     revalidatePath("/diamonds");
     return { ok: true, imported: parsed.rows.length };
@@ -83,14 +83,23 @@ export async function importMatrix(raw: unknown): Promise<ImportResult> {
   }
 }
 
-async function run<T>(schema: z.ZodType<T>, raw: unknown, fn: (input: T) => Promise<void>): Promise<ActionResult> {
+async function run<T>(
+  schema: z.ZodType<T>,
+  raw: unknown,
+  fn: (input: T, orgId: number) => Promise<void>,
+): Promise<ActionResult> {
   if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
-  const unauth = await assertSession();
-  if (unauth) return { ok: false, error: unauth };
+  let orgId: number;
+  try {
+    const session = await requireSession();
+    orgId = session.orgId;
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstZodError(parsed.error) };
   try {
-    await fn(parsed.data);
+    await fn(parsed.data, orgId);
     revalidatePath("/");
     revalidatePath("/diamonds");
     return { ok: true };
@@ -101,8 +110,8 @@ async function run<T>(schema: z.ZodType<T>, raw: unknown, fn: (input: T) => Prom
 }
 
 export async function upsertMatrixCell(raw: unknown): Promise<ActionResult> {
-  return run(matrixCellInput, raw, async (input) => {
-    await db().insert(diamondMatrixPrices).values({ orgId: AIYA_ORG_ID, ...input })
+  return run(matrixCellInput, raw, async (input, orgId) => {
+    await db().insert(diamondMatrixPrices).values({ orgId, ...input })
       .onConflictDoUpdate({
         target: [
           diamondMatrixPrices.orgId, diamondMatrixPrices.sheet, diamondMatrixPrices.shape,
@@ -110,27 +119,27 @@ export async function upsertMatrixCell(raw: unknown): Promise<ActionResult> {
         ],
         set: { pricePerCaratCents: input.pricePerCaratCents, updatedAt: new Date() },
       });
-    await snapshotIndices(db(), AIYA_ORG_ID);
+    await snapshotIndices(db(), orgId);
   });
 }
 
 export async function savePricePoint(raw: unknown): Promise<ActionResult> {
   const isUpdate = typeof (raw as { id?: unknown })?.id === "number";
   if (isUpdate) {
-    return run(pricePointUpdateInput, raw, async (input) => {
+    return run(pricePointUpdateInput, raw, async (input, orgId) => {
       await db().update(diamondPricePoints)
         .set({ label: input.label, kind: input.kind, pricePerCaratCents: input.pricePerCaratCents, updatedAt: new Date() })
-        .where(and(eq(diamondPricePoints.id, input.id), eq(diamondPricePoints.orgId, AIYA_ORG_ID)));
+        .where(and(eq(diamondPricePoints.id, input.id), eq(diamondPricePoints.orgId, orgId)));
     });
   }
-  return run(pricePointInput, raw, async (input) => {
-    await db().insert(diamondPricePoints).values({ orgId: AIYA_ORG_ID, ...input });
+  return run(pricePointInput, raw, async (input, orgId) => {
+    await db().insert(diamondPricePoints).values({ orgId, ...input });
   });
 }
 
 export async function deletePricePoint(id: number): Promise<ActionResult> {
-  return run(z.number().int(), id, async (rid) => {
+  return run(z.number().int(), id, async (rid, orgId) => {
     await db().delete(diamondPricePoints)
-      .where(and(eq(diamondPricePoints.id, rid), eq(diamondPricePoints.orgId, AIYA_ORG_ID)));
+      .where(and(eq(diamondPricePoints.id, rid), eq(diamondPricePoints.orgId, orgId)));
   });
 }

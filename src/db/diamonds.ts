@@ -1,7 +1,6 @@
 import { and, eq, asc, desc } from "drizzle-orm";
 import type { Db } from "./client";
 import { diamondMatrixPrices, diamondPricePoints, diamondIndexHistory } from "./schema";
-import { AIYA_ORG_ID } from "./org";
 import { BENCHMARK, type Sheet } from "@/lib/diamonds/constants";
 import { isDemoMode } from "@/lib/demo/mode";
 import { seedDiamondSummary } from "@/lib/demo/seed";
@@ -54,7 +53,7 @@ async function indexValue(db: Db, orgId: number, sheet: Sheet, series: string): 
   return { cents, change24hPct: await change24hPct(db, orgId, series) };
 }
 
-export async function getDiamondSummary(db: Db, orgId: number = AIYA_ORG_ID): Promise<DiamondSummary> {
+export async function getDiamondSummary(db: Db, orgId: number): Promise<DiamondSummary> {
   if (isDemoMode()) return seedDiamondSummary();
   const [naturalIndex, labIndex, pointRows] = await Promise.all([
     indexValue(db, orgId, "natural", "natural_index"),
@@ -77,8 +76,8 @@ export async function getDiamondSummary(db: Db, orgId: number = AIYA_ORG_ID): Pr
 
 export async function getDiamondTrend(
   db: Db,
-  series: string = "natural_index",
-  orgId: number = AIYA_ORG_ID
+  series: string,
+  orgId: number,
 ): Promise<number[]> {
   const rows = await db
     .select({ valueCents: diamondIndexHistory.valueCents })
