@@ -17,14 +17,17 @@ export function Shell({ children, ticker }: { children: ReactNode; ticker?: Reac
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Nav />
+      {/* Side panels are desktop-only for now. On mobile (<md / <768px) the
+          main column fills the width so the dashboard is at least viewable;
+          a future hamburger drawer can restore navigation on small screens. */}
+      <div className="hidden md:flex"><Nav /></div>
       <div className="flex min-w-0 flex-1 flex-col">
         <DemoBanner />
         <TopBar ticker={ticker} />
         <main className="flex-1 overflow-auto p-4">{children}</main>
         <FooterBar />
       </div>
-      <RightRail><SettingsPanel /></RightRail>
+      <div className="hidden md:flex"><RightRail><SettingsPanel /></RightRail></div>
     </div>
   );
 }
