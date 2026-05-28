@@ -10,6 +10,19 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 
+export const orgs = pgTable(
+  "orgs",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    slugUniq: unique("orgs_slug_uniq").on(t.slug),
+  })
+);
+
 export const revenueMonths = pgTable(
   "revenue_months",
   {
@@ -79,7 +92,7 @@ export const projectionAssumptions = pgTable("projection_assumptions", {
 
 export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
-  orgId: integer("org_id").notNull().default(1), // 1 = AIYA; orgs table arrives with multi-tenant slice
+  orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
   category: text("category", {
     enum: [
       "Rings", "Necklaces", "Earrings", "Bracelets", "Pendants",
@@ -108,7 +121,7 @@ export const diamondMatrixPrices = pgTable(
   "diamond_matrix_prices",
   {
     id: serial("id").primaryKey(),
-    orgId: integer("org_id").notNull().default(1),
+    orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
     sheet: text("sheet", { enum: ["natural", "lab"] }).notNull(),
     shape: text("shape", { enum: ["round", "fancy"] }).notNull(),
     color: text("color").notNull(),
@@ -127,7 +140,7 @@ export const diamondMatrixPrices = pgTable(
 
 export const diamondPricePoints = pgTable("diamond_price_points", {
   id: serial("id").primaryKey(),
-  orgId: integer("org_id").notNull().default(1),
+  orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
   label: text("label").notNull(),
   kind: text("kind", { enum: ["fancy_diamond", "gem"] }).notNull(),
   pricePerCaratCents: integer("price_per_carat_cents").notNull(),
@@ -137,7 +150,7 @@ export const diamondPricePoints = pgTable("diamond_price_points", {
 
 export const diamondIndexHistory = pgTable("diamond_index_history", {
   id: serial("id").primaryKey(),
-  orgId: integer("org_id").notNull().default(1),
+  orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
   series: text("series").notNull(),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
   valueCents: integer("value_cents").notNull(),
@@ -147,7 +160,7 @@ export const deals = pgTable(
   "deals",
   {
     id: serial("id").primaryKey(),
-    orgId: integer("org_id").notNull().default(1), // 1 = AIYA; orgs table arrives with multi-tenant slice
+    orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
     kind: text("kind", { enum: ["BUY", "SELL"] }).notNull(),
     category: text("category", {
       enum: ["Diamond", "Gem", "Metal", "Finished", "Other"],

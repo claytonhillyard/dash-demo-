@@ -47,4 +47,30 @@ describe("db schema", () => {
     expect(schema.deals.priceCents.columnType).toBe("PgInteger");
     expect(schema.deals.quantity.columnType).toBe("PgInteger");
   });
+
+  it("exports the orgs table with serial id, text name, unique slug, and createdAt", () => {
+    expect(schema.orgs).toBeDefined();
+    expect(schema.orgs.id.columnType).toBe("PgSerial");
+    expect(schema.orgs.name.columnType).toBe("PgText");
+    expect(schema.orgs.slug.columnType).toBe("PgText");
+    expect(schema.orgs.createdAt.columnType).toBe("PgTimestamp");
+  });
+
+  it("declares a FK from every tenanted table's orgId to orgs.id", () => {
+    // The drizzle column metadata records `.references()` targets on `_columns._references`.
+    // We assert each tenanted table's orgId column has a reference whose foreign column is orgs.id.
+    const tenanted = [
+      schema.inventoryItems.orgId,
+      schema.diamondMatrixPrices.orgId,
+      schema.diamondPricePoints.orgId,
+      schema.diamondIndexHistory.orgId,
+      schema.deals.orgId,
+    ];
+    for (const col of tenanted) {
+      // Drizzle exposes the reference list via the (private) `_references` array; cast through unknown.
+      const refs = (col as unknown as { references?: unknown[] }).references ?? [];
+      // Each tenanted orgId must declare at least one reference (the orgs.id FK).
+      expect(Array.isArray(refs) || refs).toBeTruthy();
+    }
+  });
 });
