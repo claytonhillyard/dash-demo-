@@ -3,6 +3,7 @@ import { ALL_SYMBOLS } from "./registry";
 import { resolveQuotes } from "./router";
 import { simulatedProvider } from "./providers/simulated";
 import { isDemoMode } from "@/lib/demo/mode";
+import { isBuildPhase } from "./buildPhase";
 
 // Twelve Data backs the index + commodity classes on a metered free tier
 // (8 credits/min, 1 credit per symbol). Refresh those classes on a slow cadence
@@ -15,12 +16,13 @@ const SLOW_SYMBOLS = ALL_SYMBOLS.filter((s) => SLOW_CLASSES.has(s.assetClass));
 
 /**
  * Default poller fetcher. Resolves the given symbol subset through the real
- * provider chain — or, in demo mode, forces the simulated provider so the demo
- * makes no external calls and is fully deterministic. Takes the subset so it
- * works with the fast/slow split below.
+ * provider chain — or, in demo mode or during `next build`, forces the
+ * simulated provider so neither the demo nor the build ever makes an external
+ * call. Building offline must always succeed deterministically; see
+ * `buildPhase.ts` for the rationale.
  */
 export function defaultQuoteFetcher(symbols: SymbolDef[]): Promise<Quote[]> {
-  return isDemoMode()
+  return isDemoMode() || isBuildPhase()
     ? resolveQuotes(symbols, [simulatedProvider])
     : resolveQuotes(symbols);
 }
