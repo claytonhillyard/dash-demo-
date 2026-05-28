@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ensureDbReady } from "@/db/client";
-import { AIYA_ORG_ID } from "@/db/org";
+import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { getAllDeals, type DealFilters } from "@/lib/deals/queries";
 import { DEAL_KINDS, DEAL_CATEGORIES, DEAL_STATUSES, type DealKind, type DealCategory, type DealStatus } from "@/lib/deals/constants";
 import { DealList } from "@/components/deals/DealList";
@@ -32,7 +32,8 @@ export default async function DealsPage({
   };
 
   const db = await ensureDbReady();
-  const rows = await getAllDeals(db, AIYA_ORG_ID, filters);
+  const orgId = await getCurrentOrgId();
+  const rows = await getAllDeals(db, orgId, filters);
 
   return (
     <main className="mx-auto max-w-5xl p-4">

@@ -3,7 +3,7 @@ import { QuotesProvider } from "@/components/dashboard/QuotesProvider";
 import { TickerStrip } from "@/components/market/TickerStrip";
 import { DashboardGrid } from "./DashboardGrid";
 import { ensureDbReady } from "@/db/client";
-import { AIYA_ORG_ID } from "@/db/org";
+import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { getInventorySummary } from "@/db/inventory";
 import { getDiamondSummary } from "@/db/diamonds";
 import { getActiveDeals } from "@/lib/deals/queries";
@@ -13,10 +13,11 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const db = await ensureDbReady();
+  const orgId = await getCurrentOrgId();
   const [invSummary, dia, activeDeals] = await Promise.all([
-    getInventorySummary(db),
-    getDiamondSummary(db),
-    getActiveDeals(db, AIYA_ORG_ID, 5),
+    getInventorySummary(db, orgId),
+    getDiamondSummary(db, orgId),
+    getActiveDeals(db, orgId, 5),
   ]);
   const inventory = {
     counts: invSummary.counts,

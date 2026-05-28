@@ -2,7 +2,7 @@ import Link from "next/link";
 import { asc, eq } from "drizzle-orm";
 import { ensureDbReady } from "@/db/client";
 import { diamondPricePoints } from "@/db/schema";
-import { AIYA_ORG_ID } from "@/db/org";
+import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { DiamondAdmin, type PricePointRow } from "@/components/diamonds/DiamondAdmin";
 import { importMatrix, savePricePoint, deletePricePoint } from "@/lib/diamonds/actions";
 
@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DiamondsPage() {
   const db = await ensureDbReady();
+  const orgId = await getCurrentOrgId();
   const rows = await db
     .select({
       id: diamondPricePoints.id,
@@ -18,7 +19,7 @@ export default async function DiamondsPage() {
       pricePerCaratCents: diamondPricePoints.pricePerCaratCents,
     })
     .from(diamondPricePoints)
-    .where(eq(diamondPricePoints.orgId, AIYA_ORG_ID))
+    .where(eq(diamondPricePoints.orgId, orgId))
     .orderBy(asc(diamondPricePoints.label));
 
   return (
