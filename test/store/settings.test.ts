@@ -48,6 +48,29 @@ describe("settings store — layout", () => {
     expect(layout[0].id).toBe(def[1].id);
   });
 
+  it("reorderLayout — backward move lands at the over-target's position", () => {
+    // Drag def[3] onto def[0] — def[3] should land at index 0.
+    const def = defaultLayout();
+    useSettings.getState().reorderLayout(def[3].id, def[0].id);
+    const layout = useSettings.getState().dashboardLayout!;
+    expect(layout[0].id).toBe(def[3].id);
+    expect(layout[1].id).toBe(def[0].id);
+    expect(layout[2].id).toBe(def[1].id);
+    expect(layout[3].id).toBe(def[2].id);
+  });
+
+  it("reorderLayout — multi-slot forward move lands at the over-target's position", () => {
+    // Drag def[0] onto def[5] — def[0] should land at index 5 (not 6).
+    // This is the regression case: a naive remove-then-insert puts the
+    // dragged item one slot past the drop target for forward jumps.
+    const def = defaultLayout();
+    useSettings.getState().reorderLayout(def[0].id, def[5].id);
+    const layout = useSettings.getState().dashboardLayout!;
+    expect(layout[5].id).toBe(def[0].id);
+    expect(layout[0].id).toBe(def[1].id);
+    expect(layout[4].id).toBe(def[5].id);
+  });
+
   it("setPanelSize updates a panel's size", () => {
     useSettings.getState().setPanelSize("price-trend", 4);
     const layout = useSettings.getState().dashboardLayout!;

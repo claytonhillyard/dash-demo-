@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors,
   type DragEndEvent,
@@ -28,46 +28,57 @@ export function DashboardGrid({ inventory, diamond }: { inventory?: InventoryVie
   const togglePanelHidden = useSettings((s) => s.togglePanelHidden);
 
   const layout = useMemo(() => getEffectiveLayout(persisted), [persisted]);
-  const visible = layout.filter((i) => !i.hidden);
-  const ctx = { inventory, diamond };
+  const visible = useMemo(() => layout.filter((i) => !i.hidden), [layout]);
+  // Memoize so panel children don't reconcile on every store change.
+  const ctx = useMemo(() => ({ inventory, diamond }), [inventory, diamond]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  function onDragEnd(e: DragEndEvent) {
+  const onDragEnd = useCallback((e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     reorderLayout(String(active.id), String(over.id));
-  }
+  }, [reorderLayout]);
+
+  // Render the grid (same JSX in both modes). In edit mode we wrap it in
+  // dnd-kit context so the spec's "zero drag-machinery cost outside edit mode"
+  // promise is real — no sensors, no collision detector, no SortableContext
+  // when the user isn't customizing.
+  const grid = (
+    <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+      {visible.map((item) => {
+        const panel = getPanel(item.id);
+        if (!panel) return null;
+        return (
+          <SortablePanel
+            key={item.id}
+            id={item.id}
+            size={item.size}
+            editMode={editMode}
+            onCycleSize={() => setPanelSize(item.id, NEXT_SIZE[item.size])}
+            onToggleHidden={() => togglePanelHidden(item.id)}
+          >
+            {panel.render(ctx)}
+          </SortablePanel>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="space-y-3" data-testid="dashboard-root">
       <KpiTicker diamond={diamond?.kpis} />
       <LayoutEditBar />
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={visible.map((i) => i.id)} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-            {visible.map((item) => {
-              const panel = getPanel(item.id);
-              if (!panel) return null;
-              return (
-                <SortablePanel
-                  key={item.id}
-                  id={item.id}
-                  size={item.size}
-                  editMode={editMode}
-                  onCycleSize={() => setPanelSize(item.id, NEXT_SIZE[item.size])}
-                  onToggleHidden={() => togglePanelHidden(item.id)}
-                >
-                  {panel.render(ctx)}
-                </SortablePanel>
-              );
-            })}
-          </div>
-        </SortableContext>
-      </DndContext>
+      {editMode ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={visible.map((i) => i.id)} strategy={rectSortingStrategy}>
+            {grid}
+          </SortableContext>
+        </DndContext>
+      ) : grid}
     </div>
   );
 }

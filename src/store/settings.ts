@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { arrayMove } from "@dnd-kit/sortable";
 import { defaultLayout, getEffectiveLayout } from "@/lib/layout/registry";
 import type { LayoutItem, PanelSize } from "@/lib/layout/types";
 
@@ -11,7 +12,6 @@ export interface Settings {
   uiScale: number;
   density: Density;
   refreshSeconds: number;
-  hiddenPanels: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,7 +21,6 @@ export const DEFAULT_SETTINGS: Settings = {
   uiScale: 1,
   density: "comfortable",
   refreshSeconds: 15,
-  hiddenPanels: [],
 };
 
 interface SettingsState {
@@ -64,14 +63,15 @@ export const useSettings = create<SettingsState>()(
 
       reorderLayout: (fromId, toId) =>
         setState((state) => {
+          // Use dnd-kit's arrayMove so multi-slot forward moves don't land
+          // one slot past the drop target. arrayMove takes the current
+          // indices in the displayed list and returns a new array where the
+          // dragged item occupies the over-target's visual position.
           const base = getEffectiveLayout(state.dashboardLayout);
           const fromIdx = base.findIndex((i) => i.id === fromId);
           const toIdx = base.findIndex((i) => i.id === toId);
           if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return state;
-          const next = [...base];
-          const [moved] = next.splice(fromIdx, 1);
-          next.splice(toIdx, 0, moved);
-          return { dashboardLayout: next };
+          return { dashboardLayout: arrayMove(base, fromIdx, toIdx) };
         }),
 
       setPanelSize: (id, size) =>
