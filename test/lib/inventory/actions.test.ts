@@ -37,7 +37,7 @@ describe("inventory server actions", () => {
       unitCostCents: 1000, retailPriceCents: 2000, metal: "gold", weightMg: 4000,
     });
     expect(res).toEqual({ ok: true });
-    const s = await getInventorySummary(db);
+    const s = await getInventorySummary(db, 1);
     expect(s.counts.Rings).toBe(4);
   });
 
@@ -60,9 +60,9 @@ describe("inventory server actions", () => {
       id: row.id, category: "Diamonds", name: "Stone", quantity: 7, status: "in_stock",
       unitCostCents: 0, retailPriceCents: 0,
     })).toEqual({ ok: true });
-    expect((await getInventorySummary(db)).counts.Diamonds).toBe(7);
+    expect((await getInventorySummary(db, 1)).counts.Diamonds).toBe(7);
     expect(await deleteInventoryItem(row.id)).toEqual({ ok: true });
-    expect((await getInventorySummary(db)).total).toBe(0);
+    expect((await getInventorySummary(db, 1)).total).toBe(0);
   });
 
   it("surfaces unauthorized as a typed error", async () => {

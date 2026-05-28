@@ -25,7 +25,7 @@ describe("getInventorySummary", () => {
 
   it("sums on-hand quantity per category, excludes sold, scopes to the org, zero-fills", async () => {
     await seed(db);
-    const s = await getInventorySummary(db); // defaults to AIYA org (1)
+    const s = await getInventorySummary(db, 1);
     expect(s.counts.Rings).toBe(5);        // 3 + 2, sold excluded
     expect(s.counts.Diamonds).toBe(10);
     expect(s.counts.Necklaces).toBe(0);    // the qty-1 row is org 999
@@ -35,7 +35,7 @@ describe("getInventorySummary", () => {
   });
 
   it("returns all-zero counts and null updatedAt for an empty org", async () => {
-    const s = await getInventorySummary(db);
+    const s = await getInventorySummary(db, 1);
     expect(s.total).toBe(0);
     expect(s.counts.Rings).toBe(0);
     expect(s.updatedAt).toBeNull();
@@ -47,7 +47,7 @@ describe("getInventorySummary demo mode", () => {
   it("returns seeded counts without touching the db when demo is on", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
     // pass a db that would throw if used, proving the guard returns first
-    const s = await getInventorySummary(null as never);
+    const s = await getInventorySummary(null as never, 1);
     expect(s.counts.Rings).toBe(1240);
     expect(s.total).toBeGreaterThan(0);
   });

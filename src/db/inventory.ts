@@ -1,7 +1,6 @@
 import { and, eq, ne, sql, desc } from "drizzle-orm";
 import type { Db } from "./client";
 import { inventoryItems } from "./schema";
-import { AIYA_ORG_ID } from "./org";
 import { INVENTORY_CATEGORIES, type InventoryCategory } from "@/lib/inventory/validation";
 import { isDemoMode } from "@/lib/demo/mode";
 import { seedInventorySummary } from "@/lib/demo/seed";
@@ -21,7 +20,7 @@ function zeroCounts(): Record<InventoryCategory, number> {
 
 export async function getInventorySummary(
   db: Db,
-  orgId: number = AIYA_ORG_ID
+  orgId: number,
 ): Promise<InventorySummary> {
   if (isDemoMode()) return seedInventorySummary();
   const rows = await db
