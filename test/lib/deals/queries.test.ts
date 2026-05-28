@@ -86,6 +86,29 @@ describe("getAllDeals", () => {
   });
 });
 
+describe("getAllDeals cross-org isolation across filters", () => {
+  it("scopes to orgId even when status filter is active", async () => {
+    await insert({ subject: "aiya-filled", status: "Filled", orgId: 1 });
+    await insert({ subject: "other-filled", status: "Filled", orgId: 999 });
+    const rows = await getAllDeals(db, 1, { status: "Filled" });
+    expect(rows.map((r) => r.subject)).toEqual(["aiya-filled"]);
+  });
+
+  it("scopes to orgId even when kind filter is active", async () => {
+    await insert({ subject: "aiya-buy", kind: "BUY", orgId: 1 });
+    await insert({ subject: "other-buy", kind: "BUY", orgId: 999 });
+    const rows = await getAllDeals(db, 1, { kind: "BUY" });
+    expect(rows.map((r) => r.subject)).toEqual(["aiya-buy"]);
+  });
+
+  it("scopes to orgId even when category filter is active", async () => {
+    await insert({ subject: "aiya-gem", category: "Gem", orgId: 1 });
+    await insert({ subject: "other-gem", category: "Gem", orgId: 999 });
+    const rows = await getAllDeals(db, 1, { category: "Gem" });
+    expect(rows.map((r) => r.subject)).toEqual(["aiya-gem"]);
+  });
+});
+
 describe("demo-mode short-circuit", () => {
   afterEach(() => vi.unstubAllEnvs());
 

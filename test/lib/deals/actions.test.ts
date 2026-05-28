@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } 
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth/requireSession", () => ({
-  requireSession: vi.fn(async () => ({ user: "boss" })),
+  requireSession: vi.fn(async () => ({ user: "boss", orgId: 1 })),
 }));
 
 import type { Db } from "@/db/client";
@@ -118,6 +118,55 @@ describe("tenancy isolation on mutation", () => {
     expect(res).toEqual({ ok: true }); // no error, no match
     const orgTwo = await getAllDeals(db, 999);
     expect(orgTwo[0].status).toBe("Open"); // unchanged
+  });
+});
+
+describe("deals cross-org tenancy enforcement", () => {
+  it("postDeal stamps the row with session.orgId (not a default)", async () => {
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "alice", orgId: 999,
+    });
+    const res = await postDeal({
+      kind: "SELL", category: "Diamond", subject: "Org999 deal",
+      quantity: 1, priceCents: 100,
+    });
+    expect(res).toEqual({ ok: true });
+    const [row] = await db.select({ orgId: deals.orgId, subject: deals.subject })
+      .from(deals);
+    expect(row.orgId).toBe(999);
+    expect(row.subject).toBe("Org999 deal");
+  });
+
+  it("markDealFilled with an id from another org leaves that row Open", async () => {
+    await db.insert(deals).values({
+      orgId: 999, kind: "SELL", category: "Diamond", subject: "untouchable",
+      quantity: 1, priceCents: 100, postedByLabel: "x",
+    });
+    const [target] = await db.select({ id: deals.id }).from(deals);
+
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "boss", orgId: 1,
+    });
+    await markDealFilled(target.id);
+
+    const all = await getAllDeals(db, 999);
+    expect(all[0].status).toBe("Open"); // unchanged
+  });
+
+  it("withdrawDeal with an id from another org leaves that row Open", async () => {
+    await db.insert(deals).values({
+      orgId: 999, kind: "BUY", category: "Metal", subject: "untouchable",
+      quantity: 1, priceCents: 100, postedByLabel: "x",
+    });
+    const [target] = await db.select({ id: deals.id }).from(deals);
+
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "boss", orgId: 1,
+    });
+    await withdrawDeal(target.id);
+
+    const all = await getAllDeals(db, 999);
+    expect(all[0].status).toBe("Open");
   });
 });
 

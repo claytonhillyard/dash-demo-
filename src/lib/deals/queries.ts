@@ -1,7 +1,6 @@
 import { and, eq, desc, type SQL } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { deals } from "@/db/schema";
-import { AIYA_ORG_ID } from "@/db/org";
 import { isDemoMode } from "@/lib/demo/mode";
 import { getSeedDeals } from "@/lib/demo/seed";
 import type { DealKind, DealCategory, DealStatus } from "./constants";
@@ -40,8 +39,8 @@ const COLUMNS = {
 
 export async function getActiveDeals(
   db: Db,
-  orgId: number = AIYA_ORG_ID,
-  limit: number = 5
+  orgId: number,
+  limit: number = 5,
 ): Promise<DealRow[]> {
   if (isDemoMode()) {
     return getSeedDeals().filter((d) => d.status === "Open").slice(0, limit);
@@ -57,8 +56,8 @@ export async function getActiveDeals(
 
 export async function getAllDeals(
   db: Db,
-  orgId: number = AIYA_ORG_ID,
-  filters: DealFilters = {}
+  orgId: number,
+  filters: DealFilters = {},
 ): Promise<DealRow[]> {
   if (isDemoMode()) return getSeedDeals();
   const clauses: SQL[] = [eq(deals.orgId, orgId)];
