@@ -54,12 +54,18 @@ export const PANEL_REGISTRY: PanelEntry[] = [
       ),
   },
   {
+    // id "tradenet-exchange" reflects the original mockup-2 framing; title
+    // "Deal Room" reflects the user-facing language. Both are stable.
     id: "tradenet-exchange",
     title: "Deal Room",
     defaultSize: 1,
     render: (ctx) =>
       ctx.deals
-        ? <DealRoomPanel deals={ctx.deals.deals} />
+        ? <DealRoomPanel
+            deals={ctx.deals.deals}
+            currentOrgId={ctx.deals.currentOrgId}
+            circleNamesById={ctx.deals.circleNamesById}
+          />
         : <BusinessPlaceholder title="Deal Room" testid="panel-tradenet-exchange" />,
   },
   {

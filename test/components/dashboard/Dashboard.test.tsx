@@ -33,6 +33,8 @@ describe("DashboardGrid", () => {
         visibilityCircleId: null,
         createdAt: new Date(Date.now() - 3_600_000),
       }],
+      currentOrgId: 1,
+      circleNamesById: new Map<number, string>(),
     };
     render(<DashboardGrid inventory={inventory} diamond={diamond} deals={deals} />);
     // Live panels present:
