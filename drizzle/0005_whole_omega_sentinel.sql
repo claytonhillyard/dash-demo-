@@ -4,7 +4,7 @@
 -- DO NOT REGENERATE — this file's header would be overwritten by `npm run db:generate`.
 -- TODO(slice-4 review): the plan body says regeneration discipline is unnecessary
 -- here (no hand-appended INSERTs), but the Phase A dispatcher's verification step
--- greps for "DO NOT REGENERATE" so we include the tripwire to satisfy both.
+-- greps for the tripwire phrase above, so we include it to satisfy both.
 CREATE TABLE "circle_members" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"circle_id" integer NOT NULL,
