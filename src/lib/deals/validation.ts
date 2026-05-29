@@ -8,6 +8,10 @@ export const postDealInput = z.object({
   quantity: z.number().int().min(1),
   priceCents: z.number().int().min(0),
   currency: z.string().length(3).optional().default("USD"),
+  // Slice 4: optional circle to share into. The schema only enforces shape —
+  // server-side authz in postDeal verifies the orgId from session is actually
+  // a member of this circle before the insert. See src/lib/deals/actions.ts.
+  visibilityCircleId: z.number().int().positive().nullable().optional(),
 });
 export type PostDealInput = z.infer<typeof postDealInput>;
 
