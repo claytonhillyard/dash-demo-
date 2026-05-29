@@ -6,10 +6,19 @@ import { FormStatus } from "@/components/company/FormStatus";
 import { DEAL_KINDS, DEAL_CATEGORIES, type DealKind, type DealCategory } from "@/lib/deals/constants";
 import type { ActionResult } from "@/lib/deals/actions";
 
+export interface CircleOption {
+  id: number;
+  name: string;
+}
+
 export function PostDealForm({
   postAction,
+  circles = [],
 }: {
   postAction: (raw: unknown) => Promise<ActionResult>;
+  /** The viewer's circles — drives the "Share with" dropdown. Pass [] (or omit)
+   *  for an org with no memberships; the dropdown is hidden in that case. */
+  circles?: CircleOption[];
 }) {
   const router = useRouter();
   const [kind, setKind] = useState<DealKind>("SELL");
@@ -17,6 +26,7 @@ export function PostDealForm({
   const [subject, setSubject] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [priceDollars, setPriceDollars] = useState("");
+  const [visibilityCircleId, setVisibilityCircleId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [pending, setPending] = useState(false);
@@ -32,6 +42,7 @@ export function PostDealForm({
       subject: subject.trim(),
       quantity: Math.round(Number(quantity || 0)),
       priceCents: Math.round(Number(priceDollars || 0) * 100),
+      visibilityCircleId,
     };
     const res = await postAction(raw);
     setPending(false);
@@ -40,6 +51,7 @@ export function PostDealForm({
       setSubject("");
       setQuantity("1");
       setPriceDollars("");
+      setVisibilityCircleId(null);
       router.refresh();
     } else {
       setError(res.error);
@@ -77,6 +89,22 @@ export function PostDealForm({
         <input aria-label="price" type="number" min={0} step="0.01" className="bg-bg p-2"
           value={priceDollars} onChange={(e) => setPriceDollars(e.target.value)} />
       </label>
+      {circles.length > 0 && (
+        <label className="col-span-2 flex flex-col md:col-span-1">
+          Share with
+          <select
+            aria-label="visibility"
+            className="bg-bg p-2"
+            value={visibilityCircleId ?? ""}
+            onChange={(e) => setVisibilityCircleId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Private (your org only)</option>
+            {circles.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="col-span-2 flex items-center justify-between md:col-span-3">
         <button type="submit" disabled={pending} className="rounded bg-gold p-2 text-black disabled:opacity-50">
           Post deal

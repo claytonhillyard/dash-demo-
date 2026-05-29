@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { getAllDeals, type DealFilters } from "@/lib/deals/queries";
+import { getCirclesForOrg } from "@/lib/circles/queries";
 import { DEAL_KINDS, DEAL_CATEGORIES, DEAL_STATUSES, type DealKind, type DealCategory, type DealStatus } from "@/lib/deals/constants";
 import { DealList } from "@/components/deals/DealList";
 import { PostDealForm } from "@/components/deals/PostDealForm";
@@ -33,7 +34,11 @@ export default async function DealsPage({
 
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
-  const rows = await getAllDeals(db, orgId, filters);
+  const [rows, myCircles] = await Promise.all([
+    getAllDeals(db, orgId, filters),
+    getCirclesForOrg(db, orgId),
+  ]);
+  const circleOptions = myCircles.map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -58,7 +63,7 @@ export default async function DealsPage({
         ))}
       </nav>
 
-      <PostDealForm postAction={postDeal} />
+      <PostDealForm postAction={postDeal} circles={circleOptions} />
 
       <DealList deals={rows} markFilledAction={markDealFilled} withdrawAction={withdrawDeal} />
     </main>
