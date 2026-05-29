@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
 import { circles, circleMembers } from "@/db/schema";
@@ -8,6 +8,10 @@ import {
   getCirclesForOrg,
   getCircleNamesForOrg,
 } from "@/lib/circles/queries";
+import {
+  DEMO_AIYA_ORG_ID,
+  DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+} from "@/lib/demo/seed";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); });
@@ -83,5 +87,59 @@ describe("getCircleNamesForOrg", () => {
   it("returns an empty Map for an org with no memberships", async () => {
     const map = await getCircleNamesForOrg(db, 1);
     expect(map.size).toBe(0);
+  });
+});
+
+describe("queries — demo mode", () => {
+  // The Netlify demo never boots pglite. Each demo-mode test passes a stub
+  // Db; if a guard regresses, `.select()` blows up on this object and the
+  // test fails loudly rather than silently passing.
+  const stubDb = {} as unknown as Db;
+
+  it("getCircleIdsForOrg returns the seeded ids for AIYA without touching the DB", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    try {
+      const ids = await getCircleIdsForOrg(stubDb, DEMO_AIYA_ORG_ID);
+      expect(ids).toEqual([DEMO_TRUSTED_PARTNERS_CIRCLE_ID]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("getCircleIdsForOrg returns [] for an org outside the seed graph", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    try {
+      const ids = await getCircleIdsForOrg(stubDb, 9999);
+      expect(ids).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("getCirclesForOrg returns the seed CircleRow for AIYA without touching the DB", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    try {
+      const rows = await getCirclesForOrg(stubDb, DEMO_AIYA_ORG_ID);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        id: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+        name: "AIYA Trusted Partners",
+        slug: "aiya-trusted-partners",
+        ownerOrgId: DEMO_AIYA_ORG_ID,
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("getCircleNamesForOrg returns a Map<id, name> built from the seed circles", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    try {
+      const map = await getCircleNamesForOrg(stubDb, DEMO_AIYA_ORG_ID);
+      expect(map.get(DEMO_TRUSTED_PARTNERS_CIRCLE_ID)).toBe("AIYA Trusted Partners");
+      expect(map.size).toBe(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

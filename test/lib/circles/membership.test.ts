@@ -1,9 +1,13 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
 import { circles, circleMembers } from "@/db/schema";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
+import {
+  DEMO_AIYA_ORG_ID,
+  DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+} from "@/lib/demo/seed";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); });
@@ -38,5 +42,39 @@ describe("isOrgMemberOfCircle", () => {
 
   it("returns false for a circle id that does not exist (no FK error leak)", async () => {
     expect(await isOrgMemberOfCircle(db, 1, 99999)).toBe(false);
+  });
+});
+
+describe("isOrgMemberOfCircle — demo mode", () => {
+  // Sanity that we use a *stub* db: if the demo guard regresses, .select()
+  // throws on this object and the test fails loudly.
+  const stubDb = {} as unknown as Db;
+
+  it("returns true for the AIYA org + Trusted Partners circle without touching the DB", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    try {
+      const result = await isOrgMemberOfCircle(
+        stubDb,
+        DEMO_AIYA_ORG_ID,
+        DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      );
+      expect(result).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("returns false for an org id not in the seed membership graph", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    try {
+      const result = await isOrgMemberOfCircle(
+        stubDb,
+        9999,
+        DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      );
+      expect(result).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
