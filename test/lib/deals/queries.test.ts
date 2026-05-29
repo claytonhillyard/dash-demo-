@@ -127,6 +127,9 @@ describe("demo-mode short-circuit", () => {
   it("getAllDeals returns full seed in demo mode", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
     const rows = await getAllDeals(db, 1);
-    expect(rows).toHaveLength(5);
+    // Slice 4: seed now has 5 AIYA + 3 cross-circle partner deals = 8 total.
+    // B3/B4 will narrow this to getSeedDealsVisibleTo(orgId), but the count
+    // for AIYA (org=1) is still 8 because AIYA is in the demo circle.
+    expect(rows).toHaveLength(8);
   });
 });
