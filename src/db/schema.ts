@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -218,5 +219,12 @@ export const deals = pgTable(
     ),
     orgKindIdx: index("deals_org_kind_idx").on(t.orgId, t.kind),
     orgCategoryIdx: index("deals_org_category_idx").on(t.orgId, t.category),
+    // Partial index for the slice-4 widened OR clause: the visibility branch of
+    // getActiveDeals / getAllDeals scans by visibility_circle_id IN (...) +
+    // status filter + recent-first sort. Partial WHERE clause keeps the index
+    // small (only deals shared with a circle ever appear here).
+    visibilityCircleIdx: index("deals_visibility_circle_idx")
+      .on(t.visibilityCircleId, t.status, t.createdAt.desc())
+      .where(sql`${t.visibilityCircleId} IS NOT NULL`),
   })
 );
