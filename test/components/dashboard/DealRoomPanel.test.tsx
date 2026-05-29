@@ -5,10 +5,11 @@ import type { DealRow } from "@/lib/deals/queries";
 
 function makeDeal(over: Partial<DealRow> = {}): DealRow {
   return {
-    id: 1, kind: "SELL", category: "Diamond",
+    id: 1, orgId: 1, kind: "SELL", category: "Diamond",
     subject: "Round 1.02ct G/VS1",
     quantity: 1, priceCents: 1240000, currency: "USD",
     status: "Open", postedByLabel: "boss",
+    visibilityCircleId: null,
     createdAt: new Date(Date.now() - 60 * 60 * 1000),
     ...over,
   };

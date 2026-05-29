@@ -7,6 +7,7 @@ import type { DealKind, DealCategory, DealStatus } from "./constants";
 
 export interface DealRow {
   id: number;
+  orgId: number;
   kind: DealKind;
   category: DealCategory;
   subject: string;
@@ -15,6 +16,7 @@ export interface DealRow {
   currency: string;
   status: DealStatus;
   postedByLabel: string;
+  visibilityCircleId: number | null;
   createdAt: Date;
 }
 

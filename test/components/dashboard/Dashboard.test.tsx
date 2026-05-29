@@ -27,9 +27,10 @@ describe("DashboardGrid", () => {
     };
     const deals = {
       deals: [{
-        id: 1, kind: "SELL" as const, category: "Diamond" as const,
+        id: 1, orgId: 1, kind: "SELL" as const, category: "Diamond" as const,
         subject: "Round 1.02ct G/VS1", quantity: 1, priceCents: 1240000,
         currency: "USD", status: "Open" as const, postedByLabel: "boss",
+        visibilityCircleId: null,
         createdAt: new Date(Date.now() - 3_600_000),
       }],
     };
