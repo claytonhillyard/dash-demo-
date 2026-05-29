@@ -98,6 +98,63 @@ describe("postDealInput", () => {
   });
 });
 
+describe("postDealInput visibilityCircleId field", () => {
+  it("accepts a positive integer visibilityCircleId", () => {
+    const result = postDealInput.safeParse({
+      kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 100, visibilityCircleId: 7,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.visibilityCircleId).toBe(7);
+  });
+
+  it("accepts an omitted visibilityCircleId (private deal)", () => {
+    const result = postDealInput.safeParse({
+      kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 100,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.visibilityCircleId).toBeUndefined();
+  });
+
+  it("accepts an explicit null visibilityCircleId (private deal)", () => {
+    const result = postDealInput.safeParse({
+      kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 100, visibilityCircleId: null,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.visibilityCircleId).toBeNull();
+  });
+
+  it("rejects a non-positive visibilityCircleId", () => {
+    expect(postDealInput.safeParse({
+      kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 100, visibilityCircleId: 0,
+    }).success).toBe(false);
+    expect(postDealInput.safeParse({
+      kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 100, visibilityCircleId: -1,
+    }).success).toBe(false);
+  });
+
+  it("rejects a non-integer visibilityCircleId", () => {
+    expect(postDealInput.safeParse({
+      kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 100, visibilityCircleId: 1.5,
+    }).success).toBe(false);
+  });
+
+  it("does not accept orgId in the input (slice-3 invariant preserved)", () => {
+    const result = postDealInput.safeParse({
+      kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 100, orgId: 999,
+    });
+    // Zod strips unknown fields by default; the parsed data must not contain orgId.
+    expect(result.success).toBe(true);
+    if (result.success) expect("orgId" in result.data).toBe(false);
+  });
+});
+
 describe("updateDealStatusInput", () => {
   it("accepts Filled", () => {
     expect(updateDealStatusInput.safeParse({ id: 1, status: "Filled" }).success).toBe(true);

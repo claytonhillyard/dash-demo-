@@ -16,11 +16,15 @@ import { type Db } from "@/db/client";
  * re-imports this module per test file, so the module-level singleton is
  * naturally file-scoped — no cross-file leakage.
  *
- * Multi-tenant seeding (slice 3): the migration's hand-edited block already
- * seeds AIYA at id=1, but the post-migrate `seedOrgs()` step below also
- * inserts a fixture second org at id=999 so cross-org isolation tests work
- * out of the box. After every `resetSharedDb()` we re-insert both rows
- * (TRUNCATE CASCADE wipes them) so every test starts from the same baseline.
+ * Multi-tenant seeding (slice 3 + slice 4): the migration's hand-edited block
+ * already seeds AIYA at id=1, but the post-migrate `seedOrgs()` step below
+ * also inserts two fixture orgs:
+ *   - id=999 ("Fixture Org") — original slice-3 cross-org isolation tests.
+ *   - id=888 ("Partner Org") — slice-4 cross-circle tests use this as the
+ *     "viewer with no circle memberships" or "partner that shares a circle
+ *     with AIYA", depending on the test's setup.
+ * After every `resetSharedDb()` we re-insert all three rows (TRUNCATE CASCADE
+ * wipes them) so every test starts from the same baseline.
  *
  * Tests that specifically verify per-instance isolation or migration behavior
  * (e.g. test/db/client.test.ts, test/db/orgs-migration.test.ts) should keep
@@ -31,12 +35,15 @@ let cached: { client: PGlite; db: Db } | null = null;
 let tableNames: string[] | null = null;
 
 async function seedOrgs(db: Db): Promise<void> {
-  // Idempotent: re-inserting AIYA after the migration is a no-op via ON CONFLICT.
-  // id=999 is the fixture org used by cross-org isolation tests (slice 3 spec §5.5).
+  // Idempotent: re-inserting after the migration is a no-op via ON CONFLICT.
+  // id=1 = AIYA (slice 3), id=999 = primary fixture (slice 3 cross-org isolation),
+  // id=888 = partner fixture (slice 4 cross-circle tests — viewer with no
+  // circle memberships, paired with AIYA which IS in a circle).
   await db.execute(sql`
     INSERT INTO orgs (id, name, slug) VALUES
-      (1, 'AIYA Designs', 'aiya'),
-      (999, 'Fixture Org', 'fixture')
+      (1,   'AIYA Designs', 'aiya'),
+      (999, 'Fixture Org',  'fixture'),
+      (888, 'Partner Org',  'partner')
     ON CONFLICT (id) DO NOTHING;
   `);
   await db.execute(sql`

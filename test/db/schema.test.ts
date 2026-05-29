@@ -56,6 +56,30 @@ describe("db schema", () => {
     expect(schema.orgs.createdAt.columnType).toBe("PgTimestamp");
   });
 
+  it("exports the circles table with id/name/slug/ownerOrgId/createdAt", () => {
+    expect(schema.circles).toBeDefined();
+    expect(schema.circles.id.columnType).toBe("PgSerial");
+    expect(schema.circles.name.columnType).toBe("PgText");
+    expect(schema.circles.slug.columnType).toBe("PgText");
+    expect(schema.circles.ownerOrgId.columnType).toBe("PgInteger");
+    expect(schema.circles.createdAt.columnType).toBe("PgTimestamp");
+  });
+
+  it("exports the circleMembers junction with circleId/orgId/createdAt", () => {
+    expect(schema.circleMembers).toBeDefined();
+    expect(schema.circleMembers.id.columnType).toBe("PgSerial");
+    expect(schema.circleMembers.circleId.columnType).toBe("PgInteger");
+    expect(schema.circleMembers.orgId.columnType).toBe("PgInteger");
+    expect(schema.circleMembers.createdAt.columnType).toBe("PgTimestamp");
+  });
+
+  it("exports deals.visibilityCircleId as a nullable PgInteger", () => {
+    expect(schema.deals.visibilityCircleId).toBeDefined();
+    expect(schema.deals.visibilityCircleId.columnType).toBe("PgInteger");
+    // notNull is false because the field is nullable (private = NULL).
+    expect(schema.deals.visibilityCircleId.notNull).toBe(false);
+  });
+
   it("declares a FK from every tenanted table's orgId to orgs.id", () => {
     // The drizzle column metadata records `.references()` targets on `_columns._references`.
     // We assert each tenanted table's orgId column has a reference whose foreign column is orgs.id.

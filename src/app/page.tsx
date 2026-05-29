@@ -7,6 +7,7 @@ import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { getInventorySummary } from "@/db/inventory";
 import { getDiamondSummary } from "@/db/diamonds";
 import { getActiveDeals } from "@/lib/deals/queries";
+import { getCircleNamesForOrg } from "@/lib/circles/queries";
 import { updatedAgo } from "@/lib/company/format";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
-  const [invSummary, dia, activeDeals] = await Promise.all([
+  const [invSummary, dia, activeDeals, circleNamesById] = await Promise.all([
     getInventorySummary(db, orgId),
     getDiamondSummary(db, orgId),
     getActiveDeals(db, orgId, 5),
+    getCircleNamesForOrg(db, orgId),
   ]);
   const inventory = {
     counts: invSummary.counts,
@@ -32,7 +34,7 @@ export default async function Home() {
       ...dia.points.map((p) => ({ label: p.label, cents: p.cents, change24hPct: null })),
     ],
   };
-  const deals = { deals: activeDeals };
+  const deals = { deals: activeDeals, currentOrgId: orgId, circleNamesById };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>

@@ -36,6 +36,20 @@
       "when": 1779976341917,
       "tag": "0004_wild_justin_hammer",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780019205473,
+      "tag": "0005_whole_omega_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780023510883,
+      "tag": "0006_aspiring_clea",
+      "breakpoints": true
     }
   ]
 }

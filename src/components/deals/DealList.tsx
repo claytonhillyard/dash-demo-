@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FormStatus } from "@/components/company/FormStatus";
 import { formatCents, timeAgo } from "@/lib/company/format";
+import { formatDealVisibility } from "@/lib/deals/format";
 import type { DealRow } from "@/lib/deals/queries";
 import type { DealKind, DealStatus } from "@/lib/deals/constants";
 import type { ActionResult } from "@/lib/deals/actions";
@@ -20,9 +21,15 @@ const STATUS_CLASS: Record<DealStatus, string> = {
 };
 
 export function DealList({
-  deals, markFilledAction, withdrawAction,
+  deals,
+  currentOrgId,
+  circleNamesById,
+  markFilledAction,
+  withdrawAction,
 }: {
   deals: DealRow[];
+  currentOrgId: number;
+  circleNamesById: Map<number, string>;
   markFilledAction: (id: number) => Promise<ActionResult>;
   withdrawAction: (id: number) => Promise<ActionResult>;
 }) {
@@ -70,48 +77,67 @@ export function DealList({
             <th role="columnheader" className="text-right">Qty</th>
             <th role="columnheader" className="text-right">Price</th>
             <th role="columnheader">Status</th>
+            <th role="columnheader">Visibility</th>
             <th role="columnheader">Posted by</th>
             <th role="columnheader">Age</th>
             <th role="columnheader" className="text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-text/10">
-          {deals.map((d) => (
-            <tr role="row" key={d.id}>
-              <td role="cell" className={`py-2 font-mono text-xs ${KIND_CLASS[d.kind]}`}>{d.kind}</td>
-              <td role="cell" className="text-text/60">{d.category}</td>
-              <td role="cell" className="text-text/85">{d.subject}</td>
-              <td role="cell" className="text-right text-text/70">{d.quantity}</td>
-              <td role="cell" className="text-right font-mono text-text">{formatCents(d.priceCents)}</td>
-              <td role="cell" className={STATUS_CLASS[d.status]}>{d.status}</td>
-              <td role="cell" className="text-text/60">{d.postedByLabel}</td>
-              <td role="cell" className="text-text/40">{timeAgo(d.createdAt)}</td>
-              <td role="cell" className="text-right">
-                {d.status === "Open" && (
-                  <span className="inline-flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => markFilled(d.id)}
-                      disabled={pendingId === d.id}
-                      aria-label={`Mark deal ${d.id} filled`}
-                      className="text-[11px] uppercase tracking-wider text-ok hover:underline disabled:opacity-50"
+          {deals.map((d) => {
+            const vis = formatDealVisibility(d.visibilityCircleId, circleNamesById);
+            const isOwnOrg = d.orgId === currentOrgId;
+            return (
+              <tr role="row" key={d.id}>
+                <td role="cell" className={`py-2 font-mono text-xs ${KIND_CLASS[d.kind]}`}>{d.kind}</td>
+                <td role="cell" className="text-text/60">{d.category}</td>
+                <td role="cell" className="text-text/85">{d.subject}</td>
+                <td role="cell" className="text-right text-text/70">{d.quantity}</td>
+                <td role="cell" className="text-right font-mono text-text">{formatCents(d.priceCents)}</td>
+                <td role="cell" className={STATUS_CLASS[d.status]}>{d.status}</td>
+                <td role="cell" data-testid={`deal-visibility-${d.id}`}>
+                  {vis.kind === "circle" ? (
+                    <span
+                      className="rounded-full border border-gold/30 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-gold/80"
+                      title={isOwnOrg ? `Shared with ${vis.circleName}` : `Shared by ${d.postedByLabel} via ${vis.circleName}`}
                     >
-                      Mark Filled
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => withdraw(d.id)}
-                      disabled={pendingId === d.id}
-                      aria-label={`Withdraw deal ${d.id}`}
-                      className="text-[11px] uppercase tracking-wider text-bad hover:underline disabled:opacity-50"
-                    >
-                      Withdraw
-                    </button>
-                  </span>
-                )}
-              </td>
-            </tr>
-          ))}
+                      {vis.circleName}
+                    </span>
+                  ) : (
+                    <span className="text-text/40">Private</span>
+                  )}
+                </td>
+                <td role="cell" className="text-text/60">{d.postedByLabel}</td>
+                <td role="cell" className="text-text/40">{timeAgo(d.createdAt)}</td>
+                <td role="cell" className="text-right">
+                  {isOwnOrg && d.status === "Open" ? (
+                    <span className="inline-flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => markFilled(d.id)}
+                        disabled={pendingId === d.id}
+                        aria-label={`Mark deal ${d.id} filled`}
+                        className="text-[11px] uppercase tracking-wider text-ok hover:underline disabled:opacity-50"
+                      >
+                        Mark Filled
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => withdraw(d.id)}
+                        disabled={pendingId === d.id}
+                        aria-label={`Withdraw deal ${d.id}`}
+                        className="text-[11px] uppercase tracking-wider text-bad hover:underline disabled:opacity-50"
+                      >
+                        Withdraw
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="text-text/30">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

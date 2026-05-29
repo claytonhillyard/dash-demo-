@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -20,6 +21,36 @@ export const orgs = pgTable(
   },
   (t) => ({
     slugUniq: unique("orgs_slug_uniq").on(t.slug),
+  })
+);
+
+export const circles = pgTable(
+  "circles",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    ownerOrgId: integer("owner_org_id").notNull().references(() => orgs.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    slugUniq: unique("circles_slug_uniq").on(t.slug),
+    ownerIdx: index("circles_owner_org_idx").on(t.ownerOrgId),
+  })
+);
+
+export const circleMembers = pgTable(
+  "circle_members",
+  {
+    id: serial("id").primaryKey(),
+    circleId: integer("circle_id").notNull().references(() => circles.id),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    memberUniq: unique("circle_members_circle_org_uniq").on(t.circleId, t.orgId),
+    orgIdx: index("circle_members_org_idx").on(t.orgId),
+    circleIdx: index("circle_members_circle_idx").on(t.circleId),
   })
 );
 
@@ -173,6 +204,10 @@ export const deals = pgTable(
       .notNull()
       .default("Open"),
     postedByLabel: text("posted_by_label").notNull(),
+    visibilityCircleId: integer("visibility_circle_id").references(
+      () => circles.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -184,5 +219,12 @@ export const deals = pgTable(
     ),
     orgKindIdx: index("deals_org_kind_idx").on(t.orgId, t.kind),
     orgCategoryIdx: index("deals_org_category_idx").on(t.orgId, t.category),
+    // Partial index for the slice-4 widened OR clause: the visibility branch of
+    // getActiveDeals / getAllDeals scans by visibility_circle_id IN (...) +
+    // status filter + recent-first sort. Partial WHERE clause keeps the index
+    // small (only deals shared with a circle ever appear here).
+    visibilityCircleIdx: index("deals_visibility_circle_idx")
+      .on(t.visibilityCircleId, t.status, t.createdAt.desc())
+      .where(sql`${t.visibilityCircleId} IS NOT NULL`),
   })
 );

@@ -27,6 +27,13 @@ export interface DiamondView {
 
 export interface DealView {
   deals: DealRow[];
+  /** The session's org id — used by DealRoomPanel to distinguish own-org
+   *  from foreign-org rows when rendering the "Shared via" badge. */
+  currentOrgId: number;
+  /** Map from circle id → display name, built once per page render from
+   *  getCircleNamesForOrg(orgId). Only contains circles the viewer is a
+   *  member of, so it's safe to surface any value as a UI label. */
+  circleNamesById: Map<number, string>;
 }
 
 /** Server-read context the page passes into each panel's render. */
