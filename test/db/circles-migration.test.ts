@@ -1,4 +1,9 @@
 // @vitest-environment node
+// TODO(slice-4 review): plan code used `.returning({ id: circles.id })` /
+// `.returning({ id: deals.id })`, but the Db union (Neon | PGlite) doesn't
+// resolve the overloaded returning signature under tsc. Switched to no-arg
+// returning() everywhere (returns all columns; we only read .id). Runtime
+// behavior is identical.
 import { describe, it, expect, afterEach } from "vitest";
 import { sql } from "drizzle-orm";
 import { createTestDb } from "@/db/client";
@@ -29,7 +34,7 @@ describe("circles migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "C", slug: "c", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     await t.db.insert(circleMembers).values({ circleId: c.id, orgId: 1 });
     await expect(
       t.db.insert(circleMembers).values({ circleId: c.id, orgId: 1 })
@@ -49,7 +54,7 @@ describe("circles migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "Y", slug: "y", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     await expect(
       t.db.insert(circleMembers).values({ circleId: c.id, orgId: 99999 })
     ).rejects.toThrow();
@@ -72,12 +77,12 @@ describe("circles migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "Z", slug: "z", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     const [d] = await t.db.insert(deals).values({
       orgId: 1, kind: "SELL", category: "Diamond", subject: "shared",
       quantity: 1, priceCents: 100, postedByLabel: "boss",
       visibilityCircleId: c.id,
-    }).returning({ id: deals.id });
+    }).returning();
 
     await t.db.execute(sql`DELETE FROM circles WHERE id = ${c.id}`);
 
