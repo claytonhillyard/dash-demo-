@@ -39,6 +39,10 @@ export default async function DealsPage({
     getCirclesForOrg(db, orgId),
   ]);
   const circleOptions = myCircles.map((c) => ({ id: c.id, name: c.name }));
+  // Reuse the same fetched circle list to power the Visibility column —
+  // no extra DB round-trip. Map<circleId, name> matches what
+  // formatDealVisibility expects.
+  const circleNamesById = new Map(myCircles.map((c) => [c.id, c.name] as const));
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -65,7 +69,13 @@ export default async function DealsPage({
 
       <PostDealForm postAction={postDeal} circles={circleOptions} />
 
-      <DealList deals={rows} markFilledAction={markDealFilled} withdrawAction={withdrawDeal} />
+      <DealList
+        deals={rows}
+        currentOrgId={orgId}
+        circleNamesById={circleNamesById}
+        markFilledAction={markDealFilled}
+        withdrawAction={withdrawDeal}
+      />
     </main>
   );
 }
