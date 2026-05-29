@@ -23,6 +23,36 @@ export const orgs = pgTable(
   })
 );
 
+export const circles = pgTable(
+  "circles",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    ownerOrgId: integer("owner_org_id").notNull().references(() => orgs.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    slugUniq: unique("circles_slug_uniq").on(t.slug),
+    ownerIdx: index("circles_owner_org_idx").on(t.ownerOrgId),
+  })
+);
+
+export const circleMembers = pgTable(
+  "circle_members",
+  {
+    id: serial("id").primaryKey(),
+    circleId: integer("circle_id").notNull().references(() => circles.id),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    memberUniq: unique("circle_members_circle_org_uniq").on(t.circleId, t.orgId),
+    orgIdx: index("circle_members_org_idx").on(t.orgId),
+    circleIdx: index("circle_members_circle_idx").on(t.circleId),
+  })
+);
+
 export const revenueMonths = pgTable(
   "revenue_months",
   {
@@ -173,6 +203,10 @@ export const deals = pgTable(
       .notNull()
       .default("Open"),
     postedByLabel: text("posted_by_label").notNull(),
+    visibilityCircleId: integer("visibility_circle_id").references(
+      () => circles.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
