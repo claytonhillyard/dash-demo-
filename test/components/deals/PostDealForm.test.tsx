@@ -83,7 +83,10 @@ describe("PostDealForm — dropdown renders + submits", () => {
   });
 
   it("submits visibilityCircleId: null by default (Private)", async () => {
-    const post = vi.fn(async () => ({ ok: true as const }));
+    // TODO(slice-4 review): plan's `vi.fn(async () => ...)` made the mock arg
+    // tuple `never`, so `post.mock.calls[0][0]` failed tsc. Adding `_raw: unknown`
+    // restores the slice-2 typing pattern; behavior is unchanged.
+    const post = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
     render(<PostDealForm postAction={post} circles={circles} />);
 
     fireEvent.change(screen.getByLabelText("subject"), { target: { value: "x" } });
@@ -100,7 +103,10 @@ describe("PostDealForm — dropdown renders + submits", () => {
   });
 
   it("submits the selected circle id when a non-Private option is chosen", async () => {
-    const post = vi.fn(async () => ({ ok: true as const }));
+    // TODO(slice-4 review): plan's `vi.fn(async () => ...)` made the mock arg
+    // tuple `never`, so `post.mock.calls[0][0]` failed tsc. Adding `_raw: unknown`
+    // restores the slice-2 typing pattern; behavior is unchanged.
+    const post = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
     render(<PostDealForm postAction={post} circles={circles} />);
 
     fireEvent.change(screen.getByLabelText("subject"), { target: { value: "x" } });
