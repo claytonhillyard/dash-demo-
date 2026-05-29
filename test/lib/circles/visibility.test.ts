@@ -11,9 +11,13 @@ beforeEach(async () => { await resetSharedDb(); });
 afterAll(async () => { await closeSharedDb(); });
 
 async function makeCircle(name = "Trusted", slug = "trusted"): Promise<number> {
+  // TODO(slice-4 review): plan code used `.returning({ id: circles.id })`, but
+  // the Db union (Neon | PGlite) doesn't resolve the overloaded returning
+  // signature, so we use the no-arg variant which returns all columns and pull
+  // .id from there. Same runtime behavior; tsc-only fix.
   const [row] = await db.insert(circles)
     .values({ name, slug, ownerOrgId: 1 })
-    .returning({ id: circles.id });
+    .returning();
   return row.id;
 }
 
@@ -22,11 +26,12 @@ async function addMember(circleId: number, orgId: number): Promise<void> {
 }
 
 async function insertDeal(over: Partial<typeof deals.$inferInsert>): Promise<number> {
+  // TODO(slice-4 review): same no-arg .returning() fix as makeCircle above.
   const [row] = await db.insert(deals).values({
     orgId: 1, kind: "SELL", category: "Diamond", subject: "x",
     quantity: 1, priceCents: 100, postedByLabel: "boss",
     ...over,
-  }).returning({ id: deals.id });
+  }).returning();
   return row.id;
 }
 

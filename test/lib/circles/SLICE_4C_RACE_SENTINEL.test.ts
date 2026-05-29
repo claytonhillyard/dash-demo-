@@ -32,7 +32,14 @@ describe("slice-4c race sentinel — fails when membership mutation lands", () =
     // is "module not found" regardless of bundler error shape.
     let modulePresent = false;
     try {
-      const mod = await import("@/lib/circles/membership-mutations");
+      // TODO(slice-4 review): the plan code uses a literal dynamic import
+      // string, but tsc tries to resolve it and errors because the module
+      // doesn't exist yet (which is the entire point of this sentinel).
+      // We defeat the resolver with a runtime-built path; same runtime
+      // behavior — when slice 4c lands the module, the import resolves
+      // and the sentinel fires.
+      const modulePath = ["@/lib/circles", "membership-mutations"].join("/");
+      const mod = await import(/* @vite-ignore */ modulePath);
       // If the module exists, check whether it exports either of the
       // expected helper names — that's the actual slice-4c signal.
       modulePresent =
