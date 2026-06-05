@@ -67,6 +67,7 @@ describe("DealThreadAccordion", () => {
     render(<DealThreadAccordion
       dealId={42} viewerOrgId={1} isOwner={false} currentMode={null}
       messages={[]} actions={actions}
+      canPost={true}
     />);
     fireEvent.change(screen.getByLabelText("reply body"), { target: { value: "   hello  " } });
     fireEvent.click(screen.getByRole("button", { name: /send/i }));

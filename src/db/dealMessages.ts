@@ -114,7 +114,7 @@ export async function getUnreadCountsForOrg(
            COUNT(*) FILTER (
              WHERE m.from_org_id != ${viewerOrgId}
                AND m.deleted_at IS NULL
-               AND m.created_at > COALESCE(r.last_read_at, 'epoch'::timestamptz)
+               AND m.created_at > COALESCE(r.last_read_at, '-infinity'::timestamptz)
            )::int AS unread
     FROM deal_messages m
     JOIN deals d ON d.id = m.deal_id

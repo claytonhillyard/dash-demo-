@@ -81,5 +81,21 @@ describe("Mode switch never rewrites past messages", () => {
       { body: "m2-group", mode: "group" },
       { body: "m3-private", mode: "private" },
     ]);
+
+    // Slice-10 review finding #4: the mode-snapshot property is only half of
+    // the §4 invariant. The OTHER half is: a message posted in 'group' mode
+    // remains visible to past-circle-members EVEN AFTER the owner flips the
+    // deal back to private. This proves the SQL visibility filter in
+    // getDealMessages keys on each message's own thread_mode (not deals.thread_mode).
+    const { getDealMessages } = await import("@/db/dealMessages");
+    const visibleToPartner = await getDealMessages(db, 999, d.id);
+    const partnerBodies = visibleToPartner.map((m) => m.body);
+    // org 999 (circle member, NOT owner) CAN still see m2-group after the
+    // deal has been flipped back to private:
+    expect(partnerBodies).toContain("m2-group");
+    // org 999 must NOT see m1-private or m3-private — those are
+    // owner-only by snapshot mode:
+    expect(partnerBodies).not.toContain("m1-private");
+    expect(partnerBodies).not.toContain("m3-private");
   });
 });

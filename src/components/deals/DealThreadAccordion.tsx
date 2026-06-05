@@ -44,7 +44,12 @@ function relativeTime(d: Date): string {
 }
 
 export function DealThreadAccordion(props: DealThreadAccordionProps) {
-  const canPost = props.canPost ?? true;
+  // Defense-in-depth: default canPost to FALSE. Any callsite that omits the
+  // prop should get the safe "view-only" rendering, not a reply input that
+  // would round-trip to a server Forbidden. Server-side authz still gates
+  // the actual post — this just keeps the UI honest about what's allowed.
+  // (Slice-10 review finding S5.)
+  const canPost = props.canPost ?? false;
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();

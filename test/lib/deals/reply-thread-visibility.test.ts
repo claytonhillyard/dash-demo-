@@ -94,6 +94,24 @@ describe("postDealMessage — cross-circle visibility", () => {
     expect(res).toEqual({ ok: false, error: "Forbidden" });
   });
 
+  // Slice-10 review finding #1: this is the EXACT cell the Phase B implementer
+  // caught as a security gap the original plan missed. An in-circle partner CAN
+  // see a circle-scoped deal (canSeeDeal returns ok via the slice-4 visibility
+  // model), but if the deal's thread_mode is 'private', ONLY the deal's owner
+  // org can post — circle membership doesn't extend posting rights in private
+  // mode. Without this test, the in-actions.ts private-mode gate could regress
+  // silently (the existing "no-circle" case hits canSeeDeal first and never
+  // reaches the private-mode check).
+  it("forbids an in-circle partner from posting on a PRIVATE-mode circle-scoped deal", async () => {
+    await ensureCircleWithMembers(42, "Trusted", [1, 999]);
+    const dealId = await seedCircleDeal({ ownerOrgId: 1, threadMode: "private", circleId: 42 });
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "partner", orgId: 999,
+    });
+    const res = await postDealMessage({ dealId, body: "should fail — private mode" });
+    expect(res).toEqual({ ok: false, error: "Forbidden" });
+  });
+
   it("snapshots the current deals.thread_mode onto the inserted row", async () => {
     await ensureCircleWithMembers(42, "Trusted", [1, 999]);
     const dealId = await seedCircleDeal({ ownerOrgId: 1, threadMode: "group", circleId: 42 });
