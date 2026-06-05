@@ -22,6 +22,8 @@ import {
   markDealThreadRead,
 } from "@/lib/deals/actions";
 import { updatedAgo } from "@/lib/company/format";
+import { getProviderStatus } from "@/lib/market/health";
+import { isDemoMode } from "@/lib/demo/mode";
 
 export const dynamic = "force-dynamic";
 
@@ -87,10 +89,14 @@ export default async function Home() {
     trend: websiteTrend.map((r) => ({ weekStart: r.weekStart, visitors: r.visitors })),
     updatedLabel: updatedAgo(websiteTrend[0]?.updatedAt ?? null),
   };
+  const providerStatus = {
+    rows: getProviderStatus(),
+    demo: isDemoMode(),
+  };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>
-        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} />
+        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} />
       </Shell>
     </QuotesProvider>
   );
