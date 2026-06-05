@@ -22,6 +22,9 @@ afterAll(async () => {
 });
 
 async function seedDeal(orgId: number, threadMode: "private" | "group" = "private") {
+  // Note: no-arg .returning() because the Db union (Neon | PGlite) doesn't
+  // resolve the overloaded select-shape signature under tsc — same pattern as
+  // slice-4's circles-migration test.
   const [row] = await db
     .insert(deals)
     .values({
@@ -34,7 +37,7 @@ async function seedDeal(orgId: number, threadMode: "private" | "group" = "privat
       postedByLabel: "test",
       threadMode,
     })
-    .returning({ id: deals.id });
+    .returning();
   return row.id;
 }
 
@@ -97,7 +100,7 @@ describe("getUnreadCountsForOrg", () => {
     const [row] = await db
       .insert(dealMessages)
       .values({ dealId, fromOrgId: 999, fromOrgLabel: "x", body: "live", threadMode: "group" })
-      .returning({ id: dealMessages.id });
+      .returning();
     await db.insert(dealMessages).values({
       dealId, fromOrgId: 999, fromOrgLabel: "x", body: "dead", threadMode: "group",
       deletedAt: new Date(),
