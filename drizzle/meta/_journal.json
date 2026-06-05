@@ -64,6 +64,13 @@
       "when": 1780660074595,
       "tag": "0008_acoustic_maverick",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780686768751,
+      "tag": "0009_shocking_scourge",
+      "breakpoints": true
     }
   ]
 }
