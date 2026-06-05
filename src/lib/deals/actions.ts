@@ -194,15 +194,12 @@ export async function postDealMessage(raw: unknown): Promise<ActionResult> {
     const d = db();
     const access = await canSeeDeal(d, orgId, input.dealId);
     if (!access.ok) throw new ForbiddenError();
-    // TODO(slice-10 review): plan's B2 code block omits this slice-10
-    // thread-mode-aware authz check (only enforces slice-4 visibility via
-    // canSeeDeal). User prompt's instruction #2 requires it: in 'private'
-    // mode, only the owner may post — even an in-circle member is rejected.
-    // Without this, a circle member could post in a private thread as soon
-    // as the owner shares the deal into a circle. Adding the explicit check.
-    if (access.ownerOrgId !== orgId && access.threadMode === "private") {
-      throw new ForbiddenError();
-    }
+    // Per spec §4: in private mode each interested partner has a 1-to-1
+    // thread WITH the deal owner. So in-circle partners CAN post; the
+    // message gets snapshotted as `private` and getDealMessages' WHERE
+    // clause then restricts the row's visibility to {owner, sender}.
+    // (A previous review added an owner-only gate here; that broke the
+    // partner→owner DM feature. Removed.)
     const label = await resolveOrgLabel(d, orgId);
     await d.insert(dealMessages).values({
       dealId: input.dealId,
