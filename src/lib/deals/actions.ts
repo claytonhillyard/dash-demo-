@@ -18,8 +18,8 @@ import {
   type DeleteDealMessageInput, type MarkDealThreadReadInput,
 } from "./replyValidation";
 import {
-  postBidInput, acceptBidInput,
-  type PostBidInput, type AcceptBidInput,
+  postBidInput, acceptBidInput, rejectBidInput,
+  type PostBidInput, type AcceptBidInput, type RejectBidInput,
 } from "./bidValidation";
 
 /** Thrown inside a postDeal callback when the session's org is not a member
@@ -367,5 +367,27 @@ export async function acceptBid(raw: unknown): Promise<ActionResult> {
         .set({ status: "Filled", updatedAt: now })
         .where(and(eq(deals.id, row.dealId), eq(deals.orgId, orgId)));
     });
+  });
+}
+
+export async function rejectBid(raw: unknown): Promise<ActionResult> {
+  return runWithUser(rejectBidInput, raw, async (input: RejectBidInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidStatus: bids.status,
+        dealOwnerOrgId: deals.orgId,
+      })
+      .from(bids)
+      .innerJoin(deals, eq(deals.id, bids.dealId))
+      .where(eq(bids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError();
+    if (row.dealOwnerOrgId !== orgId) throw new ForbiddenError();
+    if (row.bidStatus !== "pending") throw new ForbiddenError();
+    await d
+      .update(bids)
+      .set({ status: "rejected", decidedAt: new Date() })
+      .where(and(eq(bids.id, input.bidId), eq(bids.status, "pending")));
   });
 }

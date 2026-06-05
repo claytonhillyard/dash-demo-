@@ -9,8 +9,9 @@ vi.mock("@/lib/auth/requireSession", () => ({
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
 import { deals, circles, circleMembers, bids } from "@/db/schema";
-import { postBid, __setTestDb } from "@/lib/deals/actions";
+import { postBid, rejectBid, __setTestDb } from "@/lib/deals/actions";
 import { requireSession } from "@/lib/auth/requireSession";
+import { eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -101,5 +102,38 @@ describe("postBid — authz", () => {
     await postBid({ dealId, priceCents: 100 });
     const [row] = await db.select().from(bids);
     expect(row.bidMode).toBe("history");
+  });
+});
+
+describe("rejectBid — authz", () => {
+  it("allows the deal owner to reject a pending bid", async () => {
+    const [d] = await db.insert(deals).values({
+      orgId: 1, kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 1000, postedByLabel: "x",
+    }).returning();
+    const [b] = await db.insert(bids).values({
+      dealId: d.id, bidderOrgId: 999, bidderOrgLabel: "M",
+      priceCents: 1, bidMode: "single",
+    }).returning();
+    expect(await rejectBid({ bidId: b.id })).toEqual({ ok: true });
+    const [after] = await db.select({ status: bids.status, decidedAt: bids.decidedAt })
+      .from(bids).where(eq(bids.id, b.id));
+    expect(after.status).toBe("rejected");
+    expect(after.decidedAt).not.toBeNull();
+  });
+
+  it("forbids a non-owner (including the bidder themselves) from rejecting", async () => {
+    const [d] = await db.insert(deals).values({
+      orgId: 1, kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 1000, postedByLabel: "x",
+    }).returning();
+    const [b] = await db.insert(bids).values({
+      dealId: d.id, bidderOrgId: 999, bidderOrgLabel: "M",
+      priceCents: 1, bidMode: "single",
+    }).returning();
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "bidder-cant-reject-self", orgId: 999,
+    });
+    expect(await rejectBid({ bidId: b.id })).toEqual({ ok: false, error: "Forbidden" });
   });
 });
