@@ -162,7 +162,13 @@ async function resolveOrgLabel(d: Db, orgId: number): Promise<string> {
 
 /** Returns true iff `orgId` is the deal owner OR an in-circle member when the
  *  deal is circle-scoped. Slice-4 predicate, re-encoded here for the message
- *  action so we never widen visibility in TS. */
+ *  action so we never widen visibility in TS.
+ *
+ *  ⚠ VISIBILITY PREDICATE — mirrored in 2 other places.
+ *  If you change the outer rule here (owner OR in-circle), update:
+ *    - src/db/dealMessages.ts → getDealMessages WHERE clause
+ *    - src/db/dealMessages.ts → getUnreadCountsForOrg WHERE clause
+ *  All three must agree. Divergence is a silent visibility hole. */
 async function canSeeDeal(d: Db, orgId: number, dealId: number): Promise<
   | { ok: true; ownerOrgId: number; threadMode: "private" | "group" }
   | { ok: false }
@@ -220,7 +226,14 @@ export async function setDealThreadMode(raw: unknown): Promise<ActionResult> {
       .where(eq(deals.id, input.dealId))
       .limit(1);
     if (!row || row.ownerOrgId !== orgId) throw new ForbiddenError();
-    await d.update(deals).set({ threadMode: input.mode }).where(eq(deals.id, input.dealId));
+    // Defense-in-depth: the UPDATE re-asserts orgId in the WHERE clause so a
+    // theoretical race between SELECT and UPDATE can never write to a deal
+    // that doesn't belong to the caller. Matches slice-3 inventory/actions.ts
+    // pattern (see updateInventoryItem). Costs nothing.
+    await d
+      .update(deals)
+      .set({ threadMode: input.mode })
+      .where(and(eq(deals.id, input.dealId), eq(deals.orgId, orgId)));
   });
 }
 
@@ -241,7 +254,16 @@ export async function deleteDealMessage(raw: unknown): Promise<ActionResult> {
     if (!msg) throw new ForbiddenError();
     if (msg.fromOrgId !== orgId) throw new ForbiddenError();
     if (msg.deletedAt !== null) return; // idempotent no-op
-    const ageMs = Date.now() - msg.createdAt.getTime();
+    // Defensive cast: pglite and Neon both *should* round-trip timestamptz as
+    // a JS Date, but the Db union has surprised us before (see Phase A's
+    // identical defense in src/db/dealMessages.ts row-mapper). Without this,
+    // any future shape drift would throw TypeError inside runWithUser and
+    // become an opaque "Database error" instead of a clean window-check fail.
+    const createdAtMs =
+      msg.createdAt instanceof Date
+        ? msg.createdAt.getTime()
+        : new Date(msg.createdAt as unknown as string).getTime();
+    const ageMs = Date.now() - createdAtMs;
     if (ageMs > SOFT_DELETE_WINDOW_MS) throw new ForbiddenError();
     await d
       .update(dealMessages)
