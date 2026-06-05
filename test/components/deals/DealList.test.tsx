@@ -11,6 +11,7 @@ function deal(over: Partial<DealRow> = {}): DealRow {
     quantity: 1, priceCents: 1240000, currency: "USD",
     status: "Open", postedByLabel: "boss",
     visibilityCircleId: null,
+    threadMode: "private",
     createdAt: new Date(Date.now() - 60_000),
     ...over,
   };

@@ -18,6 +18,8 @@ export interface DealRow {
   status: DealStatus;
   postedByLabel: string;
   visibilityCircleId: number | null;
+  /** Slice-10: per-deal thread mode. Defaults to "private" via the DB. */
+  threadMode: "private" | "group";
   createdAt: Date;
 }
 
@@ -39,6 +41,7 @@ const COLUMNS = {
   status: deals.status,
   postedByLabel: deals.postedByLabel,
   visibilityCircleId: deals.visibilityCircleId,
+  threadMode: deals.threadMode,
   createdAt: deals.createdAt,
 } as const;
 
