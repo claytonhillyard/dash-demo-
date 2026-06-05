@@ -4,15 +4,16 @@ import { LogoutButton } from "./LogoutButton";
 
 const SECTIONS = [
   "Dashboard", "Command Center", "TradeNet Exchange", "Market Intelligence",
-  "Inventory", "Diamonds", "Gold & Metals", "Orders & Deals", "Clients & CRM",
-  "Finances", "Payments", "POS System", "Crypto Wallet", "Converter Hub",
-  "Reports & Analytics", "Marketing Suite", "Social & Inbox", "Calendar & Tasks",
-  "Documents", "Settings",
+  "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
+  "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
+  "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
+  "Calendar & Tasks", "Documents", "Settings",
 ];
 
 const ROUTES: Record<string, string> = {
   Inventory: "/inventory",
   Diamonds: "/diamonds",
+  Website: "/website",
   "Orders & Deals": "/deals",
 };
 
