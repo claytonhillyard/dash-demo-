@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, ne, sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, type Db } from "@/db/client";
 import { deals, dealMessages, circleMembers, orgs, bids } from "@/db/schema";
@@ -18,8 +18,8 @@ import {
   type DeleteDealMessageInput, type MarkDealThreadReadInput,
 } from "./replyValidation";
 import {
-  postBidInput,
-  type PostBidInput,
+  postBidInput, acceptBidInput,
+  type PostBidInput, type AcceptBidInput,
 } from "./bidValidation";
 
 /** Thrown inside a postDeal callback when the session's org is not a member
@@ -328,6 +328,44 @@ export async function postBid(raw: unknown): Promise<ActionResult> {
       currency: input.currency,
       notes: input.notes ?? null,
       bidMode: access.bidMode,
+    });
+  });
+}
+
+export async function acceptBid(raw: unknown): Promise<ActionResult> {
+  return runWithUser(acceptBidInput, raw, async (input: AcceptBidInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidId: bids.id,
+        bidStatus: bids.status,
+        dealId: bids.dealId,
+        dealOwnerOrgId: deals.orgId,
+        dealStatus: deals.status,
+      })
+      .from(bids)
+      .innerJoin(deals, eq(deals.id, bids.dealId))
+      .where(eq(bids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError();
+    if (row.dealOwnerOrgId !== orgId) throw new ForbiddenError();
+    if (row.dealStatus !== "Open") throw new ForbiddenError();
+    if (row.bidStatus !== "pending") throw new ForbiddenError();
+
+    const now = new Date();
+    await d.transaction(async (tx) => {
+      await tx
+        .update(bids)
+        .set({ status: "accepted", decidedAt: now })
+        .where(and(eq(bids.id, input.bidId), eq(bids.status, "pending")));
+      await tx
+        .update(bids)
+        .set({ status: "auto_rejected", decidedAt: now })
+        .where(and(eq(bids.dealId, row.dealId), eq(bids.status, "pending"), ne(bids.id, input.bidId)));
+      await tx
+        .update(deals)
+        .set({ status: "Filled", updatedAt: now })
+        .where(and(eq(deals.id, row.dealId), eq(deals.orgId, orgId)));
     });
   });
 }
