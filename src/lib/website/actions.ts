@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import { websiteSnapshots } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
@@ -53,6 +54,7 @@ async function run<T>(
     return result;
   } catch (e) {
     console.error("[website action] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "website-action" } });
     return { ok: false, error: "Database error" };
   }
 }

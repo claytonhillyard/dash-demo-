@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import {
   revenueMonths,
@@ -13,6 +14,7 @@ import {
   projectionAssumptions,
 } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
+import { isDemoMode } from "@/lib/demo/mode";
 import {
   revenueMonthInput,
   revenueTransactionInput,
@@ -40,6 +42,11 @@ async function run<T>(
   raw: unknown,
   fn: (input: T) => Promise<void>
 ): Promise<ActionResult> {
+  // Demo-mode short-circuit BEFORE any session/DB/Sentry work. Matches the
+  // pattern in inventory/diamonds/deals/website action wrappers — keeps demo
+  // errors out of the production Sentry project and prevents seeded-data
+  // mutations. (Slice-11 review finding #3.)
+  if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
   try {
     await requireSession();
   } catch {
@@ -55,6 +62,7 @@ async function run<T>(
     // Never leak DB internals (schema/constraint/column detail) to the client.
     // Log the real error server-side; return a generic message to the UI.
     console.error("[company action] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "company-action" } });
     return { ok: false, error: "Database error" };
   }
 }

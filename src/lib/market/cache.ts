@@ -2,6 +2,7 @@ import type { Quote, SymbolDef } from "./types";
 import { ALL_SYMBOLS } from "./registry";
 import { resolveQuotes } from "./router";
 import { simulatedProvider } from "./providers/simulated";
+import { recordProviderResult } from "./health";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isBuildPhase } from "./buildPhase";
 
@@ -20,11 +21,14 @@ const SLOW_SYMBOLS = ALL_SYMBOLS.filter((s) => SLOW_CLASSES.has(s.assetClass));
  * simulated provider so neither the demo nor the build ever makes an external
  * call. Building offline must always succeed deterministically; see
  * `buildPhase.ts` for the rationale.
+ *
+ * Slice 11: wires resolveQuotes's `onProviderResult` callback to update the
+ * in-memory health map for the Provider Status panel.
  */
 export function defaultQuoteFetcher(symbols: SymbolDef[]): Promise<Quote[]> {
   return isDemoMode() || isBuildPhase()
-    ? resolveQuotes(symbols, [simulatedProvider])
-    : resolveQuotes(symbols);
+    ? resolveQuotes(symbols, [simulatedProvider], recordProviderResult)
+    : resolveQuotes(symbols, undefined, recordProviderResult);
 }
 
 export class QuoteCache {
