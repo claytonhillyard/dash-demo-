@@ -88,7 +88,9 @@ describe("getSeedCircleIdsForOrg", () => {
 describe("getSeedDeals (extended)", () => {
   it("includes AIYA's original 5 deals (slice 2) unchanged", () => {
     const deals = getSeedDeals();
-    const aiyaIds = deals.filter((d) => d.orgId === DEMO_AIYA_ORG_ID).map((d) => d.id);
+    const aiyaIds = deals
+      .filter((d) => d.orgId === DEMO_AIYA_ORG_ID && d.visibilityCircleId === null)
+      .map((d) => d.id);
     expect(aiyaIds).toEqual([101, 102, 103, 104, 105]);
   });
 
@@ -111,7 +113,9 @@ describe("getSeedDeals (extended)", () => {
 
   it("AIYA's 5 original deals have visibilityCircleId = null (slice-2 private behavior)", () => {
     const deals = getSeedDeals();
-    const aiya = deals.filter((d) => d.orgId === DEMO_AIYA_ORG_ID);
+    const aiya = deals.filter(
+      (d) => d.orgId === DEMO_AIYA_ORG_ID && d.id >= 101 && d.id <= 105,
+    );
     for (const d of aiya) {
       expect(d.visibilityCircleId).toBeNull();
     }
@@ -122,11 +126,64 @@ describe("getSeedDealsVisibleTo", () => {
   it("returns AIYA's private deals + cross-circle deals shared into circles AIYA is in", () => {
     const rows = getSeedDealsVisibleTo(DEMO_AIYA_ORG_ID);
     const ids = rows.map((d) => d.id).sort();
-    expect(ids).toEqual([101, 102, 103, 104, 105, 106, 107, 108]);
+    expect(ids).toEqual([101, 102, 103, 104, 105, 106, 107, 108, 109, 110]);
   });
 
   it("an unseeded org sees no demo deals", () => {
     expect(getSeedDealsVisibleTo(9999)).toEqual([]);
+  });
+});
+
+// --- Slice 10 demo seed: deals 109/110 + 5 reply messages ---
+import { DEMO_DEAL_MESSAGES } from "@/lib/demo/seed";
+
+describe("getSeedDeals (slice 10 — reply threads)", () => {
+  it("appends 2 AIYA-owned demo deals (109 private, 110 group) scoped to Trusted Partners", () => {
+    const deals = getSeedDeals();
+    expect(deals).toHaveLength(10);
+    const d109 = deals.find((d) => d.id === 109);
+    const d110 = deals.find((d) => d.id === 110);
+    expect(d109).toBeDefined();
+    expect(d110).toBeDefined();
+    expect(d109!.orgId).toBe(DEMO_AIYA_ORG_ID);
+    expect(d109!.threadMode).toBe("private");
+    expect(d109!.visibilityCircleId).toBe(DEMO_TRUSTED_PARTNERS_CIRCLE_ID);
+    expect(d110!.orgId).toBe(DEMO_AIYA_ORG_ID);
+    expect(d110!.threadMode).toBe("group");
+    expect(d110!.visibilityCircleId).toBe(DEMO_TRUSTED_PARTNERS_CIRCLE_ID);
+  });
+
+  it("every demo deal carries a thread_mode literal ('private' | 'group')", () => {
+    for (const d of getSeedDeals()) {
+      expect(["private", "group"]).toContain(d.threadMode);
+    }
+  });
+});
+
+describe("DEMO_DEAL_MESSAGES", () => {
+  it("exports exactly 5 seed messages across deals 109 + 110", () => {
+    expect(DEMO_DEAL_MESSAGES).toHaveLength(5);
+  });
+
+  it("deal 109 has 2 private-mode messages (AIYA <-> Mehta)", () => {
+    const m109 = DEMO_DEAL_MESSAGES.filter((m) => m.dealId === 109);
+    expect(m109).toHaveLength(2);
+    expect(m109.every((m) => m.threadMode === "private")).toBe(true);
+  });
+
+  it("deal 110 has 3 group-mode messages (AIYA + Mehta + Saint-Cloud)", () => {
+    const m110 = DEMO_DEAL_MESSAGES.filter((m) => m.dealId === 110);
+    expect(m110).toHaveLength(3);
+    expect(m110.every((m) => m.threadMode === "group")).toBe(true);
+    const senders = new Set(m110.map((m) => m.fromOrgId));
+    expect(senders.size).toBe(3);
+  });
+
+  it("the constant is stable — calling consumers cannot accidentally widen the count", () => {
+    // Idempotency surrogate: a pure-TS constant cannot be mutated by re-import.
+    const again = DEMO_DEAL_MESSAGES;
+    expect(again).toHaveLength(5);
+    expect(again).toBe(DEMO_DEAL_MESSAGES);
   });
 });
 
