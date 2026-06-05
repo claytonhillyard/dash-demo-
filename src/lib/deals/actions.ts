@@ -175,7 +175,7 @@ async function resolveOrgLabel(d: Db, orgId: number): Promise<string> {
  *    - src/db/dealMessages.ts → getUnreadCountsForOrg WHERE clause
  *  All three must agree. Divergence is a silent visibility hole. */
 async function canSeeDeal(d: Db, orgId: number, dealId: number): Promise<
-  | { ok: true; ownerOrgId: number; threadMode: "private" | "group" }
+  | { ok: true; ownerOrgId: number; threadMode: "private" | "group"; bidMode: "single" | "history" }
   | { ok: false }
 > {
   const [row] = await d
@@ -183,19 +183,22 @@ async function canSeeDeal(d: Db, orgId: number, dealId: number): Promise<
       ownerOrgId: deals.orgId,
       visibilityCircleId: deals.visibilityCircleId,
       threadMode: deals.threadMode,
+      bidMode: deals.bidMode,
     })
     .from(deals)
     .where(eq(deals.id, dealId))
     .limit(1);
   if (!row) return { ok: false };
-  if (row.ownerOrgId === orgId) return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode };
+  if (row.ownerOrgId === orgId)
+    return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode, bidMode: row.bidMode };
   if (row.visibilityCircleId !== null) {
     const [member] = await d
       .select({ orgId: circleMembers.orgId })
       .from(circleMembers)
       .where(and(eq(circleMembers.circleId, row.visibilityCircleId), eq(circleMembers.orgId, orgId)))
       .limit(1);
-    if (member) return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode };
+    if (member)
+      return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode, bidMode: row.bidMode };
   }
   return { ok: false };
 }
@@ -306,13 +309,8 @@ async function canBidOn(d: Db, orgId: number, dealId: number): Promise<
   const seen = await canSeeDeal(d, orgId, dealId);
   if (!seen.ok) return { ok: false };
   if (seen.ownerOrgId === orgId) return { ok: false }; // no self-bidding
-  const [row] = await d
-    .select({ bidMode: deals.bidMode })
-    .from(deals)
-    .where(eq(deals.id, dealId))
-    .limit(1);
-  if (!row) return { ok: false };
-  return { ok: true, ownerOrgId: seen.ownerOrgId, bidMode: row.bidMode };
+  // canSeeDeal already SELECTs deals.bid_mode in its single read — no second round-trip.
+  return { ok: true, ownerOrgId: seen.ownerOrgId, bidMode: seen.bidMode };
 }
 
 export async function postBid(raw: unknown): Promise<ActionResult> {
