@@ -212,3 +212,9 @@ export function getSeedDealsVisibleTo(orgId: number): DealRow[] {
       (d.visibilityCircleId !== null && circleIds.has(d.visibilityCircleId)),
   );
 }
+
+// --- Slice 5 placeholders (replaced in A5) ---
+import type { WebsiteSnapshotRow } from "@/db/website";
+export function getSeedWebsiteSnapshots(_orgId: number): WebsiteSnapshotRow[] { return []; }
+export function getSeedLatestWebsiteSnapshot(_orgId: number): WebsiteSnapshotRow | null { return null; }
+export function getSeedWebsiteSnapshotTrend(_orgId: number, _n?: number): WebsiteSnapshotRow[] { return []; }
