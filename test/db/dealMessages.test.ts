@@ -3,7 +3,11 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db";
 import { deals, dealMessages } from "@/db/schema";
-import { getDealMessages, getUnreadCountsForOrg } from "@/db/dealMessages";
+import {
+  getDealMessages,
+  getUnreadCountsForOrg,
+  getDealThreadModeForOwner,
+} from "@/db/dealMessages";
 import { dealThreadReads } from "@/db/schema";
 
 let db: Db;
@@ -101,5 +105,21 @@ describe("getUnreadCountsForOrg", () => {
     const counts = await getUnreadCountsForOrg(db, 1, [dealId]);
     expect(counts.get(dealId)).toBe(1); // only "live"
     expect(row.id).toBeGreaterThan(0); // sanity
+  });
+});
+
+describe("getDealThreadModeForOwner", () => {
+  it("returns the current thread_mode for the owner", async () => {
+    const dealId = await seedDeal(1, "group");
+    expect(await getDealThreadModeForOwner(db, 1, dealId)).toBe("group");
+  });
+
+  it("returns null for a non-owner", async () => {
+    const dealId = await seedDeal(1, "group");
+    expect(await getDealThreadModeForOwner(db, 999, dealId)).toBeNull();
+  });
+
+  it("returns null for an unknown dealId", async () => {
+    expect(await getDealThreadModeForOwner(db, 1, 9_999_999)).toBeNull();
   });
 });

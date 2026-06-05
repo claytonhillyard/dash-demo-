@@ -146,3 +146,26 @@ export async function getUnreadCountsForOrg(
   for (const r of rows) map.set(r.deal_id, r.unread);
   return map;
 }
+
+/**
+ * Returns the current `deals.thread_mode` for the caller IFF the caller is
+ * the deal's owner, else `null`. The panel uses the null return to decide
+ * whether to render the mode-selector UI.
+ *
+ * NOT demo-mode-gated: this is consulted at render time and we want the
+ * mode banner to show even on the seeded demo dataset.
+ */
+export async function getDealThreadModeForOwner(
+  db: Db,
+  viewerOrgId: number,
+  dealId: number,
+): Promise<"private" | "group" | null> {
+  const res = await db.execute(sql`
+    SELECT thread_mode AS thread_mode
+    FROM deals
+    WHERE id = ${dealId} AND org_id = ${viewerOrgId}
+    LIMIT 1
+  `);
+  const rows = (res as unknown as { rows: { thread_mode: "private" | "group" }[] }).rows;
+  return rows[0]?.thread_mode ?? null;
+}
