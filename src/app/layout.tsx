@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { ReactNode } from "react";
 import { Inter, JetBrains_Mono, Cormorant_Garamond } from "next/font/google";
+import { WebVitalsReporter } from "@/components/observability/WebVitalsReporter";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -17,7 +18,10 @@ export const metadata = { title: "AIYA Designs — Command Center" };
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable} ${display.variable}`}>
-      <body>{children}</body>
+      <body>
+        <WebVitalsReporter />
+        {children}
+      </body>
     </html>
   );
 }
