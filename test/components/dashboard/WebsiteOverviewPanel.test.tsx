@@ -115,10 +115,10 @@ describe("WebsiteOverviewPanel — multi-snapshot state", () => {
     const row = makeRow();
     render(<WebsiteOverviewPanel latest={row} previous={null} trend={[row]} updatedLabel="updated 2d ago" />);
     expect(screen.getByText(/owner-entered/i)).toBeInTheDocument();
-    // TODO(slice-5 review): the panel renders updatedLabel twice (header action
-    // + footer with "· owner-entered" suffix). The plan's panel code prescribes
-    // both placements; getAllByText accommodates that without weakening intent.
-    expect(screen.getAllByText(/updated 2d ago/i).length).toBeGreaterThanOrEqual(1);
+    // Provenance is rendered ONCE — in the footer with the "· owner-entered"
+    // suffix (review finding S2: header action slot was removed to avoid
+    // double-rendering the label).
+    expect(screen.getByText(/updated 2d ago · owner-entered/i)).toBeInTheDocument();
   });
 
   it("does NOT render a live FreshnessDot anywhere (honesty contract)", () => {

@@ -79,11 +79,14 @@ export function WebsiteOverviewPanel({
     .slice()
     .reverse(); // oldest-first for natural left-to-right time progression
 
+  // Provenance is rendered ONLY in the footer below (with the · owner-entered
+  // suffix that is the honesty contract). The Panel `action` slot is left
+  // empty here — the previous slice-5 prerelease had both, which double-rendered
+  // updatedLabel in the DOM. Single source of truth: the footer.
   return (
     <Panel
       title="Website Overview"
       state="ready"
-      action={updatedLabel ? <span className="text-[10px] text-text/40">{updatedLabel}</span> : undefined}
     >
       <div className="grid grid-cols-2 gap-2">
         <KpiTile
