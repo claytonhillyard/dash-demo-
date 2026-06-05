@@ -9,6 +9,7 @@ import { DealThreadAccordion } from "@/components/deals/DealThreadAccordion";
 import type { DealRow } from "@/lib/deals/queries";
 import type { DealKind } from "@/lib/deals/constants";
 import type { DealMessageView } from "@/db/dealMessages";
+import type { BidView } from "@/db/bids";
 
 // Fixed lookup so user input never reaches a className expression.
 const KIND_CLASS: Record<DealKind, string> = {
@@ -40,6 +41,15 @@ function circlesSubtitle(circleNamesById: Map<number, string>): string | null {
   return `Connected to ${circleNamesById.size} circles`;
 }
 
+export type DealRoomPanelBidActions = {
+  postBid: (input: { dealId: number; priceCents: number; currency?: string; notes?: string }) =>
+    Promise<ActionResult>;
+  acceptBid: (input: { bidId: number }) => Promise<ActionResult>;
+  rejectBid: (input: { bidId: number }) => Promise<ActionResult>;
+  withdrawBid: (input: { bidId: number }) => Promise<ActionResult>;
+  setBidMode: (input: { dealId: number; mode: "single" | "history" }) => Promise<ActionResult>;
+};
+
 export function DealRoomPanel({
   deals,
   currentOrgId,
@@ -50,6 +60,9 @@ export function DealRoomPanel({
   threadsByDealId,
   threadModeByDealId,
   actions,
+  bidsByDealId,
+  bidModeByDealId,
+  bidActions,
 }: {
   deals: DealRow[];
   currentOrgId: number;
@@ -68,6 +81,13 @@ export function DealRoomPanel({
    *  viewer owns (gates rendering the mode selector). */
   threadModeByDealId?: Map<number, "private" | "group">;
   actions?: DealRoomPanelActions;
+  /** Slice-16: per-deal preloaded bids for the Bids tab. */
+  bidsByDealId?: Map<number, BidView[]>;
+  /** Slice-16: per-deal owner-only bid_mode (populated only for deals the
+   *  viewer owns; gates the owner's bid display selector). */
+  bidModeByDealId?: Map<number, "single" | "history">;
+  /** Slice-16: bid server actions, threaded through to DealBidsTab. */
+  bidActions?: DealRoomPanelBidActions;
 }) {
   const subtitle = circlesSubtitle(circleNamesById);
   const viewer = viewerOrgId ?? currentOrgId;
@@ -191,6 +211,9 @@ export function DealRoomPanel({
                     setMode: actions.setMode,
                     deleteMessage: actions.deleteMessage,
                   }}
+                  bids={bidsByDealId?.get(d.id) ?? []}
+                  currentBidMode={isOwner ? (bidModeByDealId?.get(d.id) ?? null) : null}
+                  bidActions={bidActions}
                 />
               )}
             </li>

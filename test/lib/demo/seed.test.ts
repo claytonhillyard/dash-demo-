@@ -135,7 +135,19 @@ describe("getSeedDealsVisibleTo", () => {
 });
 
 // --- Slice 10 demo seed: deals 109/110 + 5 reply messages ---
-import { DEMO_DEAL_MESSAGES } from "@/lib/demo/seed";
+import { DEMO_DEAL_MESSAGES, DEMO_BIDS } from "@/lib/demo/seed";
+
+describe("DEMO_BIDS — slice-16 authored seed", () => {
+  it("exports exactly 2 pending bids on deals 109 + 110", () => {
+    expect(DEMO_BIDS).toHaveLength(2);
+    const byDeal = new Map(DEMO_BIDS.map((b) => [b.dealId, b]));
+    expect(byDeal.get(109)?.bidderOrgLabel).toBe("Mehta Diamonds");
+    expect(byDeal.get(109)?.priceCents).toBe(12_300_00);
+    expect(byDeal.get(110)?.bidderOrgLabel).toBe("Saint-Cloud Atelier");
+    expect(byDeal.get(110)?.priceCents).toBe(89_500_00);
+    expect(DEMO_BIDS.every((b) => b.status === "pending")).toBe(true);
+  });
+});
 
 describe("getSeedDeals (slice 10 — reply threads)", () => {
   it("appends 2 AIYA-owned demo deals (109 private, 110 group) scoped to Trusted Partners", () => {

@@ -212,6 +212,9 @@ export const deals = pgTable(
     threadMode: text("thread_mode", { enum: ["private", "group"] })
       .notNull()
       .default("private"),
+    bidMode: text("bid_mode", { enum: ["single", "history"] })
+      .notNull()
+      .default("single"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -276,6 +279,40 @@ export const dealThreadReads = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.orgId, t.dealId] }),
+  }),
+);
+
+export const bids = pgTable(
+  "bids",
+  {
+    id: serial("id").primaryKey(),
+    dealId: integer("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    bidderOrgId: integer("bidder_org_id")
+      .notNull()
+      .references(() => orgs.id),
+    bidderOrgLabel: text("bidder_org_label").notNull(),
+    priceCents: integer("price_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    notes: text("notes"),
+    bidMode: text("bid_mode", { enum: ["single", "history"] }).notNull(),
+    status: text("status", {
+      enum: ["pending", "accepted", "rejected", "withdrawn", "auto_rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    dealCreatedIdx: index("bids_deal_created_idx").on(t.dealId, t.createdAt.desc()),
+    bidderStatusIdx: index("bids_bidder_status_idx").on(t.bidderOrgId, t.status),
+    pendingByDealIdx: index("bids_pending_by_deal_idx")
+      .on(t.dealId, t.status)
+      .where(sql`${t.status} = 'pending'`),
   }),
 );
 

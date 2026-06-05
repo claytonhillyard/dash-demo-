@@ -16,10 +16,21 @@ import {
   type DealMessageView,
 } from "@/db/dealMessages";
 import {
+  getBidsForDeal,
+  getDealBidModeForOwner,
+  getTodaysBidsForOwner,
+  type BidView,
+} from "@/db/bids";
+import {
   postDealMessage,
   setDealThreadMode,
   deleteDealMessage,
   markDealThreadRead,
+  postBid,
+  acceptBid,
+  rejectBid,
+  withdrawBid,
+  setDealBidMode,
 } from "@/lib/deals/actions";
 import { updatedAgo } from "@/lib/company/format";
 import { getProviderStatus } from "@/lib/market/health";
@@ -40,20 +51,39 @@ export default async function Home() {
       getWebsiteSnapshotTrend(db, orgId, 8),
     ]);
 
-  // Slice 10: per-deal thread fetches. N+1 reads in the loop is acceptable for
-  // ≤ 5 active deals (the panel cap); a future slice can consolidate into one
-  // SQL pass if profiling demands it (see plan §C6 perf note).
+  // Slice 10 + 16: per-deal fetches. Parallelized via Promise.all so the 4
+  // per-id queries run concurrently rather than sequentially. `unreadByDealId`
+  // is already batched in a single SQL call, so it stays as-is.
   const dealIds = activeDeals.map((d) => d.id);
-  const unreadByDealId = await getUnreadCountsForOrg(db, orgId, dealIds);
+  const [
+    unreadByDealId,
+    threadsResults,
+    threadModeResults,
+    bidsResults,
+    bidModeResults,
+    todaysBids,
+  ] = await Promise.all([
+    getUnreadCountsForOrg(db, orgId, dealIds),
+    Promise.all(dealIds.map((id) => getDealMessages(db, orgId, id))),
+    Promise.all(dealIds.map((id) => getDealThreadModeForOwner(db, orgId, id))),
+    Promise.all(dealIds.map((id) => getBidsForDeal(db, orgId, id))),
+    Promise.all(dealIds.map((id) => getDealBidModeForOwner(db, orgId, id))),
+    getTodaysBidsForOwner(db, orgId),
+  ]);
   const threadsByDealId = new Map<number, DealMessageView[]>();
-  for (const id of dealIds) {
-    threadsByDealId.set(id, await getDealMessages(db, orgId, id));
-  }
+  dealIds.forEach((id, i) => threadsByDealId.set(id, threadsResults[i]));
   const threadModeByDealId = new Map<number, "private" | "group">();
-  for (const id of dealIds) {
-    const m = await getDealThreadModeForOwner(db, orgId, id);
+  dealIds.forEach((id, i) => {
+    const m = threadModeResults[i];
     if (m) threadModeByDealId.set(id, m);
-  }
+  });
+  const bidsByDealId = new Map<number, BidView[]>();
+  dealIds.forEach((id, i) => bidsByDealId.set(id, bidsResults[i]));
+  const bidModeByDealId = new Map<number, "single" | "history">();
+  dealIds.forEach((id, i) => {
+    const m = bidModeResults[i];
+    if (m) bidModeByDealId.set(id, m);
+  });
   const viewerCircleIds: ReadonlySet<number> = new Set(viewerCircleIdList);
   const inventory = {
     counts: invSummary.counts,
@@ -82,6 +112,16 @@ export default async function Home() {
       deleteMessage: deleteDealMessage,
       markRead: markDealThreadRead,
     },
+    // Slice 16: bids
+    bidsByDealId,
+    bidModeByDealId,
+    bidActions: {
+      postBid,
+      acceptBid,
+      rejectBid,
+      withdrawBid,
+      setBidMode: setDealBidMode,
+    },
   };
   const website = {
     latest: websiteTrend[0] ?? null,
@@ -93,10 +133,14 @@ export default async function Home() {
     rows: getProviderStatus(),
     demo: isDemoMode(),
   };
+  const todaysBidsView = {
+    bids: todaysBids,
+    actions: { acceptBid, rejectBid },
+  };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>
-        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} />
+        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} />
       </Shell>
     </QuotesProvider>
   );

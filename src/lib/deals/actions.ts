@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, ne, sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
-import { deals, dealMessages, circleMembers, orgs } from "@/db/schema";
+import { deals, dealMessages, circleMembers, orgs, bids } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
@@ -18,6 +18,11 @@ import {
   type PostDealMessageInput, type SetDealThreadModeInput,
   type DeleteDealMessageInput, type MarkDealThreadReadInput,
 } from "./replyValidation";
+import {
+  postBidInput, acceptBidInput, rejectBidInput, withdrawBidInput, setDealBidModeInput,
+  type PostBidInput, type AcceptBidInput, type RejectBidInput,
+  type WithdrawBidInput, type SetDealBidModeInput,
+} from "./bidValidation";
 
 /** Thrown inside a postDeal callback when the session's org is not a member
  *  of the requested visibility circle. Caught by runWithUser's catch and
@@ -173,7 +178,7 @@ async function resolveOrgLabel(d: Db, orgId: number): Promise<string> {
  *    - src/db/dealMessages.ts → getUnreadCountsForOrg WHERE clause
  *  All three must agree. Divergence is a silent visibility hole. */
 async function canSeeDeal(d: Db, orgId: number, dealId: number): Promise<
-  | { ok: true; ownerOrgId: number; threadMode: "private" | "group" }
+  | { ok: true; ownerOrgId: number; threadMode: "private" | "group"; bidMode: "single" | "history" }
   | { ok: false }
 > {
   const [row] = await d
@@ -181,19 +186,22 @@ async function canSeeDeal(d: Db, orgId: number, dealId: number): Promise<
       ownerOrgId: deals.orgId,
       visibilityCircleId: deals.visibilityCircleId,
       threadMode: deals.threadMode,
+      bidMode: deals.bidMode,
     })
     .from(deals)
     .where(eq(deals.id, dealId))
     .limit(1);
   if (!row) return { ok: false };
-  if (row.ownerOrgId === orgId) return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode };
+  if (row.ownerOrgId === orgId)
+    return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode, bidMode: row.bidMode };
   if (row.visibilityCircleId !== null) {
     const [member] = await d
       .select({ orgId: circleMembers.orgId })
       .from(circleMembers)
       .where(and(eq(circleMembers.circleId, row.visibilityCircleId), eq(circleMembers.orgId, orgId)))
       .limit(1);
-    if (member) return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode };
+    if (member)
+      return { ok: true, ownerOrgId: row.ownerOrgId, threadMode: row.threadMode, bidMode: row.bidMode };
   }
   return { ok: false };
 }
@@ -285,5 +293,141 @@ export async function markDealThreadRead(raw: unknown): Promise<ActionResult> {
       VALUES (${orgId}, ${input.dealId}, now())
       ON CONFLICT (org_id, deal_id) DO UPDATE SET last_read_at = EXCLUDED.last_read_at
     `);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Slice 16: Bids
+// ---------------------------------------------------------------------------
+
+/** Slice-16 write-side gate: can the caller bid on this deal?
+ *  Returns the deal's owner + bid_mode snapshot for the insert.
+ *
+ *  ⚠ Mirrors getBidsForDeal's bidder|owner SQL visibility, with the
+ *  added "no self-bidding" rule. If you change visibility in either
+ *  place, change both. */
+async function canBidOn(d: Db, orgId: number, dealId: number): Promise<
+  { ok: true; ownerOrgId: number; bidMode: "single" | "history" } | { ok: false }
+> {
+  const seen = await canSeeDeal(d, orgId, dealId);
+  if (!seen.ok) return { ok: false };
+  if (seen.ownerOrgId === orgId) return { ok: false }; // no self-bidding
+  // canSeeDeal already SELECTs deals.bid_mode in its single read — no second round-trip.
+  return { ok: true, ownerOrgId: seen.ownerOrgId, bidMode: seen.bidMode };
+}
+
+export async function postBid(raw: unknown): Promise<ActionResult> {
+  return runWithUser(postBidInput, raw, async (input: PostBidInput, _user, orgId) => {
+    const d = db();
+    const access = await canBidOn(d, orgId, input.dealId);
+    if (!access.ok) throw new ForbiddenError();
+    const label = await resolveOrgLabel(d, orgId);
+    await d.insert(bids).values({
+      dealId: input.dealId,
+      bidderOrgId: orgId,
+      bidderOrgLabel: label,
+      priceCents: input.priceCents,
+      currency: input.currency,
+      notes: input.notes ?? null,
+      bidMode: access.bidMode,
+    });
+  });
+}
+
+export async function acceptBid(raw: unknown): Promise<ActionResult> {
+  return runWithUser(acceptBidInput, raw, async (input: AcceptBidInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidId: bids.id,
+        bidStatus: bids.status,
+        dealId: bids.dealId,
+        dealOwnerOrgId: deals.orgId,
+        dealStatus: deals.status,
+      })
+      .from(bids)
+      .innerJoin(deals, eq(deals.id, bids.dealId))
+      .where(eq(bids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError();
+    if (row.dealOwnerOrgId !== orgId) throw new ForbiddenError();
+    if (row.dealStatus !== "Open") throw new ForbiddenError();
+    if (row.bidStatus !== "pending") throw new ForbiddenError();
+
+    const now = new Date();
+    await d.transaction(async (tx) => {
+      await tx
+        .update(bids)
+        .set({ status: "accepted", decidedAt: now })
+        .where(and(eq(bids.id, input.bidId), eq(bids.status, "pending")));
+      await tx
+        .update(bids)
+        .set({ status: "auto_rejected", decidedAt: now })
+        .where(and(eq(bids.dealId, row.dealId), eq(bids.status, "pending"), ne(bids.id, input.bidId)));
+      await tx
+        .update(deals)
+        .set({ status: "Filled", updatedAt: now })
+        .where(and(eq(deals.id, row.dealId), eq(deals.orgId, orgId)));
+    });
+  });
+}
+
+export async function rejectBid(raw: unknown): Promise<ActionResult> {
+  return runWithUser(rejectBidInput, raw, async (input: RejectBidInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidStatus: bids.status,
+        dealOwnerOrgId: deals.orgId,
+      })
+      .from(bids)
+      .innerJoin(deals, eq(deals.id, bids.dealId))
+      .where(eq(bids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError();
+    if (row.dealOwnerOrgId !== orgId) throw new ForbiddenError();
+    if (row.bidStatus !== "pending") throw new ForbiddenError();
+    await d
+      .update(bids)
+      .set({ status: "rejected", decidedAt: new Date() })
+      .where(and(eq(bids.id, input.bidId), eq(bids.status, "pending")));
+  });
+}
+
+export async function withdrawBid(raw: unknown): Promise<ActionResult> {
+  return runWithUser(withdrawBidInput, raw, async (input: WithdrawBidInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidderOrgId: bids.bidderOrgId,
+        status: bids.status,
+      })
+      .from(bids)
+      .where(eq(bids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError();
+    if (row.bidderOrgId !== orgId) throw new ForbiddenError();
+    if (row.status === "withdrawn") return; // idempotent
+    if (row.status !== "pending") throw new ForbiddenError();
+    await d
+      .update(bids)
+      .set({ status: "withdrawn", decidedAt: new Date() })
+      .where(and(eq(bids.id, input.bidId), eq(bids.bidderOrgId, orgId)));
+  });
+}
+
+export async function setDealBidMode(raw: unknown): Promise<ActionResult> {
+  return runWithUser(setDealBidModeInput, raw, async (input: SetDealBidModeInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({ ownerOrgId: deals.orgId })
+      .from(deals)
+      .where(eq(deals.id, input.dealId))
+      .limit(1);
+    if (!row || row.ownerOrgId !== orgId) throw new ForbiddenError();
+    await d
+      .update(deals)
+      .set({ bidMode: input.mode })
+      .where(and(eq(deals.id, input.dealId), eq(deals.orgId, orgId)));
   });
 }

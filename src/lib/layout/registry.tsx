@@ -7,6 +7,7 @@ import { InventoryOverviewPanel } from "@/components/dashboard/InventoryOverview
 import { DealRoomPanel } from "@/components/dashboard/DealRoomPanel";
 import { WebsiteOverviewPanel } from "@/components/dashboard/WebsiteOverviewPanel";
 import { ProviderStatusPanel } from "@/components/dashboard/ProviderStatusPanel";
+import { TodaysBidsPanel } from "@/components/dashboard/TodaysBidsPanel";
 import type { LayoutItem, PanelEntry, PanelSize } from "./types";
 
 export const PANEL_REGISTRY: PanelEntry[] = [
@@ -73,6 +74,9 @@ export const PANEL_REGISTRY: PanelEntry[] = [
             threadsByDealId={ctx.deals.threadsByDealId}
             threadModeByDealId={ctx.deals.threadModeByDealId}
             actions={ctx.deals.actions}
+            bidsByDealId={ctx.deals.bidsByDealId}
+            bidModeByDealId={ctx.deals.bidModeByDealId}
+            bidActions={ctx.deals.bidActions}
           />
         : <BusinessPlaceholder title="Deal Room" testid="panel-tradenet-exchange" />,
   },
@@ -104,6 +108,20 @@ export const PANEL_REGISTRY: PanelEntry[] = [
         />
       ) : (
         <BusinessPlaceholder title="Provider Status" testid="panel-provider-status" />
+      ),
+  },
+  {
+    id: "todays-bids",
+    title: "Today's Bids",
+    defaultSize: 1,
+    render: (ctx) =>
+      ctx.todaysBids ? (
+        <TodaysBidsPanel
+          bids={ctx.todaysBids.bids}
+          actions={ctx.todaysBids.actions}
+        />
+      ) : (
+        <BusinessPlaceholder title="Today's Bids" testid="panel-todays-bids" />
       ),
   },
   {

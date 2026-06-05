@@ -309,6 +309,47 @@ export const DEMO_DEAL_MESSAGES: SeedDealMessage[] = [
 // to any future demo-mode UI shim. If a real demo runner is ever added, this
 // constant is the source.
 
+// --- Slice 16 demo seed: authored-only bid examples ---
+// See the comment above DEMO_DEAL_MESSAGES — this is also a TS constant,
+// not actually inserted at runtime. The query layer short-circuits in demo
+// mode. If a real demo runner is ever added, this is the source.
+export type SeedBid = {
+  dealId: number;
+  bidderOrgId: number;
+  bidderOrgLabel: string;
+  priceCents: number;
+  currency: string;
+  notes: string | null;
+  bidMode: "single" | "history";
+  status: "pending";
+  createdAtOffsetMinutes: number;
+};
+
+export const DEMO_BIDS: SeedBid[] = [
+  {
+    dealId: 109,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    bidderOrgLabel: "Mehta Diamonds",
+    priceCents: 12_300_00,
+    currency: "USD",
+    notes: "Can pick up today, cash.",
+    bidMode: "single",
+    status: "pending",
+    createdAtOffsetMinutes: 25,
+  },
+  {
+    dealId: 110,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.SAINT_CLOUD,
+    bidderOrgLabel: "Saint-Cloud Atelier",
+    priceCents: 89_500_00,
+    currency: "USD",
+    notes: "Spot price + 2%, 2-day courier.",
+    bidMode: "single",
+    status: "pending",
+    createdAtOffsetMinutes: 10,
+  },
+];
+
 /** Mirror of the real widened query for the demo runtime. Returns the union
  *  of {rows where orgId === viewer} and {rows whose visibilityCircleId is in
  *  one of the viewer's seeded circles}. */
