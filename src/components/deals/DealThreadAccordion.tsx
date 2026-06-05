@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import type { DealMessageView } from "@/db/dealMessages";
+import type { BidView } from "@/db/bids";
+import { DealBidsTab } from "./DealBidsTab";
 
 export type DealThreadAccordionProps = {
   dealId: number;
@@ -33,6 +35,21 @@ export type DealThreadAccordionProps = {
       { ok: true } | { ok: false; error: string }
     >;
   };
+  // --- Slice 16: optional bid props (default to safe no-op when omitted) ---
+  /** Per-deal preloaded bids for the Bids tab. Defaults to []. */
+  bids?: BidView[];
+  /** Owner's current bid display mode. Null for non-owners (selector hidden). */
+  currentBidMode?: "single" | "history" | null;
+  /** Bid action wiring. When omitted, the Bids tab silently no-ops. */
+  bidActions?: {
+    postBid: (input: { dealId: number; priceCents: number; currency?: string; notes?: string }) =>
+      Promise<{ ok: true } | { ok: false; error: string }>;
+    acceptBid: (input: { bidId: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    rejectBid: (input: { bidId: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    withdrawBid: (input: { bidId: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    setBidMode: (input: { dealId: number; mode: "single" | "history" }) =>
+      Promise<{ ok: true } | { ok: false; error: string }>;
+  };
 };
 
 function relativeTime(d: Date): string {
@@ -53,6 +70,7 @@ export function DealThreadAccordion(props: DealThreadAccordionProps) {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [tab, setTab] = useState<"messages" | "bids">("messages");
 
   const handleSend = () => {
     setError(null);
@@ -78,8 +96,46 @@ export function DealThreadAccordion(props: DealThreadAccordionProps) {
   }
   const bannerAfter = new Map(banners.map((b) => [b.afterIndex, b]));
 
+  const defaultBidActions = {
+    postBid: async () => ({ ok: false as const, error: "Bid actions not configured" }),
+    acceptBid: async () => ({ ok: false as const, error: "Bid actions not configured" }),
+    rejectBid: async () => ({ ok: false as const, error: "Bid actions not configured" }),
+    withdrawBid: async () => ({ ok: false as const, error: "Bid actions not configured" }),
+    setBidMode: async () => ({ ok: false as const, error: "Bid actions not configured" }),
+  };
+
   return (
     <div aria-label="deal thread" className="rounded border border-zinc-700 bg-zinc-900/40 p-3">
+      <div role="tablist" className="flex gap-2 mb-2 text-xs border-b border-zinc-700 pb-1">
+        <button
+          role="tab"
+          aria-selected={tab === "messages"}
+          onClick={() => setTab("messages")}
+          className={`px-2 py-0.5 rounded ${tab === "messages" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+        >
+          Messages
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === "bids"}
+          onClick={() => setTab("bids")}
+          className={`px-2 py-0.5 rounded ${tab === "bids" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+        >
+          Bids
+        </button>
+      </div>
+
+      {tab === "bids" ? (
+        <DealBidsTab
+          dealId={props.dealId}
+          viewerOrgId={props.viewerOrgId}
+          isOwner={props.isOwner}
+          currentBidMode={props.currentBidMode ?? null}
+          bids={props.bids ?? []}
+          actions={props.bidActions ?? defaultBidActions}
+        />
+      ) : (
+        <>
       {props.isOwner && props.currentMode !== null && (
         <div className="mb-3 flex items-center gap-2 text-xs">
           <label htmlFor={`mode-${props.dealId}`} className="text-zinc-400">Mode:</label>
@@ -174,6 +230,8 @@ export function DealThreadAccordion(props: DealThreadAccordionProps) {
         <p className="text-xs text-zinc-500 italic">
           Replies are limited to the deal owner while this thread is private.
         </p>
+      )}
+        </>
       )}
     </div>
   );
