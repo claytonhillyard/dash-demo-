@@ -17,6 +17,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@electric-sql/pglite": "0.4.5",
     "@neondatabase/serverless": "1.1.0",
+    "@sentry/nextjs": "^8.55.2",
     "drizzle-orm": "0.45.2",
     "jose": "5.9.6",
     "lightweight-charts": "4.2.1",
