@@ -51,4 +51,15 @@ describe("TodaysBidsPanel", () => {
     render(<TodaysBidsPanel bids={[row({ dealSubject: longSubject })]} actions={noopActions} />);
     expect(screen.getByText(/A{39}…/)).toBeInTheDocument();
   });
+
+  it("renders alert when Accept fails", async () => {
+    const actions = {
+      ...noopActions,
+      acceptBid: vi.fn(async () => ({ ok: false as const, error: "Forbidden — not your deal" })),
+    };
+    render(<TodaysBidsPanel bids={[row({ bidId: 55 })]} actions={actions} />);
+    fireEvent.click(screen.getByLabelText(/accept bid 55/));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent || "").toMatch(/forbidden/i);
+  });
 });

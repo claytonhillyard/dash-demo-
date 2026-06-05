@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import type { BidView } from "@/db/bids";
+import { formatPrice, relativeTime } from "@/lib/format/bids";
 
 export type DealBidsTabProps = {
   dealId: number;
@@ -23,23 +24,6 @@ export type DealBidsTabProps = {
   };
 };
 
-function formatPrice(cents: number, currency: string): string {
-  const dollars = cents / 100;
-  try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(dollars);
-  } catch {
-    return `${currency} ${dollars.toFixed(2)}`;
-  }
-}
-
-function relativeTime(d: Date): string {
-  const s = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return d.toLocaleDateString();
-}
-
 function statusBadgeClass(status: BidView["status"]): string {
   switch (status) {
     case "pending": return "text-amber-300";
@@ -52,6 +36,7 @@ function statusBadgeClass(status: BidView["status"]): string {
 
 export function DealBidsTab(props: DealBidsTabProps) {
   const [pending, startTransition] = useTransition();
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const visibleBids = useMemo(() => {
     if (!props.isOwner || props.currentBidMode === "history") return props.bids;
@@ -76,20 +61,26 @@ export function DealBidsTab(props: DealBidsTabProps) {
             aria-label="bid display mode"
             value={props.currentBidMode}
             disabled={pending}
-            onChange={(e) =>
+            onChange={(e) => {
+              setActionError(null);
               startTransition(async () => {
-                await props.actions.setBidMode({
+                const res = await props.actions.setBidMode({
                   dealId: props.dealId,
                   mode: e.target.value as "single" | "history",
                 });
-              })
-            }
+                if (!res.ok) setActionError(res.error);
+              });
+            }}
             className="bg-zinc-800 text-zinc-100 px-1 py-0.5 rounded"
           >
             <option value="single">Single (latest per bidder)</option>
             <option value="history">History (all bids)</option>
           </select>
         </div>
+      )}
+
+      {actionError && (
+        <p role="alert" className="text-xs text-rose-400 mb-2">{actionError}</p>
       )}
 
       {visibleBids.length === 0 ? (
@@ -115,11 +106,13 @@ export function DealBidsTab(props: DealBidsTabProps) {
                     aria-label={`accept bid ${b.id}`}
                     className="text-xs px-2 py-0.5 bg-emerald-500/80 hover:bg-emerald-500 text-zinc-900 rounded"
                     disabled={pending}
-                    onClick={() =>
+                    onClick={() => {
+                      setActionError(null);
                       startTransition(async () => {
-                        await props.actions.acceptBid({ bidId: b.id });
-                      })
-                    }
+                        const res = await props.actions.acceptBid({ bidId: b.id });
+                        if (!res.ok) setActionError(res.error);
+                      });
+                    }}
                   >
                     Accept
                   </button>
@@ -127,11 +120,13 @@ export function DealBidsTab(props: DealBidsTabProps) {
                     aria-label={`reject bid ${b.id}`}
                     className="text-xs px-2 py-0.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded"
                     disabled={pending}
-                    onClick={() =>
+                    onClick={() => {
+                      setActionError(null);
                       startTransition(async () => {
-                        await props.actions.rejectBid({ bidId: b.id });
-                      })
-                    }
+                        const res = await props.actions.rejectBid({ bidId: b.id });
+                        if (!res.ok) setActionError(res.error);
+                      });
+                    }}
                   >
                     Reject
                   </button>
@@ -142,11 +137,13 @@ export function DealBidsTab(props: DealBidsTabProps) {
                   aria-label={`withdraw bid ${b.id}`}
                   className="text-xs text-zinc-500 hover:text-rose-400 mt-1"
                   disabled={pending}
-                  onClick={() =>
+                  onClick={() => {
+                    setActionError(null);
                     startTransition(async () => {
-                      await props.actions.withdrawBid({ bidId: b.id });
-                    })
-                  }
+                      const res = await props.actions.withdrawBid({ bidId: b.id });
+                      if (!res.ok) setActionError(res.error);
+                    });
+                  }}
                 >
                   Withdraw
                 </button>

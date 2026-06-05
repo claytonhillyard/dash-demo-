@@ -124,4 +124,45 @@ describe("DealBidsTab", () => {
     />);
     expect(screen.getByText("<script>alert(1)</script>")).toBeInTheDocument();
   });
+
+  it("clears price + notes on successful post", async () => {
+    render(<DealBidsTab
+      dealId={1} viewerOrgId={999} isOwner={false} currentBidMode={null}
+      bids={[]} actions={noopActions}
+    />);
+    const priceInput = screen.getByLabelText("bid price") as HTMLInputElement;
+    fireEvent.change(priceInput, { target: { value: "200.00" } });
+    expect(priceInput.value).toBe("200.00");
+    fireEvent.click(screen.getByLabelText(/submit bid/));
+    await waitFor(() => expect(priceInput.value).toBe(""));
+  });
+
+  it("renders alert on post failure", async () => {
+    const actions = {
+      ...noopActions,
+      postBid: vi.fn(async () => ({ ok: false as const, error: "Demo mode — try again later" })),
+    };
+    render(<DealBidsTab
+      dealId={1} viewerOrgId={999} isOwner={false} currentBidMode={null}
+      bids={[]} actions={actions}
+    />);
+    fireEvent.change(screen.getByLabelText("bid price"), { target: { value: "300.00" } });
+    fireEvent.click(screen.getByLabelText(/submit bid/));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent || "").toMatch(/demo/i);
+  });
+
+  it("renders alert when Accept fails", async () => {
+    const actions = {
+      ...noopActions,
+      acceptBid: vi.fn(async () => ({ ok: false as const, error: "Forbidden" })),
+    };
+    render(<DealBidsTab
+      dealId={1} viewerOrgId={1} isOwner={true} currentBidMode="single"
+      bids={[bid({ id: 7 })]} actions={actions}
+    />);
+    fireEvent.click(screen.getByLabelText(/accept bid 7/));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent || "").toMatch(/forbidden/i);
+  });
 });

@@ -51,32 +51,39 @@ export default async function Home() {
       getWebsiteSnapshotTrend(db, orgId, 8),
     ]);
 
-  // Slice 10: per-deal thread fetches. N+1 reads in the loop is acceptable for
-  // ≤ 5 active deals (the panel cap); a future slice can consolidate into one
-  // SQL pass if profiling demands it (see plan §C6 perf note).
+  // Slice 10 + 16: per-deal fetches. Parallelized via Promise.all so the 4
+  // per-id queries run concurrently rather than sequentially. `unreadByDealId`
+  // is already batched in a single SQL call, so it stays as-is.
   const dealIds = activeDeals.map((d) => d.id);
-  const unreadByDealId = await getUnreadCountsForOrg(db, orgId, dealIds);
+  const [
+    unreadByDealId,
+    threadsResults,
+    threadModeResults,
+    bidsResults,
+    bidModeResults,
+    todaysBids,
+  ] = await Promise.all([
+    getUnreadCountsForOrg(db, orgId, dealIds),
+    Promise.all(dealIds.map((id) => getDealMessages(db, orgId, id))),
+    Promise.all(dealIds.map((id) => getDealThreadModeForOwner(db, orgId, id))),
+    Promise.all(dealIds.map((id) => getBidsForDeal(db, orgId, id))),
+    Promise.all(dealIds.map((id) => getDealBidModeForOwner(db, orgId, id))),
+    getTodaysBidsForOwner(db, orgId),
+  ]);
   const threadsByDealId = new Map<number, DealMessageView[]>();
-  for (const id of dealIds) {
-    threadsByDealId.set(id, await getDealMessages(db, orgId, id));
-  }
+  dealIds.forEach((id, i) => threadsByDealId.set(id, threadsResults[i]));
   const threadModeByDealId = new Map<number, "private" | "group">();
-  for (const id of dealIds) {
-    const m = await getDealThreadModeForOwner(db, orgId, id);
+  dealIds.forEach((id, i) => {
+    const m = threadModeResults[i];
     if (m) threadModeByDealId.set(id, m);
-  }
-  // Slice 16: per-deal bid fetches. Same N+1 tradeoff as slice 10's thread
-  // fetches above (≤ 5 active deals).
+  });
   const bidsByDealId = new Map<number, BidView[]>();
-  for (const id of dealIds) {
-    bidsByDealId.set(id, await getBidsForDeal(db, orgId, id));
-  }
+  dealIds.forEach((id, i) => bidsByDealId.set(id, bidsResults[i]));
   const bidModeByDealId = new Map<number, "single" | "history">();
-  for (const id of dealIds) {
-    const m = await getDealBidModeForOwner(db, orgId, id);
+  dealIds.forEach((id, i) => {
+    const m = bidModeResults[i];
     if (m) bidModeByDealId.set(id, m);
-  }
-  const todaysBids = await getTodaysBidsForOwner(db, orgId);
+  });
   const viewerCircleIds: ReadonlySet<number> = new Set(viewerCircleIdList);
   const inventory = {
     counts: invSummary.counts,
