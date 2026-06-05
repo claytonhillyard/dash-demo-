@@ -212,3 +212,16 @@ export async function postDealMessage(raw: unknown): Promise<ActionResult> {
     });
   });
 }
+
+export async function setDealThreadMode(raw: unknown): Promise<ActionResult> {
+  return runWithUser(setDealThreadModeInput, raw, async (input: SetDealThreadModeInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({ ownerOrgId: deals.orgId })
+      .from(deals)
+      .where(eq(deals.id, input.dealId))
+      .limit(1);
+    if (!row || row.ownerOrgId !== orgId) throw new ForbiddenError();
+    await d.update(deals).set({ threadMode: input.mode }).where(eq(deals.id, input.dealId));
+  });
+}
