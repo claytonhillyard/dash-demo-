@@ -126,10 +126,14 @@ export default async function Home() {
     rows: getProviderStatus(),
     demo: isDemoMode(),
   };
+  const todaysBidsView = {
+    bids: todaysBids,
+    actions: { acceptBid, rejectBid },
+  };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>
-        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} />
+        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} />
       </Shell>
     </QuotesProvider>
   );

@@ -4,7 +4,7 @@ import type { DiamondRow } from "@/components/market/MarketIntelligencePanel";
 import type { InventoryCategory } from "@/lib/inventory/validation";
 import type { DealRow } from "@/lib/deals/queries";
 import type { DealMessageView } from "@/db/dealMessages";
-import type { BidView } from "@/db/bids";
+import type { BidView, TodaysBidView } from "@/db/bids";
 import type { DealRoomPanelActions, DealRoomPanelBidActions } from "@/components/dashboard/DealRoomPanel";
 
 export type PanelSize = 1 | 2 | 4;
@@ -78,6 +78,14 @@ export interface ProviderStatusView {
   demo: boolean;
 }
 
+export interface TodaysBidsView {
+  bids: TodaysBidView[];
+  actions: {
+    acceptBid: (input: { bidId: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
+    rejectBid: (input: { bidId: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  };
+}
+
 /** Server-read context the page passes into each panel's render. */
 export interface PanelCtx {
   inventory?: InventoryView;
@@ -85,6 +93,7 @@ export interface PanelCtx {
   deals?: DealView;
   website?: WebsiteOverviewView;
   providerStatus?: ProviderStatusView; // slice 11
+  todaysBids?: TodaysBidsView; // slice 16
 }
 
 export interface PanelEntry {

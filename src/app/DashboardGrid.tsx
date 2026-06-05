@@ -8,7 +8,7 @@ import {
   SortableContext, sortableKeyboardCoordinates, rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { KpiTicker } from "@/components/market/KpiTicker";
-import type { PanelSize, InventoryView, DiamondView, DealView, WebsiteOverviewView, ProviderStatusView } from "@/lib/layout/types";
+import type { PanelSize, InventoryView, DiamondView, DealView, WebsiteOverviewView, ProviderStatusView, TodaysBidsView } from "@/lib/layout/types";
 import { getPanel, getEffectiveLayout } from "@/lib/layout/registry";
 import { useSettings } from "@/store/settings";
 import { SortablePanel } from "@/components/dashboard/SortablePanel";
@@ -16,18 +16,19 @@ import { LayoutEditBar } from "@/components/dashboard/LayoutEditBar";
 
 // Re-export the view types so callers that previously imported them from
 // DashboardGrid (e.g. page.tsx) keep working without an extra import path.
-export type { InventoryView, DiamondView, DealView, WebsiteOverviewView, ProviderStatusView } from "@/lib/layout/types";
+export type { InventoryView, DiamondView, DealView, WebsiteOverviewView, ProviderStatusView, TodaysBidsView } from "@/lib/layout/types";
 
 const NEXT_SIZE: Record<PanelSize, PanelSize> = { 1: 2, 2: 4, 4: 1 };
 
 export function DashboardGrid({
-  inventory, diamond, deals, website, providerStatus,
+  inventory, diamond, deals, website, providerStatus, todaysBids,
 }: {
   inventory?: InventoryView;
   diamond?: DiamondView;
   deals?: DealView;
   website?: WebsiteOverviewView;
   providerStatus?: ProviderStatusView;
+  todaysBids?: TodaysBidsView;
 }) {
   const editMode = useSettings((s) => s.editMode);
   const persisted = useSettings((s) => s.dashboardLayout);
@@ -39,8 +40,8 @@ export function DashboardGrid({
   const visible = useMemo(() => layout.filter((i) => !i.hidden), [layout]);
   // Memoize so panel children don't reconcile on every store change.
   const ctx = useMemo(
-    () => ({ inventory, diamond, deals, website, providerStatus }),
-    [inventory, diamond, deals, website, providerStatus],
+    () => ({ inventory, diamond, deals, website, providerStatus, todaysBids }),
+    [inventory, diamond, deals, website, providerStatus, todaysBids],
   );
 
   const sensors = useSensors(
