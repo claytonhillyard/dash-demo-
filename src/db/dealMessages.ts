@@ -86,3 +86,63 @@ export async function getDealMessages(
     createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
   }));
 }
+
+/**
+ * Returns a Map<dealId, unreadCount> for the supplied deals.
+ *
+ * "Unread" = messages on each deal where:
+ *   - the viewer can see the message (slice-4 + slice-10 visibility, same as getDealMessages)
+ *   - created_at > coalesce(last_read_at, '-infinity')
+ *   - from_org_id != viewerOrgId (own messages never count)
+ *   - deleted_at IS NULL
+ *
+ * Deals with no unread messages are still returned with `0` so the caller
+ * can render "💬 N" (subtle) badges for deals with messages but nothing new.
+ * Deals with literally zero messages are NOT in the result map.
+ *
+ * Demo-mode short-circuit: returns an empty Map.
+ */
+export async function getUnreadCountsForOrg(
+  db: Db,
+  viewerOrgId: number,
+  dealIds: number[],
+): Promise<Map<number, number>> {
+  if (isDemoMode() || dealIds.length === 0) return new Map();
+
+  const res = await db.execute(sql`
+    SELECT m.deal_id AS deal_id,
+           COUNT(*) FILTER (
+             WHERE m.from_org_id != ${viewerOrgId}
+               AND m.deleted_at IS NULL
+               AND m.created_at > COALESCE(r.last_read_at, 'epoch'::timestamptz)
+           )::int AS unread
+    FROM deal_messages m
+    JOIN deals d ON d.id = m.deal_id
+    LEFT JOIN deal_thread_reads r
+      ON r.deal_id = m.deal_id AND r.org_id = ${viewerOrgId}
+    WHERE m.deal_id IN (${sql.join(
+      dealIds.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+      AND (
+        d.org_id = ${viewerOrgId}
+        OR (
+          d.visibility_circle_id IS NOT NULL
+          AND d.visibility_circle_id IN (
+            SELECT circle_id FROM circle_members WHERE org_id = ${viewerOrgId}
+          )
+        )
+      )
+      AND (
+        m.thread_mode = 'group'
+        OR m.from_org_id = ${viewerOrgId}
+        OR d.org_id = ${viewerOrgId}
+      )
+    GROUP BY m.deal_id
+  `);
+
+  const rows = (res as unknown as { rows: { deal_id: number; unread: number }[] }).rows;
+  const map = new Map<number, number>();
+  for (const r of rows) map.set(r.deal_id, r.unread);
+  return map;
+}
