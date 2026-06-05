@@ -1,0 +1,175 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import type { DealMessageView } from "@/db/dealMessages";
+
+export type DealThreadAccordionProps = {
+  dealId: number;
+  viewerOrgId: number;
+  isOwner: boolean;
+  /** Null when viewer is not the owner (mode selector is hidden). */
+  currentMode: "private" | "group" | null;
+  messages: DealMessageView[];
+  /**
+   * Whether the viewer is allowed to post a reply to this thread.
+   * - Owner: always true.
+   * - In-circle non-owner: true iff `currentMode === "group"` (private mode is owner-only per Phase B authz).
+   * - Out-of-circle: false.
+   *
+   * Optional with default true to preserve the plan's component-test fixtures
+   * (which assume the input renders unconditionally). The RSC + DealRoomPanel
+   * pass it explicitly so non-posters never see an input.
+   */
+  canPost?: boolean;
+  /** Server actions, passed in so the component is testable without next/server. */
+  actions: {
+    postMessage: (input: { dealId: number; body: string }) => Promise<
+      { ok: true } | { ok: false; error: string }
+    >;
+    setMode: (input: { dealId: number; mode: "private" | "group" }) => Promise<
+      { ok: true } | { ok: false; error: string }
+    >;
+    deleteMessage: (input: { messageId: number }) => Promise<
+      { ok: true } | { ok: false; error: string }
+    >;
+  };
+};
+
+function relativeTime(d: Date): string {
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return d.toLocaleDateString();
+}
+
+export function DealThreadAccordion(props: DealThreadAccordionProps) {
+  const canPost = props.canPost ?? true;
+  const [body, setBody] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleSend = () => {
+    setError(null);
+    const trimmed = body.trim();
+    if (trimmed.length === 0) return;
+    startTransition(async () => {
+      const res = await props.actions.postMessage({ dealId: props.dealId, body: trimmed });
+      if (res.ok) setBody("");
+      else setError(res.error);
+    });
+  };
+
+  // Build banner positions: every place where adjacent messages differ in mode
+  const banners: { afterIndex: number; mode: "private" | "group"; at: Date }[] = [];
+  for (let i = 1; i < props.messages.length; i++) {
+    if (props.messages[i].threadMode !== props.messages[i - 1].threadMode) {
+      banners.push({
+        afterIndex: i - 1,
+        mode: props.messages[i].threadMode,
+        at: props.messages[i].createdAt,
+      });
+    }
+  }
+  const bannerAfter = new Map(banners.map((b) => [b.afterIndex, b]));
+
+  return (
+    <div aria-label="deal thread" className="rounded border border-zinc-700 bg-zinc-900/40 p-3">
+      {props.isOwner && props.currentMode !== null && (
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          <label htmlFor={`mode-${props.dealId}`} className="text-zinc-400">Mode:</label>
+          <select
+            id={`mode-${props.dealId}`}
+            aria-label="thread mode"
+            value={props.currentMode}
+            disabled={pending}
+            onChange={(e) =>
+              startTransition(async () => {
+                await props.actions.setMode({
+                  dealId: props.dealId,
+                  mode: e.target.value as "private" | "group",
+                });
+              })
+            }
+            className="bg-zinc-800 text-zinc-100 px-1 py-0.5 rounded"
+          >
+            <option value="private">Private</option>
+            <option value="group">Group</option>
+          </select>
+          <span className="text-zinc-500" title="This only affects new replies. Earlier messages stay where they were sent.">
+            (future replies only)
+          </span>
+        </div>
+      )}
+
+      {props.messages.length === 0 ? (
+        <p className="text-sm text-zinc-500 mb-2">No replies yet. Be the first.</p>
+      ) : (
+        <ul className="flex flex-col gap-2 mb-3">
+          {props.messages.map((m, i) => (
+            <li key={m.id} aria-label="thread message">
+              {m.isDeleted ? (
+                <p className="italic text-xs text-zinc-500">
+                  {m.fromOrgLabel} deleted a message · {relativeTime(m.createdAt)}
+                </p>
+              ) : (
+                <div>
+                  <p className="text-xs text-zinc-400">
+                    {m.fromOrgLabel} · {relativeTime(m.createdAt)} · {m.threadMode}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm text-zinc-100">{m.body}</p>
+                  {m.fromOrgId === props.viewerOrgId &&
+                    Date.now() - m.createdAt.getTime() < 15 * 60 * 1000 && (
+                      <button
+                        className="text-xs text-zinc-500 hover:text-rose-400 mt-1"
+                        onClick={() =>
+                          startTransition(async () => {
+                            await props.actions.deleteMessage({ messageId: m.id });
+                          })
+                        }
+                      >
+                        Delete
+                      </button>
+                    )}
+                </div>
+              )}
+              {bannerAfter.has(i) && (
+                <p className="text-xs text-amber-300/80 mt-1">
+                  Mode switched to {bannerAfter.get(i)!.mode} at {relativeTime(bannerAfter.get(i)!.at)}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canPost ? (
+        <div className="flex flex-col gap-1">
+          <textarea
+            aria-label="reply body"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Write a reply..."
+            maxLength={2000}
+            rows={2}
+            className="w-full bg-zinc-800 text-zinc-100 text-sm p-2 rounded"
+          />
+          {error && (
+            <p role="alert" className="text-xs text-rose-400">{error}</p>
+          )}
+          <button
+            onClick={handleSend}
+            disabled={pending || body.trim().length === 0}
+            className="self-end text-xs px-2 py-1 bg-amber-500/80 hover:bg-amber-500 text-zinc-900 rounded disabled:opacity-50"
+          >
+            {pending ? "Sending..." : "Send"}
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-zinc-500 italic">
+          Replies are limited to the deal owner while this thread is private.
+        </p>
+      )}
+    </div>
+  );
+}
