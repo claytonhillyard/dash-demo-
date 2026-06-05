@@ -1,4 +1,4 @@
-import type { AssetClass, Quote, QuoteProvider, SymbolDef } from "./types";
+import type { AssetClass, Quote, ProviderId, QuoteProvider, SymbolDef } from "./types";
 import { computeFreshness } from "./freshness";
 import { coingeckoProvider } from "./providers/coingecko";
 import { frankfurterProvider } from "./providers/frankfurter";
@@ -17,9 +17,20 @@ export const CHAINS: Record<AssetClass, QuoteProvider[]> = {
   bond: [twelvedataProvider, simulatedProvider],
 };
 
+export type OnProviderResult = (id: ProviderId, ok: boolean, err?: unknown) => void;
+
+/**
+ * Resolve quotes for `symbols` across the provider chain.
+ *
+ * Slice 11: when `onProviderResult` is supplied, the callback fires once per
+ * provider per asset-class pass — `(id, true)` when the fetch yielded ≥1 raw
+ * quote, `(id, false, err)` when the provider threw. Used by
+ * `defaultQuoteFetcher` in cache.ts to update the health map.
+ */
 export async function resolveQuotes(
   symbols: SymbolDef[],
-  chainOverride?: QuoteProvider[]
+  chainOverride?: QuoteProvider[],
+  onProviderResult?: OnProviderResult,
 ): Promise<Quote[]> {
   const result: Quote[] = [];
   const byClass = new Map<AssetClass, SymbolDef[]>();
@@ -40,9 +51,11 @@ export async function resolveQuotes(
       let raws: Awaited<ReturnType<QuoteProvider["fetchQuotes"]>>;
       try {
         raws = await provider.fetchQuotes([...pending.values()]);
-      } catch {
+      } catch (err) {
+        onProviderResult?.(provider.id, false, err);
         continue;
       }
+      const beforeSize = pending.size;
       for (const [symbol, raw] of raws) {
         const def = pending.get(symbol);
         if (!def) continue;
@@ -59,6 +72,15 @@ export async function resolveQuotes(
           freshness: computeFreshness(provider.id, raw.asOf),
         });
         pending.delete(symbol);
+      }
+      // "ok" = the provider returned at least one usable quote. A provider
+      // that returned an empty map for everything pending is treated as
+      // a soft failure for health-tracking purposes (it didn't throw, but
+      // it also didn't help).
+      if (pending.size < beforeSize) {
+        onProviderResult?.(provider.id, true);
+      } else if (raws.size === 0) {
+        onProviderResult?.(provider.id, false, new Error("empty result"));
       }
     }
   }
