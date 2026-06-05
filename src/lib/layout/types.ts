@@ -3,6 +3,8 @@ import type { DiamondKpis } from "@/components/market/KpiTicker";
 import type { DiamondRow } from "@/components/market/MarketIntelligencePanel";
 import type { InventoryCategory } from "@/lib/inventory/validation";
 import type { DealRow } from "@/lib/deals/queries";
+import type { DealMessageView } from "@/db/dealMessages";
+import type { DealRoomPanelActions } from "@/components/dashboard/DealRoomPanel";
 
 export type PanelSize = 1 | 2 | 4;
 
@@ -34,6 +36,20 @@ export interface DealView {
    *  getCircleNamesForOrg(orgId). Only contains circles the viewer is a
    *  member of, so it's safe to surface any value as a UI label. */
   circleNamesById: Map<number, string>;
+  // --- Slice 10: reply threads ---
+  /** Set of circle ids the viewer belongs to. Used by DealRoomPanel's
+   *  canPost derivation to decide whether a non-owner may post on a
+   *  group-mode deal. */
+  viewerCircleIds?: ReadonlySet<number>;
+  /** Per-deal unread message count for the viewer. */
+  unreadByDealId?: Map<number, number>;
+  /** Per-deal preloaded message list (already sorted ASC by createdAt). */
+  threadsByDealId?: Map<number, DealMessageView[]>;
+  /** Per-deal current thread mode — populated ONLY for deals the viewer
+   *  owns (gates the owner mode-selector in the accordion). */
+  threadModeByDealId?: Map<number, "private" | "group">;
+  /** Server actions wired through from src/lib/deals/actions.ts. */
+  actions?: DealRoomPanelActions;
 }
 
 export interface WebsiteOverviewView {
