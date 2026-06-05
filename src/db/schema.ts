@@ -9,6 +9,7 @@ import {
   jsonb,
   unique,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const orgs = pgTable(
@@ -208,6 +209,9 @@ export const deals = pgTable(
       () => circles.id,
       { onDelete: "set null" },
     ),
+    threadMode: text("thread_mode", { enum: ["private", "group"] })
+      .notNull()
+      .default("private"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -227,6 +231,52 @@ export const deals = pgTable(
       .on(t.visibilityCircleId, t.status, t.createdAt.desc())
       .where(sql`${t.visibilityCircleId} IS NOT NULL`),
   })
+);
+
+export const dealMessages = pgTable(
+  "deal_messages",
+  {
+    id: serial("id").primaryKey(),
+    dealId: integer("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    fromOrgId: integer("from_org_id")
+      .notNull()
+      .references(() => orgs.id),
+    fromOrgLabel: text("from_org_label").notNull(),
+    body: text("body").notNull(),
+    threadMode: text("thread_mode", { enum: ["private", "group"] }).notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    dealCreatedIdx: index("deal_messages_deal_created_idx").on(
+      t.dealId,
+      t.createdAt.desc(),
+    ),
+    fromOrgCreatedIdx: index("deal_messages_from_org_created_idx").on(
+      t.fromOrgId,
+      t.createdAt.desc(),
+    ),
+  }),
+);
+
+export const dealThreadReads = pgTable(
+  "deal_thread_reads",
+  {
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    dealId: integer("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.orgId, t.dealId] }),
+  }),
 );
 
 export const websiteSnapshots = pgTable(
