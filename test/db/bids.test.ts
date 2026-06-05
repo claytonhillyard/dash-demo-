@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db";
 import { deals, bids } from "@/db/schema";
-import { getBidsForDeal } from "@/db/bids";
+import { getBidsForDeal, getTodaysBidsForOwner } from "@/db/bids";
 
 let db: Db;
 beforeAll(async () => {
@@ -75,5 +75,42 @@ describe("getBidsForDeal — visibility filter", () => {
     ]);
     const rows = await getBidsForDeal(db, 1, dealId);
     expect(rows.map((r) => r.priceCents)).toEqual([1200, 1100]);
+  });
+});
+
+describe("getTodaysBidsForOwner", () => {
+  it("returns today's pending bids on the viewer's deals, joined with deal subject", async () => {
+    const myDealId = await seedDeal(1);
+    const othersDealId = await seedDeal(999);
+
+    await db.insert(bids).values({
+      dealId: myDealId, bidderOrgId: 999, bidderOrgLabel: "Mehta",
+      priceCents: 12_300_00, bidMode: "single", status: "pending",
+      createdAt: new Date(),
+    });
+    await db.insert(bids).values({
+      dealId: othersDealId, bidderOrgId: 1, bidderOrgLabel: "Me",
+      priceCents: 999, bidMode: "single", status: "pending",
+      createdAt: new Date(),
+    });
+    await db.insert(bids).values({
+      dealId: myDealId, bidderOrgId: 999, bidderOrgLabel: "Mehta",
+      priceCents: 1, bidMode: "single", status: "accepted",
+      decidedAt: new Date(), createdAt: new Date(),
+    });
+    await db.insert(bids).values({
+      dealId: myDealId, bidderOrgId: 999, bidderOrgLabel: "Mehta",
+      priceCents: 2, bidMode: "single", status: "pending",
+      createdAt: new Date(Date.now() - 36 * 60 * 60 * 1000),
+    });
+
+    const rows = await getTodaysBidsForOwner(db, 1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].priceCents).toBe(12_300_00);
+    expect(rows[0].bidderOrgLabel).toBe("Mehta");
+  });
+
+  it("returns an empty array when there are no qualifying bids", async () => {
+    expect(await getTodaysBidsForOwner(db, 1)).toEqual([]);
   });
 });

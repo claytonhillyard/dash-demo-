@@ -95,3 +95,63 @@ export async function getBidsForDeal(
     createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
   }));
 }
+
+export type TodaysBidView = {
+  bidId: number;
+  dealId: number;
+  dealSubject: string;
+  bidderOrgLabel: string;
+  priceCents: number;
+  currency: string;
+  createdAt: Date;
+};
+
+/**
+ * Returns today's PENDING bids on deals owned by `viewerOrgId`.
+ * "Today" = `created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')`.
+ * LIMIT 30.
+ *
+ * ⚠ VISIBILITY PREDICATE — mirrors the owner-side of getBidsForDeal.
+ * If you change "deals.org_id = viewer" here, update getBidsForDeal +
+ * canBidOn (src/lib/deals/actions.ts) at the same time.
+ *
+ * Demo mode short-circuits to `[]`.
+ */
+export async function getTodaysBidsForOwner(
+  db: Db,
+  viewerOrgId: number,
+): Promise<TodaysBidView[]> {
+  if (isDemoMode()) return [];
+
+  const res = await db.execute(sql`
+    SELECT b.id AS bid_id, d.id AS deal_id, d.subject AS deal_subject,
+           b.bidder_org_label, b.price_cents, b.currency, b.created_at
+    FROM bids b
+    JOIN deals d ON d.id = b.deal_id
+    WHERE d.org_id = ${viewerOrgId}
+      AND b.status = 'pending'
+      AND b.created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+    ORDER BY b.created_at DESC
+    LIMIT 30
+  `);
+
+  const rows = rowsOf<{
+    bid_id: number;
+    deal_id: number;
+    deal_subject: string;
+    bidder_org_label: string;
+    price_cents: number;
+    currency: string;
+    created_at: Date | string;
+  }>(res);
+
+  return rows.map((r) => ({
+    bidId: r.bid_id,
+    dealId: r.deal_id,
+    dealSubject: r.deal_subject,
+    bidderOrgLabel: r.bidder_org_label,
+    priceCents: r.price_cents,
+    currency: r.currency,
+    createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
+  }));
+}
