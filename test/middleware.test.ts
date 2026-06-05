@@ -57,6 +57,10 @@ describe("middleware matcher", () => {
     expect(isMatched("/deals")).toBe(true);
   });
 
+  it("guards /website (slice-5)", () => {
+    expect(isMatched("/website")).toBe(true);
+  });
+
   it("does not guard the public login page", () => {
     expect(isMatched("/login")).toBe(false);
   });

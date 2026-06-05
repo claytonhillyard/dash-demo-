@@ -50,6 +50,13 @@
       "when": 1780023510883,
       "tag": "0006_aspiring_clea",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780650021968,
+      "tag": "0007_kind_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }

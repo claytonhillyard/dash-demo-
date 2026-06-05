@@ -24,6 +24,7 @@ import {
   getSeedCircleIdsForOrg,
   getSeedDealsVisibleTo,
   DEMO_AIYA_ORG_ID,
+  DEMO_PARTNER_ORG_IDS,
   DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
 } from "@/lib/demo/seed";
 import { DEAL_KINDS, DEAL_CATEGORIES, DEAL_STATUSES } from "@/lib/deals/constants";
@@ -126,5 +127,106 @@ describe("getSeedDealsVisibleTo", () => {
 
   it("an unseeded org sees no demo deals", () => {
     expect(getSeedDealsVisibleTo(9999)).toEqual([]);
+  });
+});
+
+import {
+  getSeedWebsiteSnapshots,
+  getSeedLatestWebsiteSnapshot,
+  getSeedWebsiteSnapshotTrend,
+} from "@/lib/demo/seed";
+
+describe("getSeedWebsiteSnapshots", () => {
+  it("returns 8 weeks for AIYA, sorted DESC by weekStart", () => {
+    const rows = getSeedWebsiteSnapshots(DEMO_AIYA_ORG_ID);
+    expect(rows).toHaveLength(8);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i - 1].weekStart >= rows[i].weekStart).toBe(true);
+    }
+  });
+
+  it("AIYA rows have realistic luxury-jewelry KPI ranges", () => {
+    const rows = getSeedWebsiteSnapshots(DEMO_AIYA_ORG_ID);
+    for (const r of rows) {
+      // Visitors 3k-8k, page views 12k-25k, avg session 150-240, bounce 35-55.
+      expect(r.visitors).toBeGreaterThanOrEqual(3000);
+      expect(r.visitors).toBeLessThanOrEqual(8500);
+      expect(r.pageViews).toBeGreaterThanOrEqual(12000);
+      expect(r.pageViews).toBeLessThanOrEqual(25000);
+      expect(r.avgSessionDurationSeconds).toBeGreaterThanOrEqual(150);
+      expect(r.avgSessionDurationSeconds).toBeLessThanOrEqual(240);
+      expect(r.bounceRatePercent).toBeGreaterThanOrEqual(35);
+      expect(r.bounceRatePercent).toBeLessThanOrEqual(55);
+    }
+  });
+
+  it("AIYA shows mostly week-over-week visitor growth (>= 5 of 7 transitions up)", () => {
+    const rows = getSeedWebsiteSnapshots(DEMO_AIYA_ORG_ID);
+    // Rows are newest-first; reverse for chronological comparison.
+    const chronological = [...rows].reverse();
+    let upTransitions = 0;
+    for (let i = 1; i < chronological.length; i++) {
+      if (chronological[i].visitors > chronological[i - 1].visitors) upTransitions++;
+    }
+    expect(upTransitions).toBeGreaterThanOrEqual(5);
+  });
+
+  it("returns 2 weeks for Mehta Diamonds (multi-tenant story)", () => {
+    const rows = getSeedWebsiteSnapshots(DEMO_PARTNER_ORG_IDS.MEHTA);
+    expect(rows).toHaveLength(2);
+  });
+
+  it("returns [] for any unseeded org (e.g. Saint-Cloud or fixture)", () => {
+    expect(getSeedWebsiteSnapshots(DEMO_PARTNER_ORG_IDS.SAINT_CLOUD)).toEqual([]);
+    expect(getSeedWebsiteSnapshots(DEMO_PARTNER_ORG_IDS.MARATHI)).toEqual([]);
+    expect(getSeedWebsiteSnapshots(999)).toEqual([]);
+    expect(getSeedWebsiteSnapshots(7777)).toEqual([]);
+  });
+
+  it("every row's bounceRate is in [0, 100]", () => {
+    const all = [
+      ...getSeedWebsiteSnapshots(DEMO_AIYA_ORG_ID),
+      ...getSeedWebsiteSnapshots(DEMO_PARTNER_ORG_IDS.MEHTA),
+    ];
+    for (const r of all) {
+      expect(r.bounceRatePercent).toBeGreaterThanOrEqual(0);
+      expect(r.bounceRatePercent).toBeLessThanOrEqual(100);
+    }
+  });
+});
+
+describe("getSeedLatestWebsiteSnapshot", () => {
+  it("returns AIYA's most-recent week (the first of the 8 DESC rows)", () => {
+    const all = getSeedWebsiteSnapshots(DEMO_AIYA_ORG_ID);
+    const latest = getSeedLatestWebsiteSnapshot(DEMO_AIYA_ORG_ID);
+    expect(latest?.weekStart).toBe(all[0].weekStart);
+    expect(latest?.visitors).toBe(all[0].visitors);
+  });
+
+  it("returns null for an unseeded org", () => {
+    expect(getSeedLatestWebsiteSnapshot(999)).toBeNull();
+    expect(getSeedLatestWebsiteSnapshot(DEMO_PARTNER_ORG_IDS.SAINT_CLOUD)).toBeNull();
+  });
+});
+
+describe("getSeedWebsiteSnapshotTrend", () => {
+  it("caps at the requested N (4 of AIYA's 8)", () => {
+    const rows = getSeedWebsiteSnapshotTrend(DEMO_AIYA_ORG_ID, 4);
+    expect(rows).toHaveLength(4);
+  });
+
+  it("returns the 4 MOST RECENT, not arbitrary 4", () => {
+    const all = getSeedWebsiteSnapshots(DEMO_AIYA_ORG_ID);
+    const trend = getSeedWebsiteSnapshotTrend(DEMO_AIYA_ORG_ID, 4);
+    expect(trend.map((r) => r.weekStart)).toEqual(all.slice(0, 4).map((r) => r.weekStart));
+  });
+
+  it("defaults to 8 when no N supplied (returns all 8 AIYA rows)", () => {
+    expect(getSeedWebsiteSnapshotTrend(DEMO_AIYA_ORG_ID)).toHaveLength(8);
+  });
+
+  it("returns [] for an unseeded org regardless of N", () => {
+    expect(getSeedWebsiteSnapshotTrend(999, 4)).toEqual([]);
+    expect(getSeedWebsiteSnapshotTrend(7777)).toEqual([]);
   });
 });

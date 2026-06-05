@@ -212,3 +212,82 @@ export function getSeedDealsVisibleTo(orgId: number): DealRow[] {
       (d.visibilityCircleId !== null && circleIds.has(d.visibilityCircleId)),
   );
 }
+
+// --- Slice 5 demo seed: weekly website KPI snapshots ---
+import type { WebsiteSnapshotRow } from "@/db/website";
+
+/** Deterministic reference week for the slice-5 demo. 2026-05-25 is a Monday.
+ *  AIYA's 8 weeks span 2026-04-06 (Mon) through 2026-05-25 (Mon). */
+const DEMO_WEBSITE_REF_WEEK = "2026-05-25T00:00:00Z";
+
+function makeWeekStart(weeksAgo: number): string {
+  const ref = new Date(DEMO_WEBSITE_REF_WEEK);
+  ref.setUTCDate(ref.getUTCDate() - weeksAgo * 7);
+  return ref.toISOString().slice(0, 10);
+}
+
+/** AIYA's seeded weekly snapshots: 8 weeks, gentle visible growth, realistic
+ *  ranges for a small luxury-jewelry e-commerce site. Newest-first to match
+ *  the DESC ordering of the real query. Demo-only ids in the 5000-range
+ *  never collide with real serials (which start at 1 in shared-db). */
+function seedAiyaSnapshots(): WebsiteSnapshotRow[] {
+  const weeks: Array<Omit<WebsiteSnapshotRow, "id" | "orgId" | "createdAt" | "updatedAt">> = [
+    { weekStart: makeWeekStart(0), visitors: 7820, uniqueVisitors: 5640, pageViews: 22130, avgSessionDurationSeconds: 215, bounceRatePercent: 38 },
+    { weekStart: makeWeekStart(1), visitors: 7510, uniqueVisitors: 5390, pageViews: 21240, avgSessionDurationSeconds: 208, bounceRatePercent: 40 },
+    { weekStart: makeWeekStart(2), visitors: 7080, uniqueVisitors: 5120, pageViews: 19880, avgSessionDurationSeconds: 196, bounceRatePercent: 41 },
+    { weekStart: makeWeekStart(3), visitors: 6720, uniqueVisitors: 4940, pageViews: 18920, avgSessionDurationSeconds: 188, bounceRatePercent: 43 },
+    { weekStart: makeWeekStart(4), visitors: 6510, uniqueVisitors: 4820, pageViews: 18120, avgSessionDurationSeconds: 184, bounceRatePercent: 44 },
+    { weekStart: makeWeekStart(5), visitors: 6020, uniqueVisitors: 4490, pageViews: 16880, avgSessionDurationSeconds: 175, bounceRatePercent: 46 },
+    { weekStart: makeWeekStart(6), visitors: 5720, uniqueVisitors: 4310, pageViews: 16210, avgSessionDurationSeconds: 168, bounceRatePercent: 48 },
+    { weekStart: makeWeekStart(7), visitors: 5410, uniqueVisitors: 4120, pageViews: 15420, avgSessionDurationSeconds: 161, bounceRatePercent: 49 },
+  ];
+  return weeks.map((w, i) => ({
+    id: 5000 + i,
+    orgId: DEMO_AIYA_ORG_ID,
+    ...w,
+    createdAt: new Date(DEMO_REF),
+    updatedAt: new Date(DEMO_REF - i * 86_400_000),
+  }));
+}
+
+/** Mehta Diamonds (Mumbai) — 2 weeks. Smaller wholesale partner, half the
+ *  traffic, longer sessions, slightly higher bounce. The contrast makes the
+ *  multi-tenant story visible in the demo. Saint-Cloud and Marathi don't get
+ *  website rows (spec: 2 orgs are sufficient). */
+function seedMehtaSnapshots(): WebsiteSnapshotRow[] {
+  const base: Array<Omit<WebsiteSnapshotRow, "id" | "orgId" | "createdAt" | "updatedAt">> = [
+    { weekStart: makeWeekStart(0), visitors: 3140, uniqueVisitors: 2310, pageViews: 9820, avgSessionDurationSeconds: 195, bounceRatePercent: 52 },
+    { weekStart: makeWeekStart(1), visitors: 2890, uniqueVisitors: 2150, pageViews: 9120, avgSessionDurationSeconds: 188, bounceRatePercent: 54 },
+  ];
+  return base.map((w, i) => ({
+    id: 5100 + i,
+    orgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    ...w,
+    createdAt: new Date(DEMO_REF),
+    updatedAt: new Date(DEMO_REF - i * 86_400_000),
+  }));
+}
+
+const ALL_DEMO_WEBSITE_ROWS: WebsiteSnapshotRow[] = [
+  ...seedAiyaSnapshots(),
+  ...seedMehtaSnapshots(),
+];
+
+/** All snapshots for an org, most-recent week first. Mirrors the real query
+ *  signature so the demo shape is interchangeable with the DB shape. */
+export function getSeedWebsiteSnapshots(orgId: number): WebsiteSnapshotRow[] {
+  return ALL_DEMO_WEBSITE_ROWS
+    .filter((r) => r.orgId === orgId)
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+}
+
+export function getSeedLatestWebsiteSnapshot(orgId: number): WebsiteSnapshotRow | null {
+  return getSeedWebsiteSnapshots(orgId)[0] ?? null;
+}
+
+export function getSeedWebsiteSnapshotTrend(
+  orgId: number,
+  n: number = 8,
+): WebsiteSnapshotRow[] {
+  return getSeedWebsiteSnapshots(orgId).slice(0, n);
+}

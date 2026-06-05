@@ -2,17 +2,23 @@ import Link from "next/link";
 import { AiyaLogo } from "./AiyaLogo";
 import { LogoutButton } from "./LogoutButton";
 
+// Slice 5 §6.3 proposed mapping "Marketing Suite" → /website. The user (per
+// slice-5 decision #1) preferred a dedicated "Website" entry alongside the
+// other admin routes (Inventory, Diamonds, Orders & Deals) instead of
+// repurposing the umbrella "Marketing Suite" slot. The standalone entry sits
+// next to "Diamonds" so all owner-entered ledgers cluster together.
 const SECTIONS = [
   "Dashboard", "Command Center", "TradeNet Exchange", "Market Intelligence",
-  "Inventory", "Diamonds", "Gold & Metals", "Orders & Deals", "Clients & CRM",
-  "Finances", "Payments", "POS System", "Crypto Wallet", "Converter Hub",
-  "Reports & Analytics", "Marketing Suite", "Social & Inbox", "Calendar & Tasks",
-  "Documents", "Settings",
+  "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
+  "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
+  "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
+  "Calendar & Tasks", "Documents", "Settings",
 ];
 
 const ROUTES: Record<string, string> = {
   Inventory: "/inventory",
   Diamonds: "/diamonds",
+  Website: "/website",
   "Orders & Deals": "/deals",
 };
 

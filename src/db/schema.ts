@@ -228,3 +228,30 @@ export const deals = pgTable(
       .where(sql`${t.visibilityCircleId} IS NOT NULL`),
   })
 );
+
+export const websiteSnapshots = pgTable(
+  "website_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
+    // Calendar week marker (date-only, no time component). Any valid YYYY-MM-DD
+    // — the owner picks whatever day matches their analytics provider's week
+    // boundary (US Sun→Sat or ISO Mon→Sun). The unique constraint below
+    // enforces "one row per week" treating this value as canonical.
+    weekStart: date("week_start").notNull(),
+    // Range enforced at the Zod layer (>= 0); DB-level CHECK is deferred
+    // (see slice 5 spec §2.6).
+    visitors: integer("visitors").notNull(),
+    uniqueVisitors: integer("unique_visitors").notNull(),
+    pageViews: integer("page_views").notNull(),
+    avgSessionDurationSeconds: integer("avg_session_duration_seconds").notNull(),
+    // Range enforced at the Zod layer (0..100); DB-level CHECK is deferred.
+    bounceRatePercent: integer("bounce_rate_percent").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgWeekUniq: unique("website_snapshots_org_week_uniq").on(t.orgId, t.weekStart),
+    orgWeekIdx: index("website_snapshots_org_week_idx").on(t.orgId, t.weekStart.desc()),
+  })
+);

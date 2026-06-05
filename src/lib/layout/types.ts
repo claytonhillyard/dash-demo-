@@ -36,11 +36,25 @@ export interface DealView {
   circleNamesById: Map<number, string>;
 }
 
+export interface WebsiteOverviewView {
+  /** Most-recent weekly snapshot; null when the org has no rows. */
+  latest: import("@/db/website").WebsiteSnapshotRow | null;
+  /** Snapshot before the latest (for week-over-week deltas); null when
+   *  only a single row exists for the org. */
+  previous: import("@/db/website").WebsiteSnapshotRow | null;
+  /** Newest-first; max 8. Used by the panel's visitor sparkline. */
+  trend: Array<{ weekStart: string; visitors: number }>;
+  /** Owner-entered provenance label — "updated 2d ago" or similar.
+   *  Null when no snapshot exists. */
+  updatedLabel: string | null;
+}
+
 /** Server-read context the page passes into each panel's render. */
 export interface PanelCtx {
   inventory?: InventoryView;
   diamond?: DiamondView;
   deals?: DealView;
+  website?: WebsiteOverviewView;
 }
 
 export interface PanelEntry {

@@ -5,6 +5,7 @@ import { ClockCalendar } from "@/components/dashboard/ClockCalendar";
 import { BusinessPlaceholder } from "@/components/dashboard/BusinessPlaceholder";
 import { InventoryOverviewPanel } from "@/components/dashboard/InventoryOverviewPanel";
 import { DealRoomPanel } from "@/components/dashboard/DealRoomPanel";
+import { WebsiteOverviewPanel } from "@/components/dashboard/WebsiteOverviewPanel";
 import type { LayoutItem, PanelEntry, PanelSize } from "./types";
 
 export const PANEL_REGISTRY: PanelEntry[] = [
@@ -67,6 +68,22 @@ export const PANEL_REGISTRY: PanelEntry[] = [
             circleNamesById={ctx.deals.circleNamesById}
           />
         : <BusinessPlaceholder title="Deal Room" testid="panel-tradenet-exchange" />,
+  },
+  {
+    id: "website-overview",
+    title: "Website Overview",
+    defaultSize: 2,
+    render: (ctx) =>
+      ctx.website ? (
+        <WebsiteOverviewPanel
+          latest={ctx.website.latest}
+          previous={ctx.website.previous}
+          trend={ctx.website.trend}
+          updatedLabel={ctx.website.updatedLabel}
+        />
+      ) : (
+        <BusinessPlaceholder title="Website Overview" testid="panel-website-overview" />
+      ),
   },
   {
     id: "orders-pipeline",

@@ -97,4 +97,26 @@ describe("db schema", () => {
       expect(Array.isArray(refs) || refs).toBeTruthy();
     }
   });
+
+  it("exports the websiteSnapshots table with all 9 columns", () => {
+    expect(schema.websiteSnapshots).toBeDefined();
+    expect(schema.websiteSnapshots.id.columnType).toBe("PgSerial");
+    expect(schema.websiteSnapshots.orgId.columnType).toBe("PgInteger");
+    expect(schema.websiteSnapshots.weekStart.columnType).toBe("PgDateString");
+    expect(schema.websiteSnapshots.visitors.columnType).toBe("PgInteger");
+    expect(schema.websiteSnapshots.uniqueVisitors.columnType).toBe("PgInteger");
+    expect(schema.websiteSnapshots.pageViews.columnType).toBe("PgInteger");
+    expect(schema.websiteSnapshots.avgSessionDurationSeconds.columnType).toBe("PgInteger");
+    expect(schema.websiteSnapshots.bounceRatePercent.columnType).toBe("PgInteger");
+    expect(schema.websiteSnapshots.createdAt.columnType).toBe("PgTimestamp");
+    expect(schema.websiteSnapshots.updatedAt.columnType).toBe("PgTimestamp");
+  });
+
+  it("websiteSnapshots requires NOT NULL on every count field", () => {
+    expect(schema.websiteSnapshots.visitors.notNull).toBe(true);
+    expect(schema.websiteSnapshots.uniqueVisitors.notNull).toBe(true);
+    expect(schema.websiteSnapshots.pageViews.notNull).toBe(true);
+    expect(schema.websiteSnapshots.avgSessionDurationSeconds.notNull).toBe(true);
+    expect(schema.websiteSnapshots.bounceRatePercent.notNull).toBe(true);
+  });
 });
