@@ -79,27 +79,42 @@ budgets that the live deploy would silently inherit.
    compute median scores, and assert against the budgets in
    `lighthouserc.js`. Total runtime: 3–5 minutes.
 
-2. **Interpret a passing run.** Exit code `0` means every budget passed.
+2. **First-run calibration (one-time).** The committed budgets in
+   `lighthouserc.js` are **plan-default placeholders**, not yet calibrated
+   against your specific hardware. The slice-14 implementation could not
+   run Chrome to do the calibration (macOS sandbox restrictions in some
+   environments). YOUR first local run is where calibration happens:
+   - Run `npm run lighthouse` once
+   - If it PASSES at the placeholders, you're golden — keep them
+   - If it FAILS, check the actual observed values in
+     `.lighthouseci/lhr-*.report.json` (search for `numericValue`)
+   - Update `lighthouserc.js` with each failing budget set to
+     `observed × 1.1` (rounded up to a sensible number). **EXCEPTION:
+     CLS should hold at 0.1 — if observed CLS exceeds that, STOP and
+     fix the layout-shift bug rather than widen the budget**
+   - Commit the calibrated budgets with a `chore(perf): calibrate
+     lighthouse budgets from first local run` message
+
+3. **Interpret a passing run.** Exit code `0` means every budget passed.
    Reports are written to `.lighthouseci/` (gitignored). Open
    `.lighthouseci/lhr-<timestamp>-<url>.report.html` in a browser for the
    full Lighthouse UI with waterfall charts + opportunity recommendations.
 
-3. **Interpret a failing run.** Exit code `1` + a console summary of which
-   assertion(s) failed. Each budget in `lighthouserc.js` is annotated with
-   the calibration baseline and a `TODO(slice-14-followup)` trajectory
-   toward the slice-12 "good" threshold. A failing run usually means:
+4. **Interpret a failing run (after calibration).** Exit code `1` + a
+   console summary of which assertion(s) failed. After calibration is
+   committed, a failing run usually means:
    - A real regression — fix the cause, don't widen the budget
    - A flaky run on a noisy machine — re-run, take median of two
 
-4. **Calibration philosophy.** The committed budgets are NOT aspirational
-   targets. They were set at the FIRST observed baseline × 1.1 headroom
-   (with CLS pinned at the slice-12 "good" ceiling of 0.1 regardless).
-   This avoids the "every build fails forever" anti-pattern when the
-   dashboard's actual perf hasn't yet reached aspirational targets.
-   Tighten the budgets toward the `TODO` trajectories as the dashboard
+5. **Calibration philosophy.** Budgets are NOT aspirational targets.
+   They're set at observed baseline × 1.1 headroom (with CLS pinned at
+   the slice-12 "good" ceiling of 0.1 regardless). This avoids the
+   "every build fails forever" anti-pattern when the dashboard's actual
+   perf hasn't yet reached aspirational targets. Tighten the budgets
+   toward the `TODO(slice-14-followup)` trajectories as the dashboard
    gets faster — that's how the gate stays honest.
 
-5. **What's NOT in this slice (named for future slices).**
+6. **What's NOT in this slice (named for future slices).**
    - GitHub Actions integration → slice 14b "Lighthouse CI in CI"
    - Mobile-preset audits → future ("desktop-only" was a deliberate
      scope cut)
@@ -108,7 +123,7 @@ budgets that the live deploy would silently inherit.
    - LHCI server upload + historical trend dashboards → future
      ("filesystem" upload target only; no token needed)
 
-6. **Demo-mode auth bypass note.** The `lighthouserc.js`
+7. **Demo-mode auth bypass note.** The `lighthouserc.js`
    `startServerCommand` sets `NEXT_PUBLIC_DEMO_MODE=true` so lighthouse
    can reach `/` without auth. It also sets a literal dummy
    `SESSION_SECRET=lighthouse-ci-noop-secret` to satisfy the middleware's

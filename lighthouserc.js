@@ -28,8 +28,12 @@ module.exports = {
       // SESSION_SECRET=lighthouse-ci-noop-secret is a literal dummy that
       // satisfies the middleware import — it's never used cryptographically
       // because the demo path bypasses verify (see slice 11 §3.3).
+      //
+      // The shell command runs `next build` first (so .next/ exists) then
+      // `next start`. The build step is idempotent and fast on warm caches;
+      // doing it inline keeps the `npm run lighthouse` UX a single command.
       startServerCommand:
-        "NEXT_PUBLIC_DEMO_MODE=true SESSION_SECRET=lighthouse-ci-noop-secret npm run start",
+        "NEXT_PUBLIC_DEMO_MODE=true SESSION_SECRET=lighthouse-ci-noop-secret sh -c 'npm run build && npm run start'",
       startServerReadyPattern: "Ready in",
       url: [
         "http://localhost:3000/login",
