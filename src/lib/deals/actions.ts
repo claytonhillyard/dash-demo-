@@ -225,3 +225,29 @@ export async function setDealThreadMode(raw: unknown): Promise<ActionResult> {
     await d.update(deals).set({ threadMode: input.mode }).where(eq(deals.id, input.dealId));
   });
 }
+
+const SOFT_DELETE_WINDOW_MS = 15 * 60 * 1000;
+
+export async function deleteDealMessage(raw: unknown): Promise<ActionResult> {
+  return runWithUser(deleteDealMessageInput, raw, async (input: DeleteDealMessageInput, _user, orgId) => {
+    const d = db();
+    const [msg] = await d
+      .select({
+        fromOrgId: dealMessages.fromOrgId,
+        createdAt: dealMessages.createdAt,
+        deletedAt: dealMessages.deletedAt,
+      })
+      .from(dealMessages)
+      .where(eq(dealMessages.id, input.messageId))
+      .limit(1);
+    if (!msg) throw new ForbiddenError();
+    if (msg.fromOrgId !== orgId) throw new ForbiddenError();
+    if (msg.deletedAt !== null) return; // idempotent no-op
+    const ageMs = Date.now() - msg.createdAt.getTime();
+    if (ageMs > SOFT_DELETE_WINDOW_MS) throw new ForbiddenError();
+    await d
+      .update(dealMessages)
+      .set({ deletedAt: new Date() })
+      .where(eq(dealMessages.id, input.messageId));
+  });
+}
