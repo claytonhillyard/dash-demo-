@@ -9,7 +9,7 @@ vi.mock("@/lib/auth/requireSession", () => ({
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
 import { deals, circles, circleMembers, bids } from "@/db/schema";
-import { postBid, rejectBid, __setTestDb } from "@/lib/deals/actions";
+import { postBid, rejectBid, setDealBidMode, __setTestDb } from "@/lib/deals/actions";
 import { requireSession } from "@/lib/auth/requireSession";
 import { eq } from "drizzle-orm";
 
@@ -135,5 +135,46 @@ describe("rejectBid — authz", () => {
       user: "bidder-cant-reject-self", orgId: 999,
     });
     expect(await rejectBid({ bidId: b.id })).toEqual({ ok: false, error: "Forbidden" });
+  });
+});
+
+describe("setDealBidMode — owner-only display toggle", () => {
+  it("allows the owner to switch display modes", async () => {
+    const [d] = await db.insert(deals).values({
+      orgId: 1, kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 1000, postedByLabel: "x", bidMode: "single",
+    }).returning();
+    expect(await setDealBidMode({ dealId: d.id, mode: "history" })).toEqual({ ok: true });
+    const [after] = await db.select({ mode: deals.bidMode }).from(deals).where(eq(deals.id, d.id));
+    expect(after.mode).toBe("history");
+  });
+
+  it("does NOT mutate any bid rows when the mode changes", async () => {
+    const [d] = await db.insert(deals).values({
+      orgId: 1, kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 1000, postedByLabel: "x", bidMode: "single",
+    }).returning();
+    const [b] = await db.insert(bids).values({
+      dealId: d.id, bidderOrgId: 999, bidderOrgLabel: "M",
+      priceCents: 1, bidMode: "single",
+    }).returning();
+    await setDealBidMode({ dealId: d.id, mode: "history" });
+    const [bidAfter] = await db.select({ mode: bids.bidMode }).from(bids).where(eq(bids.id, b.id));
+    expect(bidAfter.mode).toBe("single"); // snapshot UNCHANGED
+  });
+
+  it("forbids a non-owner from changing the display mode", async () => {
+    const [d] = await db.insert(deals).values({
+      orgId: 1, kind: "SELL", category: "Diamond", subject: "x",
+      quantity: 1, priceCents: 1000, postedByLabel: "x",
+    }).returning();
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "partner", orgId: 999,
+    });
+    expect(await setDealBidMode({ dealId: d.id, mode: "history" })).toEqual({
+      ok: false, error: "Forbidden",
+    });
+    const [after] = await db.select({ mode: deals.bidMode }).from(deals).where(eq(deals.id, d.id));
+    expect(after.mode).toBe("single");
   });
 });

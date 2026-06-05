@@ -18,8 +18,9 @@ import {
   type DeleteDealMessageInput, type MarkDealThreadReadInput,
 } from "./replyValidation";
 import {
-  postBidInput, acceptBidInput, rejectBidInput, withdrawBidInput,
-  type PostBidInput, type AcceptBidInput, type RejectBidInput, type WithdrawBidInput,
+  postBidInput, acceptBidInput, rejectBidInput, withdrawBidInput, setDealBidModeInput,
+  type PostBidInput, type AcceptBidInput, type RejectBidInput,
+  type WithdrawBidInput, type SetDealBidModeInput,
 } from "./bidValidation";
 
 /** Thrown inside a postDeal callback when the session's org is not a member
@@ -411,5 +412,21 @@ export async function withdrawBid(raw: unknown): Promise<ActionResult> {
       .update(bids)
       .set({ status: "withdrawn", decidedAt: new Date() })
       .where(and(eq(bids.id, input.bidId), eq(bids.bidderOrgId, orgId)));
+  });
+}
+
+export async function setDealBidMode(raw: unknown): Promise<ActionResult> {
+  return runWithUser(setDealBidModeInput, raw, async (input: SetDealBidModeInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({ ownerOrgId: deals.orgId })
+      .from(deals)
+      .where(eq(deals.id, input.dealId))
+      .limit(1);
+    if (!row || row.ownerOrgId !== orgId) throw new ForbiddenError();
+    await d
+      .update(deals)
+      .set({ bidMode: input.mode })
+      .where(and(eq(deals.id, input.dealId), eq(deals.orgId, orgId)));
   });
 }
