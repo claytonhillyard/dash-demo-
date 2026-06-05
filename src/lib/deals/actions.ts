@@ -122,6 +122,7 @@ export async function postDeal(raw: unknown): Promise<ActionResult> {
       priceCents: input.priceCents,
       currency: input.currency,
       visibilityCircleId: input.visibilityCircleId ?? null,
+      threadMode: input.threadMode,
       postedByLabel: user,
     });
     console.log(

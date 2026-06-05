@@ -12,6 +12,10 @@ export const postDealInput = z.object({
   // server-side authz in postDeal verifies the orgId from session is actually
   // a member of this circle before the insert. See src/lib/deals/actions.ts.
   visibilityCircleId: z.number().int().positive().nullable().optional(),
+  // Slice 10: per-deal thread mode (private = owner-only replies; group =
+  // any circle member can reply). Defaults to "private" — moot for owner-only
+  // (visibilityCircleId === null) deals, but still stamped on the row.
+  threadMode: z.enum(["private", "group"]).optional().default("private"),
 });
 export type PostDealInput = z.infer<typeof postDealInput>;
 
