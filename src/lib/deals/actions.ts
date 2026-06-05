@@ -251,3 +251,16 @@ export async function deleteDealMessage(raw: unknown): Promise<ActionResult> {
       .where(eq(dealMessages.id, input.messageId));
   });
 }
+
+export async function markDealThreadRead(raw: unknown): Promise<ActionResult> {
+  return runWithUser(markDealThreadReadInput, raw, async (input: MarkDealThreadReadInput, _user, orgId) => {
+    const d = db();
+    const access = await canSeeDeal(d, orgId, input.dealId);
+    if (!access.ok) throw new ForbiddenError();
+    await d.execute(drizzleSql`
+      INSERT INTO deal_thread_reads (org_id, deal_id, last_read_at)
+      VALUES (${orgId}, ${input.dealId}, now())
+      ON CONFLICT (org_id, deal_id) DO UPDATE SET last_read_at = EXCLUDED.last_read_at
+    `);
+  });
+}
