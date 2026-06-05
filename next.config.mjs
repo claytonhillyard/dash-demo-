@@ -1,5 +1,26 @@
 /** @type {import('next').NextConfig} */
 
+import { withSentryConfig } from "@sentry/nextjs";
+
+// Inline copy of `src/lib/observability/csp.ts#parseSentryIngestHost`.
+// Plan fallback: importing the `.ts` source from this `.mjs` works in Node 22
+// runtime but triggers a MODULE_TYPELESS_PACKAGE_JSON warning and has bitten
+// Netlify's build in prior slices. The canonical implementation + unit tests
+// live in `src/lib/observability/csp.ts` — keep this copy byte-equivalent.
+/** @param {string | undefined} dsn @returns {string | null} */
+function parseSentryIngestHost(dsn) {
+  if (!dsn) return null;
+  let url;
+  try {
+    url = new URL(dsn);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  return `${url.protocol}//${url.hostname}`;
+}
+
 // External hosts the app contacts at runtime. Derived from
 // src/lib/market/providers/*.ts — every fetch() to a non-self URL must be
 // listed here, otherwise CSP will block live data in production.
@@ -16,6 +37,14 @@ const CONNECT_HOSTS = [
   "https://api.twelvedata.com",
   "https://finnhub.io",
 ];
+
+// Slice 11: widen connect-src with the exact Sentry ingest host derived
+// from SENTRY_DSN. When SENTRY_DSN is unset (demo build, local dev), the
+// helper returns null and CONNECT_HOSTS is unchanged byte-for-byte.
+const SENTRY_INGEST_HOST = parseSentryIngestHost(process.env.SENTRY_DSN);
+const EFFECTIVE_CONNECT_HOSTS = SENTRY_INGEST_HOST
+  ? [...CONNECT_HOSTS, SENTRY_INGEST_HOST]
+  : CONNECT_HOSTS;
 
 // Single-line CSP. Each directive ends in ';'. Keep it readable.
 //
@@ -36,7 +65,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  `connect-src 'self' ${CONNECT_HOSTS.join(" ")}`,
+  `connect-src 'self' ${EFFECTIVE_CONNECT_HOSTS.join(" ")}`,
   "img-src 'self' data:",
   "font-src 'self' data:",
   "frame-ancestors 'none'",
@@ -91,4 +120,17 @@ const nextConfig = {
     ];
   },
 };
-export default nextConfig;
+
+// Slice 11: wrap with Sentry's config helper for source-map upload at build
+// time. Upload is skipped silently when SENTRY_AUTH_TOKEN is absent (demo
+// build, local builds, CI without the secret). The webpack plugins are also
+// explicitly disabled in that case so the build never warns about a missing
+// auth token.
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+  disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+});
