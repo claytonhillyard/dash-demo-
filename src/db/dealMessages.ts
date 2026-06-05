@@ -23,6 +23,12 @@ export type DealMessageView = {
  *   (2) the slice-10 "can-see-this-message" rule: group, OR self-authored,
  *       OR the viewer is the deal owner (owner sees every private thread).
  *
+ * ⚠ VISIBILITY PREDICATE — mirrored in 2 other places.
+ * The outer "can-see-this-deal" rule below must match:
+ *   - getUnreadCountsForOrg WHERE clause (in this file)
+ *   - canSeeDeal() in src/lib/deals/actions.ts
+ * All three must agree. Divergence is a silent visibility hole.
+ *
  * Demo mode short-circuits to `[]` (matches slice-4 query helper convention —
  * demo data is seed-rendered statically; no live writes).
  */
@@ -99,6 +105,12 @@ export async function getDealMessages(
  * Deals with no unread messages are still returned with `0` so the caller
  * can render "💬 N" (subtle) badges for deals with messages but nothing new.
  * Deals with literally zero messages are NOT in the result map.
+ *
+ * ⚠ VISIBILITY PREDICATE — mirrored in 2 other places.
+ * The outer "can-see-this-deal" rule below must match:
+ *   - getDealMessages WHERE clause (above in this file)
+ *   - canSeeDeal() in src/lib/deals/actions.ts
+ * All three must agree. Divergence is a silent visibility hole.
  *
  * Demo-mode short-circuit: returns an empty Map.
  */

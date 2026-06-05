@@ -8,7 +8,7 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { deals, circles, circleMembers } from "@/db/schema";
+import { deals, circles, circleMembers, dealMessages } from "@/db/schema";
 import { postDealMessage, __setTestDb } from "@/lib/deals/actions";
 import { requireSession } from "@/lib/auth/requireSession";
 
@@ -94,22 +94,28 @@ describe("postDealMessage — cross-circle visibility", () => {
     expect(res).toEqual({ ok: false, error: "Forbidden" });
   });
 
-  // Slice-10 review finding #1: this is the EXACT cell the Phase B implementer
-  // caught as a security gap the original plan missed. An in-circle partner CAN
-  // see a circle-scoped deal (canSeeDeal returns ok via the slice-4 visibility
-  // model), but if the deal's thread_mode is 'private', ONLY the deal's owner
-  // org can post — circle membership doesn't extend posting rights in private
-  // mode. Without this test, the in-actions.ts private-mode gate could regress
-  // silently (the existing "no-circle" case hits canSeeDeal first and never
-  // reaches the private-mode check).
-  it("forbids an in-circle partner from posting on a PRIVATE-mode circle-scoped deal", async () => {
+  // Per spec §4: private mode = each interested partner has a 1-to-1 thread
+  // WITH the deal owner. An in-circle partner CAN post; the message gets
+  // snapshotted as `private`, and the read-side SQL visibility predicate
+  // (test/db/dealMessages.test.ts owns that coverage) restricts the row to
+  // {owner, sender}. This test guards against a regression that would gate
+  // posting on owner-equality (a previous review introduced exactly that
+  // gate; it broke the partner-DM-owner feature and was reverted).
+  it("allows an in-circle partner to post on a PRIVATE-mode circle-scoped deal (1-to-1 partner ↔ owner DM)", async () => {
     await ensureCircleWithMembers(42, "Trusted", [1, 999]);
     const dealId = await seedCircleDeal({ ownerOrgId: 1, threadMode: "private", circleId: 42 });
     (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       user: "partner", orgId: 999,
     });
-    const res = await postDealMessage({ dealId, body: "should fail — private mode" });
-    expect(res).toEqual({ ok: false, error: "Forbidden" });
+    const res = await postDealMessage({ dealId, body: "DM to owner only" });
+    expect(res).toEqual({ ok: true });
+    // Snapshot is "private" — the inserted row carries the mode that was
+    // active at send time, so the read-side visibility filter will only
+    // surface this message to the deal owner and to org 999 itself.
+    const rows = await db.select().from(dealMessages);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].threadMode).toBe("private");
+    expect(rows[0].fromOrgId).toBe(999);
   });
 
   it("snapshots the current deals.thread_mode onto the inserted row", async () => {
