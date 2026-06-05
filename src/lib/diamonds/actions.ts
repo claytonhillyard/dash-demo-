@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import { diamondMatrixPrices, diamondPricePoints, diamondIndexHistory } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
@@ -79,6 +80,7 @@ export async function importMatrix(raw: unknown): Promise<ImportResult> {
     return { ok: true, imported: parsed.rows.length };
   } catch (e) {
     console.error("[diamond import] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "diamonds-action" } });
     return { ok: false, error: "Database error" };
   }
 }
@@ -105,6 +107,7 @@ async function run<T>(
     return { ok: true };
   } catch (e) {
     console.error("[diamond action] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "diamonds-action" } });
     return { ok: false, error: "Database error" };
   }
 }

@@ -6,6 +6,7 @@ import { BusinessPlaceholder } from "@/components/dashboard/BusinessPlaceholder"
 import { InventoryOverviewPanel } from "@/components/dashboard/InventoryOverviewPanel";
 import { DealRoomPanel } from "@/components/dashboard/DealRoomPanel";
 import { WebsiteOverviewPanel } from "@/components/dashboard/WebsiteOverviewPanel";
+import { ProviderStatusPanel } from "@/components/dashboard/ProviderStatusPanel";
 import type { LayoutItem, PanelEntry, PanelSize } from "./types";
 
 export const PANEL_REGISTRY: PanelEntry[] = [
@@ -89,6 +90,20 @@ export const PANEL_REGISTRY: PanelEntry[] = [
         />
       ) : (
         <BusinessPlaceholder title="Website Overview" testid="panel-website-overview" />
+      ),
+  },
+  {
+    id: "provider-status",
+    title: "Provider Status",
+    defaultSize: 1,
+    render: (ctx) =>
+      ctx.providerStatus ? (
+        <ProviderStatusPanel
+          rows={ctx.providerStatus.rows}
+          demo={ctx.providerStatus.demo}
+        />
+      ) : (
+        <BusinessPlaceholder title="Provider Status" testid="panel-provider-status" />
       ),
   },
   {

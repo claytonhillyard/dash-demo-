@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, ne, sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import { deals, dealMessages, circleMembers, orgs, bids } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
@@ -64,6 +65,7 @@ async function run<T>(
     return { ok: true };
   } catch (e) {
     console.error("[deals action] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "deals-action" } });
     return { ok: false, error: "Database error" };
   }
 }
@@ -98,6 +100,7 @@ async function runWithUser<T>(
       return { ok: false, error: "Forbidden" };
     }
     console.error("[deals action] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "deals-action" } });
     return { ok: false, error: "Database error" };
   }
 }

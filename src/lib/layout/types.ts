@@ -65,12 +65,18 @@ export interface WebsiteOverviewView {
   updatedLabel: string | null;
 }
 
+export interface ProviderStatusView {
+  rows: import("@/lib/market/health").ProviderHealth[];
+  demo: boolean;
+}
+
 /** Server-read context the page passes into each panel's render. */
 export interface PanelCtx {
   inventory?: InventoryView;
   diamond?: DiamondView;
   deals?: DealView;
   website?: WebsiteOverviewView;
+  providerStatus?: ProviderStatusView; // slice 11
 }
 
 export interface PanelEntry {
