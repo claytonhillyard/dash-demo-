@@ -96,6 +96,29 @@ export async function getBidsForDeal(
   }));
 }
 
+/**
+ * Owner-only read of a deal's current `bid_mode`. Returns null when the
+ * caller is not the owner (or the deal doesn't exist) — gating the owner's
+ * bid-display selector in the Bids tab.
+ *
+ * Mirrors the slice-10 `getDealThreadModeForOwner` pattern.
+ * NOT demo-mode-gated — consulted at render time on the demo seed too.
+ */
+export async function getDealBidModeForOwner(
+  db: Db,
+  viewerOrgId: number,
+  dealId: number,
+): Promise<"single" | "history" | null> {
+  const res = await db.execute(sql`
+    SELECT bid_mode AS bid_mode
+    FROM deals
+    WHERE id = ${dealId} AND org_id = ${viewerOrgId}
+    LIMIT 1
+  `);
+  const rows = (res as unknown as { rows: { bid_mode: "single" | "history" }[] }).rows;
+  return rows[0]?.bid_mode ?? null;
+}
+
 export type TodaysBidView = {
   bidId: number;
   dealId: number;

@@ -16,10 +16,21 @@ import {
   type DealMessageView,
 } from "@/db/dealMessages";
 import {
+  getBidsForDeal,
+  getDealBidModeForOwner,
+  getTodaysBidsForOwner,
+  type BidView,
+} from "@/db/bids";
+import {
   postDealMessage,
   setDealThreadMode,
   deleteDealMessage,
   markDealThreadRead,
+  postBid,
+  acceptBid,
+  rejectBid,
+  withdrawBid,
+  setDealBidMode,
 } from "@/lib/deals/actions";
 import { updatedAgo } from "@/lib/company/format";
 import { getProviderStatus } from "@/lib/market/health";
@@ -54,6 +65,18 @@ export default async function Home() {
     const m = await getDealThreadModeForOwner(db, orgId, id);
     if (m) threadModeByDealId.set(id, m);
   }
+  // Slice 16: per-deal bid fetches. Same N+1 tradeoff as slice 10's thread
+  // fetches above (≤ 5 active deals).
+  const bidsByDealId = new Map<number, BidView[]>();
+  for (const id of dealIds) {
+    bidsByDealId.set(id, await getBidsForDeal(db, orgId, id));
+  }
+  const bidModeByDealId = new Map<number, "single" | "history">();
+  for (const id of dealIds) {
+    const m = await getDealBidModeForOwner(db, orgId, id);
+    if (m) bidModeByDealId.set(id, m);
+  }
+  const todaysBids = await getTodaysBidsForOwner(db, orgId);
   const viewerCircleIds: ReadonlySet<number> = new Set(viewerCircleIdList);
   const inventory = {
     counts: invSummary.counts,
@@ -81,6 +104,16 @@ export default async function Home() {
       setMode: setDealThreadMode,
       deleteMessage: deleteDealMessage,
       markRead: markDealThreadRead,
+    },
+    // Slice 16: bids
+    bidsByDealId,
+    bidModeByDealId,
+    bidActions: {
+      postBid,
+      acceptBid,
+      rejectBid,
+      withdrawBid,
+      setBidMode: setDealBidMode,
     },
   };
   const website = {

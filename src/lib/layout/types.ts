@@ -4,7 +4,8 @@ import type { DiamondRow } from "@/components/market/MarketIntelligencePanel";
 import type { InventoryCategory } from "@/lib/inventory/validation";
 import type { DealRow } from "@/lib/deals/queries";
 import type { DealMessageView } from "@/db/dealMessages";
-import type { DealRoomPanelActions } from "@/components/dashboard/DealRoomPanel";
+import type { BidView } from "@/db/bids";
+import type { DealRoomPanelActions, DealRoomPanelBidActions } from "@/components/dashboard/DealRoomPanel";
 
 export type PanelSize = 1 | 2 | 4;
 
@@ -50,6 +51,13 @@ export interface DealView {
   threadModeByDealId?: Map<number, "private" | "group">;
   /** Server actions wired through from src/lib/deals/actions.ts. */
   actions?: DealRoomPanelActions;
+  // --- Slice 16: bids ---
+  /** Per-deal preloaded bids for the Bids tab inside DealThreadAccordion. */
+  bidsByDealId?: Map<number, BidView[]>;
+  /** Per-deal owner bid_mode (populated only for deals the viewer owns). */
+  bidModeByDealId?: Map<number, "single" | "history">;
+  /** Slice-16 bid action wiring. */
+  bidActions?: DealRoomPanelBidActions;
 }
 
 export interface WebsiteOverviewView {
