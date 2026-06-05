@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, type Db } from "@/db/client";
-import { deals, dealMessages, circleMembers, orgs } from "@/db/schema";
+import { deals, dealMessages, circleMembers, orgs, bids } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
@@ -17,6 +17,10 @@ import {
   type PostDealMessageInput, type SetDealThreadModeInput,
   type DeleteDealMessageInput, type MarkDealThreadReadInput,
 } from "./replyValidation";
+import {
+  postBidInput,
+  type PostBidInput,
+} from "./bidValidation";
 
 /** Thrown inside a postDeal callback when the session's org is not a member
  *  of the requested visibility circle. Caught by runWithUser's catch and
@@ -282,5 +286,48 @@ export async function markDealThreadRead(raw: unknown): Promise<ActionResult> {
       VALUES (${orgId}, ${input.dealId}, now())
       ON CONFLICT (org_id, deal_id) DO UPDATE SET last_read_at = EXCLUDED.last_read_at
     `);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Slice 16: Bids
+// ---------------------------------------------------------------------------
+
+/** Slice-16 write-side gate: can the caller bid on this deal?
+ *  Returns the deal's owner + bid_mode snapshot for the insert.
+ *
+ *  ⚠ Mirrors getBidsForDeal's bidder|owner SQL visibility, with the
+ *  added "no self-bidding" rule. If you change visibility in either
+ *  place, change both. */
+async function canBidOn(d: Db, orgId: number, dealId: number): Promise<
+  { ok: true; ownerOrgId: number; bidMode: "single" | "history" } | { ok: false }
+> {
+  const seen = await canSeeDeal(d, orgId, dealId);
+  if (!seen.ok) return { ok: false };
+  if (seen.ownerOrgId === orgId) return { ok: false }; // no self-bidding
+  const [row] = await d
+    .select({ bidMode: deals.bidMode })
+    .from(deals)
+    .where(eq(deals.id, dealId))
+    .limit(1);
+  if (!row) return { ok: false };
+  return { ok: true, ownerOrgId: seen.ownerOrgId, bidMode: row.bidMode };
+}
+
+export async function postBid(raw: unknown): Promise<ActionResult> {
+  return runWithUser(postBidInput, raw, async (input: PostBidInput, _user, orgId) => {
+    const d = db();
+    const access = await canBidOn(d, orgId, input.dealId);
+    if (!access.ok) throw new ForbiddenError();
+    const label = await resolveOrgLabel(d, orgId);
+    await d.insert(bids).values({
+      dealId: input.dealId,
+      bidderOrgId: orgId,
+      bidderOrgLabel: label,
+      priceCents: input.priceCents,
+      currency: input.currency,
+      notes: input.notes ?? null,
+      bidMode: access.bidMode,
+    });
   });
 }
