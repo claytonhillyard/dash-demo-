@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { FormStatus } from "@/components/company/FormStatus";
 import { DEAL_KINDS, DEAL_CATEGORIES, type DealKind, type DealCategory } from "@/lib/deals/constants";
@@ -21,12 +21,14 @@ export function PostDealForm({
   circles?: CircleOption[];
 }) {
   const router = useRouter();
+  const formId = useId();
   const [kind, setKind] = useState<DealKind>("SELL");
   const [category, setCategory] = useState<DealCategory>("Diamond");
   const [subject, setSubject] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [priceDollars, setPriceDollars] = useState("");
   const [visibilityCircleId, setVisibilityCircleId] = useState<number | null>(null);
+  const [threadMode, setThreadMode] = useState<"private" | "group">("private");
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [pending, setPending] = useState(false);
@@ -36,7 +38,7 @@ export function PostDealForm({
     setError(null);
     setOk(false);
     setPending(true);
-    const raw = {
+    const raw: Record<string, unknown> = {
       kind,
       category,
       subject: subject.trim(),
@@ -44,6 +46,11 @@ export function PostDealForm({
       priceCents: Math.round(Number(priceDollars || 0) * 100),
       visibilityCircleId,
     };
+    // Per the plan: thread_mode is moot for owner-only deals — only stamp it
+    // when the deal is being shared into a circle.
+    if (visibilityCircleId !== null) {
+      raw.threadMode = threadMode;
+    }
     const res = await postAction(raw);
     setPending(false);
     if (res.ok) {
@@ -52,6 +59,7 @@ export function PostDealForm({
       setQuantity("1");
       setPriceDollars("");
       setVisibilityCircleId(null);
+      setThreadMode("private");
       router.refresh();
     } else {
       setError(res.error);
@@ -104,6 +112,33 @@ export function PostDealForm({
             ))}
           </select>
         </label>
+      )}
+      {visibilityCircleId !== null && (
+        <fieldset className="col-span-2 flex flex-col gap-1 md:col-span-3" aria-label="thread mode">
+          <legend className="text-xs text-text/60">Replies</legend>
+          <label className="text-xs text-text/80">
+            <input
+              type="radio"
+              name={`thread-mode-${formId}`}
+              value="private"
+              checked={threadMode === "private"}
+              onChange={() => setThreadMode("private")}
+              className="mr-1"
+            />
+            Private — replies are 1-to-1 with you (default)
+          </label>
+          <label className="text-xs text-text/80">
+            <input
+              type="radio"
+              name={`thread-mode-${formId}`}
+              value="group"
+              checked={threadMode === "group"}
+              onChange={() => setThreadMode("group")}
+              className="mr-1"
+            />
+            Group — replies visible to everyone in this circle
+          </label>
+        </fieldset>
       )}
       <div className="col-span-2 flex items-center justify-between md:col-span-3">
         <button type="submit" disabled={pending} className="rounded bg-gold p-2 text-black disabled:opacity-50">

@@ -31,6 +31,7 @@ describe("DashboardGrid", () => {
         subject: "Round 1.02ct G/VS1", quantity: 1, priceCents: 1240000,
         currency: "USD", status: "Open" as const, postedByLabel: "boss",
         visibilityCircleId: null,
+        threadMode: "private" as const,
         createdAt: new Date(Date.now() - 3_600_000),
       }],
       currentOrgId: 1,

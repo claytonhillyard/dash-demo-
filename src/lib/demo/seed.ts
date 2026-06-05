@@ -33,6 +33,8 @@ export function seedDiamondSummary(): DiamondSummary {
 // (Real `getActiveDeals` runs against the DB; this only fires when isDemoMode().)
 const DEMO_REF = new Date("2026-05-28T12:00:00Z").getTime();
 
+const hoursAgo = (h: number) => new Date(DEMO_REF - h * 60 * 60 * 1000);
+
 // --- Slice 4 demo seed: circles + memberships + cross-circle deals ---
 // Demo-only ids; never collide with shared-db test fixtures (1, 999, 888)
 // or with prod org ids (which all live below ~500 in practice).
@@ -97,6 +99,7 @@ export function getSeedDeals(): DealRow[] {
       status: "Open",
       postedByLabel: "demo-user",
       visibilityCircleId: null,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 2 * 3600 * 1000),
     },
     {
@@ -111,6 +114,7 @@ export function getSeedDeals(): DealRow[] {
       status: "Open",
       postedByLabel: "demo-user",
       visibilityCircleId: null,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 5 * 3600 * 1000),
     },
     {
@@ -125,6 +129,7 @@ export function getSeedDeals(): DealRow[] {
       status: "Open",
       postedByLabel: "demo-user",
       visibilityCircleId: null,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 26 * 3600 * 1000),
     },
     {
@@ -139,6 +144,7 @@ export function getSeedDeals(): DealRow[] {
       status: "Filled",
       postedByLabel: "demo-user",
       visibilityCircleId: null,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 72 * 3600 * 1000),
     },
     {
@@ -153,6 +159,7 @@ export function getSeedDeals(): DealRow[] {
       status: "Open",
       postedByLabel: "demo-user",
       visibilityCircleId: null,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 15 * 60 * 1000),
     },
     // --- Slice 4 cross-circle demo deals (partner orgs into AIYA Trusted Partners) ---
@@ -168,6 +175,7 @@ export function getSeedDeals(): DealRow[] {
       status: "Open",
       postedByLabel: "Mehta Diamonds — Mumbai",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 45 * 60 * 1000),
     },
     {
@@ -182,6 +190,7 @@ export function getSeedDeals(): DealRow[] {
       status: "Open",
       postedByLabel: "Saint-Cloud Gems — Geneva",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 90 * 60 * 1000),
     },
     {
@@ -196,10 +205,109 @@ export function getSeedDeals(): DealRow[] {
       status: "Open",
       postedByLabel: "Marathi Trading — Surat",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      threadMode: "private",
       createdAt: new Date(DEMO_REF - 180 * 60 * 1000),
+    },
+    // --- Slice 10 demo deals: AIYA -> circle, used to seed thread examples ---
+    // TODO(slice-10 review): plan also lists `updatedAt` on these entries; the
+    // current `DealRow` shape (mirrors the slice-2/4 seed) has no updatedAt
+    // field, so it's omitted here. Carry over if/when the type grows one.
+    {
+      id: 109,
+      orgId: DEMO_AIYA_ORG_ID,
+      kind: "SELL",
+      category: "Diamond",
+      subject: "1.02ct G/VS1 round — natural — demo · simulated",
+      quantity: 1,
+      priceCents: 1_240_000,
+      currency: "USD",
+      status: "Open",
+      postedByLabel: "AIYA",
+      visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      threadMode: "private",
+      createdAt: hoursAgo(6),
+    },
+    {
+      id: 110,
+      orgId: DEMO_AIYA_ORG_ID,
+      kind: "SELL",
+      category: "Metal",
+      subject: "18k chain lot — 320g — demo · simulated",
+      quantity: 320,
+      priceCents: 28_800_000,
+      currency: "USD",
+      status: "Open",
+      postedByLabel: "AIYA",
+      visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      threadMode: "group",
+      createdAt: hoursAgo(3),
     },
   ];
 }
+
+// --- Slice 10 seed messages for deals 109/110 ---
+export interface SeedDealMessage {
+  dealId: number;
+  fromOrgId: number;
+  fromOrgLabel: string;
+  body: string;
+  threadMode: "private" | "group";
+  createdAtOffsetMinutes: number; // minutes before DEMO_REF "now"
+}
+
+export const DEMO_DEAL_MESSAGES: SeedDealMessage[] = [
+  // Deal 109 — private thread between AIYA and Mehta
+  {
+    dealId: 109,
+    fromOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    fromOrgLabel: "Mehta Diamonds",
+    body: "Still available? Can do $12,100 today, cash on pickup.",
+    threadMode: "private",
+    createdAtOffsetMinutes: 90,
+  },
+  {
+    dealId: 109,
+    fromOrgId: DEMO_AIYA_ORG_ID,
+    fromOrgLabel: "AIYA Designs",
+    body: "Yes, available. Can meet $12,250 today. Photos already match what's posted.",
+    threadMode: "private",
+    createdAtOffsetMinutes: 60,
+  },
+  // Deal 110 — group thread visible to AIYA + all Trusted Partners
+  {
+    dealId: 110,
+    fromOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    fromOrgLabel: "Mehta Diamonds",
+    body: "Interested. Where are you shipping from?",
+    threadMode: "group",
+    createdAtOffsetMinutes: 45,
+  },
+  {
+    dealId: 110,
+    fromOrgId: DEMO_PARTNER_ORG_IDS.SAINT_CLOUD,
+    fromOrgLabel: "Saint-Cloud Atelier",
+    body: "Same question. Lead time?",
+    threadMode: "group",
+    createdAtOffsetMinutes: 30,
+  },
+  {
+    dealId: 110,
+    fromOrgId: DEMO_AIYA_ORG_ID,
+    fromOrgLabel: "AIYA Designs",
+    body: "Ships from Bandra. Same-day pickup or 2-day courier. Both partners welcome.",
+    threadMode: "group",
+    createdAtOffsetMinutes: 15,
+  },
+];
+
+// TODO(slice-10 review): plan's C1 Step 4 wires DEMO_DEAL_MESSAGES through a
+// `db.insert(dealMessages).values(...)` runner. This codebase's demo seed is a
+// pure-TS in-memory module (no runner inserts into pglite/Neon for demo mode —
+// `isDemoMode()` short-circuits at the query layer). The DB query helpers
+// `getDealMessages` / `getUnreadCountsForOrg` already return `[]` / empty Map
+// in demo mode, so the seeded messages above are an authored constant exposed
+// to any future demo-mode UI shim. If a real demo runner is ever added, this
+// constant is the source.
 
 /** Mirror of the real widened query for the demo runtime. Returns the union
  *  of {rows where orgId === viewer} and {rows whose visibilityCircleId is in

@@ -1,14 +1,28 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { Panel } from "@/components/Panel";
 import { formatCents, timeAgo } from "@/lib/company/format";
 import { formatDealVisibility } from "@/lib/deals/format";
+import { DealThreadAccordion } from "@/components/deals/DealThreadAccordion";
 import type { DealRow } from "@/lib/deals/queries";
 import type { DealKind } from "@/lib/deals/constants";
+import type { DealMessageView } from "@/db/dealMessages";
 
 // Fixed lookup so user input never reaches a className expression.
 const KIND_CLASS: Record<DealKind, string> = {
   BUY: "text-ok",
   SELL: "text-gold",
+};
+
+type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; error: string };
+
+export type DealRoomPanelActions = {
+  postMessage: (input: { dealId: number; body: string }) => Promise<ActionResult>;
+  setMode: (input: { dealId: number; mode: "private" | "group" }) => Promise<ActionResult>;
+  deleteMessage: (input: { messageId: number }) => Promise<ActionResult>;
+  markRead: (input: { dealId: number }) => Promise<ActionResult>;
 };
 
 /** Builds the panel subtitle. Driven by the viewer's circle map so the
@@ -30,12 +44,34 @@ export function DealRoomPanel({
   deals,
   currentOrgId,
   circleNamesById,
+  viewerOrgId,
+  viewerCircleIds,
+  unreadByDealId,
+  threadsByDealId,
+  threadModeByDealId,
+  actions,
 }: {
   deals: DealRow[];
   currentOrgId: number;
   circleNamesById: Map<number, string>;
+  /** Slice-10: the viewer's own org id. When omitted, falls back to currentOrgId. */
+  viewerOrgId?: number;
+  /** Slice-10: set of circle ids the viewer belongs to, used to derive canPost
+   *  for non-owner viewers in group-mode threads. Optional — when absent the
+   *  panel treats non-owners as out-of-circle and disables posting. */
+  viewerCircleIds?: ReadonlySet<number>;
+  /** Slice-10: per-deal unread count for the viewer. */
+  unreadByDealId?: Map<number, number>;
+  /** Slice-10: per-deal preloaded messages for the accordion. */
+  threadsByDealId?: Map<number, DealMessageView[]>;
+  /** Slice-10: per-deal current thread_mode, populated ONLY for deals the
+   *  viewer owns (gates rendering the mode selector). */
+  threadModeByDealId?: Map<number, "private" | "group">;
+  actions?: DealRoomPanelActions;
 }) {
   const subtitle = circlesSubtitle(circleNamesById);
+  const viewer = viewerOrgId ?? currentOrgId;
+  const [openDealId, setOpenDealId] = useState<number | null>(null);
 
   if (deals.length === 0) {
     return (
@@ -84,24 +120,79 @@ export function DealRoomPanel({
                 ? `Shared by ${d.postedByLabel} via ${vis.circleName}`
                 : `Shared with ${vis.circleName}`
               : undefined;
+          const unread = unreadByDealId?.get(d.id) ?? 0;
+          const threadMessages = threadsByDealId?.get(d.id) ?? [];
+          const total = threadMessages.length;
+          const isOwner = d.orgId === viewer;
+          const ownerThreadMode = threadModeByDealId?.get(d.id) ?? null;
+          // canPost derivation (mirrors Phase B's actions authz):
+          //   - owner: always true
+          //   - in-circle non-owner: true iff deal's thread_mode is 'group'
+          //   - out-of-circle: false
+          // Source of thread mode for non-owners: the deal row itself (snapshot
+          // of the per-deal column, populated by Phase A's schema add).
+          const inCircle =
+            d.visibilityCircleId !== null &&
+            (viewerCircleIds?.has(d.visibilityCircleId) ?? false);
+          const canPost = isOwner ? true : inCircle && d.threadMode === "group";
           return (
-            <li key={d.id} className="flex items-center gap-2 py-2">
-              <span className={`font-mono text-[10px] uppercase tracking-wider ${KIND_CLASS[d.kind]}`}>
-                {d.kind}
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-text/40">{d.category}</span>
-              <span className="flex-1 truncate text-text/80" title={d.subject}>{d.subject}</span>
-              {vis.kind === "circle" && (
-                <span
-                  className="rounded-full border border-gold/30 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-gold/80"
-                  title={badgeTooltip}
-                  data-testid="deal-visibility-badge"
-                >
-                  {vis.circleName}
+            <li key={d.id} className="flex flex-col gap-1 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`font-mono text-[10px] uppercase tracking-wider ${KIND_CLASS[d.kind]}`}>
+                  {d.kind}
                 </span>
+                <span className="text-[10px] uppercase tracking-wider text-text/40">{d.category}</span>
+                <span className="flex-1 truncate text-text/80" title={d.subject}>{d.subject}</span>
+                {vis.kind === "circle" && (
+                  <span
+                    className="rounded-full border border-gold/30 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-gold/80"
+                    title={badgeTooltip}
+                    data-testid="deal-visibility-badge"
+                  >
+                    {vis.circleName}
+                  </span>
+                )}
+                <span className="font-mono text-text">{formatCents(d.priceCents)}</span>
+                <span className="text-[10px] text-text/40">{timeAgo(d.createdAt)}</span>
+                {total > 0 && (
+                  unread > 0 ? (
+                    <span className="text-xs text-rose-400 ml-2">🔴 {unread} new</span>
+                  ) : (
+                    <span className="text-xs text-zinc-500 ml-2">💬 {total}</span>
+                  )
+                )}
+                {actions && (
+                  <button
+                    aria-label={`toggle thread for deal ${d.id}`}
+                    className="ml-2 text-zinc-500 hover:text-zinc-200"
+                    onClick={() => {
+                      const willOpen = openDealId !== d.id;
+                      setOpenDealId(willOpen ? d.id : null);
+                      if (willOpen) {
+                        // fire-and-forget — UI updates optimistically
+                        void actions.markRead({ dealId: d.id });
+                      }
+                    }}
+                  >
+                    {openDealId === d.id ? "▾" : "▸"}
+                  </button>
+                )}
+              </div>
+              {openDealId === d.id && actions && (
+                <DealThreadAccordion
+                  dealId={d.id}
+                  viewerOrgId={viewer}
+                  isOwner={isOwner}
+                  currentMode={ownerThreadMode}
+                  messages={threadMessages}
+                  canPost={canPost}
+                  actions={{
+                    postMessage: actions.postMessage,
+                    setMode: actions.setMode,
+                    deleteMessage: actions.deleteMessage,
+                  }}
+                />
               )}
-              <span className="font-mono text-text">{formatCents(d.priceCents)}</span>
-              <span className="text-[10px] text-text/40">{timeAgo(d.createdAt)}</span>
             </li>
           );
         })}

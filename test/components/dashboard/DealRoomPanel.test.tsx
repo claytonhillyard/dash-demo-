@@ -16,6 +16,7 @@ function makeDeal(over: Partial<DealRow> = {}): DealRow {
     status: "Open",
     postedByLabel: "boss",
     visibilityCircleId: null,
+    threadMode: "private",
     createdAt: new Date(Date.now() - 60 * 60 * 1000),
     ...over,
   };
