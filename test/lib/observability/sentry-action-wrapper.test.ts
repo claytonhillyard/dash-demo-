@@ -67,10 +67,10 @@ describe("action wrapper Sentry capture", () => {
   it("does NOT call captureException when a ForbiddenError is thrown", async () => {
     const Sentry = await import("@sentry/nextjs");
     // Seed an owner=999 deal with no circle. session.orgId=1 tries to post.
-    // TODO(slice-11 review): plan used `.returning({ id: deals.id })` but the
-    // Db union (Neon | PGlite) doesn't resolve the overloaded returning signature
-    // under tsc — same finding as slice-4/slice-5 tests. Switched to no-arg
-    // returning() (returns all columns; we only read .id).
+    // No-arg .returning() instead of .returning({ id: deals.id }) because the
+    // Db union (Neon | PGlite) doesn't resolve the overloaded returning
+    // signature under tsc — same fix slice-4 + slice-5 tests applied. Returns
+    // all columns; we only read .id, runtime-identical.
     const inserted = await db.insert(deals).values({
       orgId: 999, kind: "SELL", category: "Diamond", subject: "x",
       quantity: 1, priceCents: 1000, postedByLabel: "x", threadMode: "private",

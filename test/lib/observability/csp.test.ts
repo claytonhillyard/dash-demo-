@@ -41,4 +41,21 @@ describe("parseSentryIngestHost", () => {
       parseSentryIngestHost("http://abc@o1.ingest.sentry.io/12345"),
     ).toBeNull();
   });
+
+  // Slice-11 review finding #4: a misconfigured SENTRY_DSN env var pointing
+  // at an arbitrary HTTPS host would otherwise silently widen CSP to that
+  // third-party host. The hostname suffix check rejects non-Sentry origins.
+  it("rejects DSNs whose hostname is not a *.ingest.sentry.io host", () => {
+    expect(
+      parseSentryIngestHost("https://abc@my-proxy.example.com/12345"),
+    ).toBeNull();
+    expect(
+      parseSentryIngestHost("https://abc@evil.attacker.com/12345"),
+    ).toBeNull();
+    // A hostname that contains the substring but doesn't actually end in
+    // the suffix must also be rejected (no `.ingest.sentry.io.evil.com` games):
+    expect(
+      parseSentryIngestHost("https://abc@o1.ingest.sentry.io.evil.com/12345"),
+    ).toBeNull();
+  });
 });

@@ -57,11 +57,10 @@ describe("useQuotesPoll — threshold-5 Sentry capture", () => {
     renderHook(() => useQuotesPoll());
     await act(async () => { for (let j = 0; j < 5; j++) await Promise.resolve(); });
     await advanceTicks(4); // 5 failures total
-    // TODO(slice-11 review): plan used `waitFor`, but waitFor uses real timers
-    // and we're in vi.useFakeTimers() mode — waitFor never sees the assertion
-    // succeed because the microtask flush already happened inside advanceTicks.
-    // Asserting synchronously after the explicit microtask drain is functionally
-    // equivalent.
+    // Synchronous assertion (no waitFor): under vi.useFakeTimers(), waitFor
+    // would never see the assertion succeed because waitFor uses REAL timers
+    // and the microtask flush already happened inside advanceTicks. The
+    // explicit microtask drain in advanceTicks is functionally equivalent.
     expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
     const call = (Sentry.captureMessage as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(call[0]).toMatch(/5 consecutive/);

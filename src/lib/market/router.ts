@@ -52,7 +52,10 @@ export async function resolveQuotes(
       try {
         raws = await provider.fetchQuotes([...pending.values()]);
       } catch (err) {
-        onProviderResult?.(provider.id, false, err);
+        // Telemetry must not break the data path: a throwing callback here
+        // would short-circuit `continue` and abort the failover loop entirely.
+        // (Slice-11 review finding #1.)
+        try { onProviderResult?.(provider.id, false, err); } catch { /* swallow */ }
         continue;
       }
       const beforeSize = pending.size;
@@ -77,10 +80,12 @@ export async function resolveQuotes(
       // that returned an empty map for everything pending is treated as
       // a soft failure for health-tracking purposes (it didn't throw, but
       // it also didn't help).
+      // Telemetry must not break the data path: a throwing callback here
+      // would abort the failover loop mid-iteration. (Slice-11 review #1.)
       if (pending.size < beforeSize) {
-        onProviderResult?.(provider.id, true);
+        try { onProviderResult?.(provider.id, true); } catch { /* swallow */ }
       } else if (raws.size === 0) {
-        onProviderResult?.(provider.id, false, new Error("empty result"));
+        try { onProviderResult?.(provider.id, false, new Error("empty result")); } catch { /* swallow */ }
       }
     }
   }

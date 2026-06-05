@@ -2,20 +2,19 @@ import * as Sentry from "@sentry/nextjs";
 import { isDemoMode } from "@/lib/demo/mode";
 import { stripOrgId } from "./stripOrgId";
 
-const SENTRY_DSN = process.env.SENTRY_DSN;
-
 /**
  * `beforeSend` is the SINGLE SOURCE OF TRUTH for the "no orgId in
  * breadcrumbs/extras/contexts" rule. It runs once per event right before
  * transmission. `event.tags` is INTENTIONALLY untouched — `orgId` is allowed
  * there (set server-side via `withOrgScope`) and is used for triage filtering
  * inside the Sentry workspace UI, never leaving the operator's control plane.
+ *
+ * The plan's signature used `Sentry.Event` / `Sentry.EventHint`, but
+ * @sentry/nextjs v8 narrows the beforeSend option to `ErrorEvent` (and
+ * `Contexts` is not re-exported). The body is unchanged; only the
+ * parameter/return types and the `contexts` cast are adjusted to match
+ * the v8 type surface so this file compiles under strict typecheck.
  */
-// TODO(slice-11 review): the plan's signature used `Sentry.Event` /
-// `Sentry.EventHint`, but @sentry/nextjs v8 narrows the beforeSend option to
-// `ErrorEvent` (and `Contexts` is not re-exported). The body is unchanged;
-// only the parameter/return types and the `contexts` cast are adjusted to
-// match the v8 type surface so this file compiles under strict typecheck.
 export function beforeSend(
   event: Sentry.ErrorEvent,
   _hint: Sentry.EventHint,
@@ -45,10 +44,11 @@ export function beforeSend(
  * braces with `beforeSend` — the latter is the canonical strip, the former
  * keeps the in-memory breadcrumb buffer clean so a developer inspecting it
  * via DevTools never sees `orgId` either.
+ *
+ * The plan's signature required `_hint: BreadcrumbHint`, but
+ * @sentry/nextjs v8 declares the option as `hint?: BreadcrumbHint`. The
+ * param is widened to optional to match v8's type surface.
  */
-// TODO(slice-11 review): the plan's signature required `_hint: BreadcrumbHint`,
-// but @sentry/nextjs v8 declares the option as `hint?: BreadcrumbHint`. The
-// param is widened to optional to match v8's type surface.
 export function beforeBreadcrumb(
   breadcrumb: Sentry.Breadcrumb,
   _hint?: Sentry.BreadcrumbHint,
@@ -90,9 +90,14 @@ export function initSentry(): void {
     Sentry.init({ enabled: false });
     return;
   }
+  // Read SENTRY_DSN at call time, not module load time. Module-level capture
+  // was fragile under vi.resetModules() and any parallel test runner that
+  // imported this module transitively before resetting env vars. (Slice-11
+  // review finding #2.) Matches isDemoMode()'s call-time read pattern.
+  const sentryDsn = process.env.SENTRY_DSN;
   Sentry.init({
-    dsn: SENTRY_DSN,
-    enabled: !!SENTRY_DSN,
+    dsn: sentryDsn,
+    enabled: !!sentryDsn,
     tracesSampleRate: 0, // tracing deferred to slice 12+
     beforeSend,
     beforeBreadcrumb,
