@@ -8,6 +8,7 @@ import { getInventorySummary } from "@/db/inventory";
 import { getDiamondSummary } from "@/db/diamonds";
 import { getActiveDeals } from "@/lib/deals/queries";
 import { getCircleNamesForOrg } from "@/lib/circles/queries";
+import { getWebsiteSnapshotTrend } from "@/db/website";
 import { updatedAgo } from "@/lib/company/format";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +16,12 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
-  const [invSummary, dia, activeDeals, circleNamesById] = await Promise.all([
+  const [invSummary, dia, activeDeals, circleNamesById, websiteTrend] = await Promise.all([
     getInventorySummary(db, orgId),
     getDiamondSummary(db, orgId),
     getActiveDeals(db, orgId, 5),
     getCircleNamesForOrg(db, orgId),
+    getWebsiteSnapshotTrend(db, orgId, 8),
   ]);
   const inventory = {
     counts: invSummary.counts,
@@ -35,10 +37,16 @@ export default async function Home() {
     ],
   };
   const deals = { deals: activeDeals, currentOrgId: orgId, circleNamesById };
+  const website = {
+    latest: websiteTrend[0] ?? null,
+    previous: websiteTrend[1] ?? null,
+    trend: websiteTrend.map((r) => ({ weekStart: r.weekStart, visitors: r.visitors })),
+    updatedLabel: updatedAgo(websiteTrend[0]?.updatedAt ?? null),
+  };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>
-        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} />
+        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} />
       </Shell>
     </QuotesProvider>
   );
