@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import { inventoryItems } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
@@ -47,6 +48,7 @@ async function run<T>(
     return { ok: true };
   } catch (e) {
     console.error("[inventory action] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "inventory-action" } });
     return { ok: false, error: "Database error" };
   }
 }

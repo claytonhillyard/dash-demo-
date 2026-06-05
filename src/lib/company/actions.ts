@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import {
   revenueMonths,
@@ -55,6 +56,7 @@ async function run<T>(
     // Never leak DB internals (schema/constraint/column detail) to the client.
     // Log the real error server-side; return a generic message to the UI.
     console.error("[company action] database error:", e);
+    Sentry.captureException(e, { tags: { layer: "company-action" } });
     return { ok: false, error: "Database error" };
   }
 }
