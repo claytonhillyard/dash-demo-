@@ -32,3 +32,8 @@ yarn-error.log*
 
 # Local Netlify folder
 .netlify
+
+# Lighthouse CI reports (slice 14) — local-only synthetic perf reports.
+# Each report is a 100-500KB JSON + HTML pair; they accumulate. Never
+# committed.
+.lighthouseci/
