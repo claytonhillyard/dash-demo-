@@ -19,9 +19,13 @@ describe("circle_invitations migration", () => {
   it("enforces unique tokens", async () => {
     const t = await createTestDb();
     close = t.close;
+    // TODO(slice-4c review): plan code used `.returning({ id: circles.id })`,
+    // but the Db union (Neon | PGlite) doesn't resolve the overloaded returning
+    // signature, so we use the no-arg variant which returns all columns and
+    // pull .id from there. Same runtime behavior; tsc-only fix.
     const [c] = await t.db.insert(circles)
       .values({ name: "C", slug: "c", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     await t.db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "alpha",
       token: "tok-1", expiresAt: fiveMinFromNow(),
@@ -39,7 +43,7 @@ describe("circle_invitations migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "C", slug: "c", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     await t.db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "alpha",
       token: "tok-1", expiresAt: fiveMinFromNow(),
@@ -57,12 +61,12 @@ describe("circle_invitations migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "C", slug: "c", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     // First invite, then flip to declined.
     const [first] = await t.db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "alpha",
       token: "tok-1", expiresAt: fiveMinFromNow(),
-    }).returning({ id: circleInvitations.id });
+    }).returning();
     await t.db.execute(sql`
       UPDATE circle_invitations
       SET status = 'declined', responded_at = now()
@@ -83,7 +87,7 @@ describe("circle_invitations migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "C", slug: "c", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     await t.db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "alpha",
       token: "tok-1", expiresAt: fiveMinFromNow(),
@@ -97,7 +101,7 @@ describe("circle_invitations migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "C", slug: "c", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     await expect(
       t.db.insert(circleInvitations).values({
         circleId: c.id, fromOrgId: 99999, toOrgSlug: "alpha",
@@ -111,11 +115,11 @@ describe("circle_invitations migration", () => {
     close = t.close;
     const [c] = await t.db.insert(circles)
       .values({ name: "C", slug: "c", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     const [inv] = await t.db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "alpha",
       token: "tok-1", expiresAt: fiveMinFromNow(),
-    }).returning({ status: circleInvitations.status });
+    }).returning();
     expect(inv.status).toBe("pending");
   });
 });
