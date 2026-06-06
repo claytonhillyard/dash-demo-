@@ -521,7 +521,22 @@ export async function uploadDealAttachment(formData: FormData): Promise<ActionRe
 
   // Blob first, then DB. If DB throws, delete the blob — no orphans.
   const store = getBlobStore();
-  await store.set(storageKey, bytes);
+
+  // Storage write: a Netlify Blobs network failure / 5xx surfaces here.
+  // Without this catch the exception bypasses the action's {ok,error} contract
+  // and hits Next.js as an opaque 500 — and Sentry never tags it with
+  // layer="deals-action". Matches the slice-11 capture convention.
+  try {
+    await store.set(storageKey, bytes);
+  } catch (e) {
+    console.error("[deals action] blob set failed", { storageKey, error: e });
+    Sentry.captureException(e, {
+      tags: { layer: "deals-action", subsystem: "blob-store" },
+      extra: { storageKey },
+    });
+    return { ok: false, error: "Upload failed" };
+  }
+
   try {
     await d.insert(dealAttachments).values({
       dealId: meta.data.dealId,
@@ -533,9 +548,27 @@ export async function uploadDealAttachment(formData: FormData): Promise<ActionRe
       altText: meta.data.altText ?? null,
     });
   } catch (e) {
-    try { await store.delete(storageKey); } catch { /* best effort cleanup */ }
-    console.error("[deals action] upload db insert failed:", e);
-    Sentry.captureException(e, { tags: { layer: "deals-action" } });
+    let rollbackOk = true;
+    try {
+      await store.delete(storageKey);
+    } catch (rollbackErr) {
+      rollbackOk = false;
+      // Orphan blob: log + Sentry-capture so a future GC sweep has the key.
+      console.warn("[deals action] orphan blob rollback failed", {
+        storageKey, error: rollbackErr,
+      });
+      Sentry.captureException(rollbackErr, {
+        tags: { layer: "deals-action", subsystem: "blob-store-rollback" },
+        extra: { storageKey },
+      });
+    }
+    console.error("[deals action] upload db insert failed", {
+      storageKey, rollbackOk, error: e,
+    });
+    Sentry.captureException(e, {
+      tags: { layer: "deals-action" },
+      extra: { storageKey, rollbackOk },
+    });
     return { ok: false, error: "Database error" };
   }
 
