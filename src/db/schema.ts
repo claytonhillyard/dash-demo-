@@ -9,6 +9,7 @@ import {
   jsonb,
   unique,
   index,
+  uniqueIndex,
   primaryKey,
 } from "drizzle-orm/pg-core";
 
@@ -53,6 +54,42 @@ export const circleMembers = pgTable(
     orgIdx: index("circle_members_org_idx").on(t.orgId),
     circleIdx: index("circle_members_circle_idx").on(t.circleId),
   })
+);
+
+export const circleInvitations = pgTable(
+  "circle_invitations",
+  {
+    id: serial("id").primaryKey(),
+    circleId: integer("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    fromOrgId: integer("from_org_id")
+      .notNull()
+      .references(() => orgs.id),
+    toOrgSlug: text("to_org_slug").notNull(),
+    token: text("token").notNull(),
+    status: text("status", {
+      enum: ["pending", "accepted", "declined", "withdrawn", "expired"],
+    })
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (t) => ({
+    tokenUniq: unique("circle_invitations_token_uniq").on(t.token),
+    // Partial UNIQUE: only one pending invite per (circle, target slug) at a time.
+    // Historical accepted/declined/withdrawn rows do NOT occupy the index, so
+    // re-invites after a non-pending response are allowed.
+    pendingUniq: uniqueIndex("circle_invitations_pending_uniq")
+      .on(t.circleId, t.toOrgSlug)
+      .where(sql`${t.status} = 'pending'`),
+    toSlugStatusIdx: index("circle_invitations_to_slug_status_idx")
+      .on(t.toOrgSlug, t.status),
+    fromOrgStatusIdx: index("circle_invitations_from_org_status_idx")
+      .on(t.fromOrgId, t.status),
+  }),
 );
 
 export const revenueMonths = pgTable(

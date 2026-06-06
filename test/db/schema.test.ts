@@ -119,4 +119,20 @@ describe("db schema", () => {
     expect(schema.websiteSnapshots.avgSessionDurationSeconds.notNull).toBe(true);
     expect(schema.websiteSnapshots.bounceRatePercent.notNull).toBe(true);
   });
+
+  it("exports circleInvitations with id/circleId/fromOrgId/toOrgSlug/token/status/expiresAt", () => {
+    expect(schema.circleInvitations).toBeDefined();
+    expect(schema.circleInvitations.id.columnType).toBe("PgSerial");
+    expect(schema.circleInvitations.circleId.columnType).toBe("PgInteger");
+    expect(schema.circleInvitations.fromOrgId.columnType).toBe("PgInteger");
+    expect(schema.circleInvitations.toOrgSlug.columnType).toBe("PgText");
+    expect(schema.circleInvitations.token.columnType).toBe("PgText");
+    expect(schema.circleInvitations.status.columnType).toBe("PgText");
+    expect(schema.circleInvitations.createdAt.columnType).toBe("PgTimestamp");
+    expect(schema.circleInvitations.expiresAt.columnType).toBe("PgTimestamp");
+    expect(schema.circleInvitations.respondedAt.columnType).toBe("PgTimestamp");
+    // respondedAt is nullable; expiresAt is NOT null.
+    expect(schema.circleInvitations.respondedAt.notNull).toBe(false);
+    expect(schema.circleInvitations.expiresAt.notNull).toBe(true);
+  });
 });
