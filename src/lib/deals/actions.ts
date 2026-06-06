@@ -5,7 +5,7 @@ import { and, eq, ne, sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
-import { deals, dealMessages, circleMembers, orgs, bids } from "@/db/schema";
+import { deals, dealMessages, circleMembers, orgs, bids, dealAttachments } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
@@ -23,6 +23,12 @@ import {
   type PostBidInput, type AcceptBidInput, type RejectBidInput,
   type WithdrawBidInput, type SetDealBidModeInput,
 } from "./bidValidation";
+import {
+  uploadAttachmentMetaInput,
+} from "./attachmentValidation";
+import { detectKindFromBytes } from "./attachmentMime";
+import { getBlobStore } from "@/lib/storage/blobStore";
+import { countAttachmentsByKind } from "@/db/dealAttachments";
 
 /** Thrown inside a postDeal callback when the session's org is not a member
  *  of the requested visibility circle. Caught by runWithUser's catch and
@@ -430,4 +436,108 @@ export async function setDealBidMode(raw: unknown): Promise<ActionResult> {
       .set({ bidMode: input.mode })
       .where(and(eq(deals.id, input.dealId), eq(deals.orgId, orgId)));
   });
+}
+
+// ---------------------------------------------------------------------------
+// Slice 17: Deal attachments (photos + certs)
+// ---------------------------------------------------------------------------
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_IMAGES_PER_DEAL = 8;
+const MAX_CERTS_PER_DEAL = 4;
+
+/** Server action: multipart upload of a single image or cert.
+ *  Cannot use runWithUser's Zod-on-JSON contract because the body is
+ *  FormData with a binary file. Inlines session + Zod-on-fields + the
+ *  same "demo guard, error mapping" contract from runWithUser. */
+export async function uploadDealAttachment(formData: FormData): Promise<ActionResult> {
+  if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
+
+  let orgId: number;
+  try {
+    const session = await requireSession();
+    orgId = session.orgId;
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  // Field parsing — FormData values are string | File. Coerce into the Zod shape.
+  const dealIdRaw = formData.get("dealId");
+  const kindRaw = formData.get("kind");
+  const fileRaw = formData.get("file");
+  const altTextRaw = formData.get("altText");
+
+  const meta = uploadAttachmentMetaInput.safeParse({
+    dealId: typeof dealIdRaw === "string" ? Number(dealIdRaw) : undefined,
+    kind: typeof kindRaw === "string" ? kindRaw : undefined,
+    altText: typeof altTextRaw === "string" && altTextRaw !== "" ? altTextRaw : undefined,
+  });
+  if (!meta.success) return { ok: false, error: firstZodError(meta.error) };
+
+  if (!(fileRaw instanceof Blob)) {
+    return { ok: false, error: "Missing file" };
+  }
+
+  // Owner-only authz — in-circle partners get READ-only access to attachments.
+  const d = db();
+  const [deal] = await d
+    .select({ ownerOrgId: deals.orgId })
+    .from(deals)
+    .where(eq(deals.id, meta.data.dealId))
+    .limit(1);
+  if (!deal || deal.ownerOrgId !== orgId) return { ok: false, error: "Forbidden" };
+
+  // Size cap
+  if (fileRaw.size > MAX_FILE_BYTES) return { ok: false, error: "Forbidden" };
+
+  // MIME magic-byte validation (never trust Content-Type header from request)
+  const head = new Uint8Array(await fileRaw.slice(0, 12).arrayBuffer());
+  const detected = detectKindFromBytes(head);
+  if (!detected || detected.kind !== meta.data.kind) {
+    return { ok: false, error: "Forbidden" };
+  }
+
+  // Per-deal kind cap
+  const counts = await countAttachmentsByKind(d, meta.data.dealId);
+  if (meta.data.kind === "image" && counts.image >= MAX_IMAGES_PER_DEAL) {
+    return { ok: false, error: "Forbidden" };
+  }
+  if (meta.data.kind === "cert" && counts.cert >= MAX_CERTS_PER_DEAL) {
+    return { ok: false, error: "Forbidden" };
+  }
+
+  // Compose storage key. UUID prevents same-name collisions across uploads;
+  // extension is derived from the detected MIME (not the filename).
+  const ext = detected.mime === "image/jpeg" ? "jpg"
+    : detected.mime === "image/png" ? "png"
+    : detected.mime === "image/webp" ? "webp"
+    : "pdf";
+  const storageKey = `org/${orgId}/deal/${meta.data.dealId}/${meta.data.kind}/${crypto.randomUUID()}.${ext}`;
+
+  // Read full bytes for the upload
+  const bytes = new Uint8Array(await fileRaw.arrayBuffer());
+
+  // Blob first, then DB. If DB throws, delete the blob — no orphans.
+  const store = getBlobStore();
+  await store.set(storageKey, bytes);
+  try {
+    await d.insert(dealAttachments).values({
+      dealId: meta.data.dealId,
+      uploadedByOrgId: orgId,
+      kind: meta.data.kind,
+      storageKey,
+      mimeType: detected.mime,
+      sizeBytes: bytes.byteLength,
+      altText: meta.data.altText ?? null,
+    });
+  } catch (e) {
+    try { await store.delete(storageKey); } catch { /* best effort cleanup */ }
+    console.error("[deals action] upload db insert failed:", e);
+    Sentry.captureException(e, { tags: { layer: "deals-action" } });
+    return { ok: false, error: "Database error" };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/deals");
+  return { ok: true };
 }
