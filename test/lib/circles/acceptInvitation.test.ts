@@ -125,7 +125,13 @@ describe("acceptInvitation — demo guard", () => {
     const prev = process.env.NEXT_PUBLIC_DEMO_MODE;
     process.env.NEXT_PUBLIC_DEMO_MODE = "true";
     try {
-      const res = await acceptInvitation({ token: "demo-token" });
+      // Token is padded ≥ Zod tokenInput.min(16) so this test stays
+      // unambiguously about the demo guard. The shorter "demo-token"
+      // we used originally relied on the demo check firing BEFORE Zod
+      // validation in runWithUser — a guard-ordering assumption that
+      // would silently flip this test from "demo no-op" to "Zod
+      // rejection" if reordered. (Slice-4c review finding #3.)
+      const res = await acceptInvitation({ token: "demo-token-pad-to-16+" });
       expect(res).toEqual({ ok: false, error: "Demo mode — changes are disabled" });
     } finally {
       process.env.NEXT_PUBLIC_DEMO_MODE = prev;

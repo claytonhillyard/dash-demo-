@@ -185,6 +185,19 @@ export async function declineInvitation(raw: unknown): Promise<ActionResult> {
   });
 }
 
+// Note: removeOrgFromCircle and leaveCircle inline the DELETE rather than
+// calling membership-mutations.ts's removeOrgFromCircle helper. Reasons:
+// (a) DELETE FROM ... WHERE ... is idempotent + safe without transaction
+//     wrapping — no race condition to mitigate
+// (b) The session-scoped predicates (ownerOrgId === sessionOrgId for remove,
+//     orgId === sessionOrgId for leave) are authz-relevant and live with
+//     the action's authz checks; folding them into the helper would push
+//     authz across the module boundary
+// (c) The helper in membership-mutations.ts remains the canonical writer
+//     for tests + future external callers (e.g. an admin CLI). The slice-4c
+//     race sentinel asserts the helper EXPORTS exist + the production
+//     race-mitigation patterns are present; both invariants still hold.
+// (Slice-4c review finding #7.)
 export async function removeOrgFromCircle(raw: unknown): Promise<ActionResult> {
   return runWithUser(removeOrgFromCircleInput, raw, async (input: RemoveOrgFromCircleInput, _user, orgId) => {
     const d = db();
