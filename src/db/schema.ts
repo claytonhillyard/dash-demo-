@@ -8,6 +8,7 @@ import {
   timestamp,
   jsonb,
   unique,
+  uniqueIndex,
   index,
   primaryKey,
 } from "drizzle-orm/pg-core";
@@ -313,6 +314,35 @@ export const bids = pgTable(
     pendingByDealIdx: index("bids_pending_by_deal_idx")
       .on(t.dealId, t.status)
       .where(sql`${t.status} = 'pending'`),
+  }),
+);
+
+export const dealAttachments = pgTable(
+  "deal_attachments",
+  {
+    id: serial("id").primaryKey(),
+    dealId: integer("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    uploadedByOrgId: integer("uploaded_by_org_id")
+      .notNull()
+      .references(() => orgs.id),
+    kind: text("kind", { enum: ["image", "cert"] }).notNull(),
+    storageKey: text("storage_key").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    altText: text("alt_text"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    storageKeyUnique: uniqueIndex("deal_attachments_storage_key_unique").on(t.storageKey),
+    dealKindCreatedIdx: index("deal_attachments_deal_kind_created_idx").on(
+      t.dealId,
+      t.kind,
+      t.createdAt.asc(),
+    ),
   }),
 );
 
