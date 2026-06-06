@@ -195,4 +195,15 @@ export async function removeOrgFromCircle(raw: unknown): Promise<ActionResult> {
   });
 }
 
-// leaveCircle lands in B9.
+export async function leaveCircle(raw: unknown): Promise<ActionResult> {
+  return runWithUser(leaveCircleInput, raw, async (input: LeaveCircleInput, _user, orgId) => {
+    const d = db();
+    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId }).from(circles)
+      .where(eq(circles.id, input.circleId)).limit(1);
+    if (!c) throw new ForbiddenError();
+    if (c.ownerOrgId === orgId) throw new ForbiddenError(); // owner cannot leave
+    await d
+      .delete(circleMembers)
+      .where(and(eq(circleMembers.circleId, input.circleId), eq(circleMembers.orgId, orgId)));
+  });
+}
