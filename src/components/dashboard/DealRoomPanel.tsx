@@ -10,6 +10,7 @@ import type { DealRow } from "@/lib/deals/queries";
 import type { DealKind } from "@/lib/deals/constants";
 import type { DealMessageView } from "@/db/dealMessages";
 import type { BidView } from "@/db/bids";
+import type { DealAttachmentView } from "@/db/dealAttachments";
 
 // Fixed lookup so user input never reaches a className expression.
 const KIND_CLASS: Record<DealKind, string> = {
@@ -50,6 +51,11 @@ export type DealRoomPanelBidActions = {
   setBidMode: (input: { dealId: number; mode: "single" | "history" }) => Promise<ActionResult>;
 };
 
+export type DealRoomPanelAttachmentActions = {
+  uploadAttachment: (fd: FormData) => Promise<ActionResult>;
+  deleteAttachment: (input: { attachmentId: number }) => Promise<ActionResult>;
+};
+
 export function DealRoomPanel({
   deals,
   currentOrgId,
@@ -63,6 +69,9 @@ export function DealRoomPanel({
   bidsByDealId,
   bidModeByDealId,
   bidActions,
+  attachmentsByDealId,
+  signedUrlsByDealId,
+  attachmentActions,
 }: {
   deals: DealRow[];
   currentOrgId: number;
@@ -88,6 +97,12 @@ export function DealRoomPanel({
   bidModeByDealId?: Map<number, "single" | "history">;
   /** Slice-16: bid server actions, threaded through to DealBidsTab. */
   bidActions?: DealRoomPanelBidActions;
+  /** Slice-17: per-deal preloaded attachments for the carousel. */
+  attachmentsByDealId?: Map<number, DealAttachmentView[]>;
+  /** Slice-17: per-deal signed URLs keyed by attachment id (or demo public URLs). */
+  signedUrlsByDealId?: Map<number, Map<number, string>>;
+  /** Slice-17: upload/delete server actions threaded through to the carousel. */
+  attachmentActions?: DealRoomPanelAttachmentActions;
 }) {
   const subtitle = circlesSubtitle(circleNamesById);
   const viewer = viewerOrgId ?? currentOrgId;
@@ -214,6 +229,9 @@ export function DealRoomPanel({
                   bids={bidsByDealId?.get(d.id) ?? []}
                   currentBidMode={isOwner ? (bidModeByDealId?.get(d.id) ?? null) : null}
                   bidActions={bidActions}
+                  attachments={attachmentsByDealId?.get(d.id) ?? []}
+                  attachmentSignedUrls={signedUrlsByDealId?.get(d.id) ?? new Map()}
+                  attachmentActions={attachmentActions}
                 />
               )}
             </li>

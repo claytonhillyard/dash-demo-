@@ -5,7 +5,12 @@ import type { InventoryCategory } from "@/lib/inventory/validation";
 import type { DealRow } from "@/lib/deals/queries";
 import type { DealMessageView } from "@/db/dealMessages";
 import type { BidView, TodaysBidView } from "@/db/bids";
-import type { DealRoomPanelActions, DealRoomPanelBidActions } from "@/components/dashboard/DealRoomPanel";
+import type { DealAttachmentView } from "@/db/dealAttachments";
+import type {
+  DealRoomPanelActions,
+  DealRoomPanelBidActions,
+  DealRoomPanelAttachmentActions,
+} from "@/components/dashboard/DealRoomPanel";
 
 export type PanelSize = 1 | 2 | 4;
 
@@ -58,6 +63,13 @@ export interface DealView {
   bidModeByDealId?: Map<number, "single" | "history">;
   /** Slice-16 bid action wiring. */
   bidActions?: DealRoomPanelBidActions;
+  // --- Slice 17: attachments (photos + certs) ---
+  /** Per-deal preloaded attachment metadata for the carousel. */
+  attachmentsByDealId?: Map<number, DealAttachmentView[]>;
+  /** Per-deal signed URLs keyed by attachment id (or demo public URLs). */
+  signedUrlsByDealId?: Map<number, Map<number, string>>;
+  /** Slice-17 attachment action wiring (owner upload/delete). */
+  attachmentActions?: DealRoomPanelAttachmentActions;
 }
 
 export interface WebsiteOverviewView {
