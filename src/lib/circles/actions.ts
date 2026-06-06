@@ -113,5 +113,44 @@ export async function inviteOrgToCircle(raw: unknown): Promise<ActionResult> {
   });
 }
 
-// acceptInvitation, declineInvitation, removeOrgFromCircle,
-// leaveCircle land in B6..B9.
+export async function acceptInvitation(raw: unknown): Promise<ActionResult> {
+  return runWithUser(tokenInput, raw, async (input: TokenInput, _user, orgId) => {
+    await db().transaction(async (tx) => {
+      // 1) Lock the invitation row (FOR UPDATE closes the check-then-write race).
+      const rows = await tx.execute(drizzleSql`
+        SELECT id, circle_id, to_org_slug, status, expires_at
+        FROM circle_invitations
+        WHERE token = ${input.token}
+        LIMIT 1
+        FOR UPDATE
+      `);
+      // pglite normalizes .execute() to a { rows: [...] } shape; some drivers
+      // return the array directly. Defensive cast handles both.
+      const inv = ((rows as { rows?: Array<Record<string, unknown>> }).rows
+        ?? (rows as unknown as Array<Record<string, unknown>>))[0];
+      if (!inv) throw new ForbiddenError();
+      if (inv.status !== "pending") throw new ForbiddenError();
+      const expiresAt = inv.expires_at instanceof Date
+        ? inv.expires_at
+        : new Date(inv.expires_at as string);
+      if (expiresAt <= new Date()) throw new ForbiddenError();
+      // 2) Cross-org integrity: session's org slug must match invite.to_org_slug.
+      const [me] = await tx.select({ slug: orgs.slug }).from(orgs)
+        .where(eq(orgs.id, orgId)).limit(1);
+      if (!me || me.slug !== inv.to_org_slug) throw new ForbiddenError();
+      // 3) Idempotent membership insert (ON CONFLICT against slice-4 uniq).
+      await tx.execute(drizzleSql`
+        INSERT INTO circle_members (circle_id, org_id)
+        VALUES (${inv.circle_id as number}, ${orgId})
+        ON CONFLICT (circle_id, org_id) DO NOTHING
+      `);
+      // 4) Mark accepted.
+      await tx
+        .update(circleInvitations)
+        .set({ status: "accepted", respondedAt: new Date() })
+        .where(eq(circleInvitations.id, inv.id as number));
+    });
+  });
+}
+
+// declineInvitation, removeOrgFromCircle, leaveCircle land in B7..B9.
