@@ -3,7 +3,8 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db";
 import { deals, dealAttachments, circles, circleMembers } from "@/db/schema";
-import { getAttachmentsForDeal } from "@/db/dealAttachments";
+import { getAttachmentsForDeal, countAttachmentsByKind, resolveSignedUrl } from "@/db/dealAttachments";
+import { __setTestBlobStore, type BlobStore } from "@/lib/storage/blobStore";
 
 let db: Db;
 beforeAll(async () => {
@@ -95,5 +96,67 @@ describe("getAttachmentsForDeal — visibility truth table", () => {
     ]);
     const rows = await getAttachmentsForDeal(db, 1, dealId);
     expect(rows.map((r) => r.storageKey)).toEqual(["c1", "i1", "i2"]);
+  });
+});
+
+describe("countAttachmentsByKind", () => {
+  it("returns per-kind counts", async () => {
+    const dealId = await seedDeal(1);
+    await db.insert(dealAttachments).values([
+      { dealId, uploadedByOrgId: 1, kind: "image", storageKey: "i1",
+        mimeType: "image/jpeg", sizeBytes: 1, altText: null },
+      { dealId, uploadedByOrgId: 1, kind: "image", storageKey: "i2",
+        mimeType: "image/jpeg", sizeBytes: 1, altText: null },
+      { dealId, uploadedByOrgId: 1, kind: "cert", storageKey: "c1",
+        mimeType: "application/pdf", sizeBytes: 1, altText: null },
+    ]);
+    expect(await countAttachmentsByKind(db, dealId)).toEqual({ image: 2, cert: 1 });
+  });
+
+  it("returns zeros for a deal with no attachments", async () => {
+    const dealId = await seedDeal(1);
+    expect(await countAttachmentsByKind(db, dealId)).toEqual({ image: 0, cert: 0 });
+  });
+});
+
+describe("resolveSignedUrl", () => {
+  it("returns the signed URL from the store when caller can see the deal", async () => {
+    const stub: BlobStore = {
+      set: async () => {},
+      delete: async () => {},
+      getSignedUrl: async (key) => `https://stub/${key}?signed=1`,
+    };
+    __setTestBlobStore(stub);
+    try {
+      const dealId = await seedDeal(1);
+      const [a] = await db.insert(dealAttachments).values({
+        dealId, uploadedByOrgId: 1, kind: "image",
+        storageKey: "org/1/deal/x/image/abc.jpg",
+        mimeType: "image/jpeg", sizeBytes: 1, altText: null,
+      }).returning();
+      const url = await resolveSignedUrl(db, 1, dealId, a.id);
+      expect(url).toBe("https://stub/org/1/deal/x/image/abc.jpg?signed=1");
+    } finally {
+      __setTestBlobStore(null);
+    }
+  });
+
+  it("throws when caller cannot see the deal", async () => {
+    const stub: BlobStore = {
+      set: async () => {},
+      delete: async () => {},
+      getSignedUrl: async () => "not-reached",
+    };
+    __setTestBlobStore(stub);
+    try {
+      const dealId = await seedDeal(1);
+      const [a] = await db.insert(dealAttachments).values({
+        dealId, uploadedByOrgId: 1, kind: "image",
+        storageKey: "k", mimeType: "image/jpeg", sizeBytes: 1, altText: null,
+      }).returning();
+      await expect(resolveSignedUrl(db, 999, dealId, a.id)).rejects.toThrow();
+    } finally {
+      __setTestBlobStore(null);
+    }
   });
 });

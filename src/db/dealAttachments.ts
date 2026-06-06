@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { type Db } from "@/db/client";
 import { isDemoMode } from "@/lib/demo/mode";
+import { getBlobStore } from "@/lib/storage/blobStore";
 
 function rowsOf<T>(res: unknown): T[] {
   return (res as { rows: T[] }).rows;
@@ -91,4 +92,69 @@ export async function getAttachmentsForDeal(
     altText: r.alt_text,
     createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
   }));
+}
+
+/** Returns per-kind counts for a deal, used by uploadDealAttachment to
+ *  enforce per-deal kind caps. */
+export async function countAttachmentsByKind(
+  db: Db,
+  dealId: number,
+): Promise<{ image: number; cert: number }> {
+  if (isDemoMode()) return { image: 0, cert: 0 };
+  const res = await db.execute(sql`
+    SELECT
+      COUNT(*) FILTER (WHERE kind = 'image')::int AS image,
+      COUNT(*) FILTER (WHERE kind = 'cert')::int AS cert
+    FROM deal_attachments
+    WHERE deal_id = ${dealId}
+  `);
+  const [row] = rowsOf<{ image: number; cert: number }>(res);
+  return { image: row?.image ?? 0, cert: row?.cert ?? 0 };
+}
+
+/**
+ * Resolves a short-TTL signed URL for an attachment, after verifying
+ * the caller can see the parent deal.
+ *
+ * Throws on visibility failure (caller should catch and map to ForbiddenError
+ * if reached from a server action — but normally callers are RSC server
+ * components that resolve only attachments returned by getAttachmentsForDeal,
+ * so the visibility check here is belt-and-suspenders).
+ *
+ * Demo-mode short-circuit: returns the DEMO_DEAL_ATTACHMENTS row's
+ * publicCdnUrl. The RSC seed layer handles this directly so this branch
+ * may never execute in practice — but defensive in case a test seam path
+ * reaches here.
+ */
+export async function resolveSignedUrl(
+  db: Db,
+  viewerOrgId: number,
+  dealId: number,
+  attachmentId: number,
+  ttlSeconds: number = 900,
+): Promise<string> {
+  if (isDemoMode()) {
+    throw new Error(
+      "resolveSignedUrl called in demo mode — RSC should read DEMO_DEAL_ATTACHMENTS.publicCdnUrl directly",
+    );
+  }
+  const res = await db.execute(sql`
+    SELECT a.storage_key
+    FROM deal_attachments a
+    JOIN deals d ON d.id = a.deal_id
+    WHERE a.id = ${attachmentId} AND a.deal_id = ${dealId}
+      AND (
+        d.org_id = ${viewerOrgId}
+        OR (
+          d.visibility_circle_id IS NOT NULL
+          AND d.visibility_circle_id IN (
+            SELECT circle_id FROM circle_members WHERE org_id = ${viewerOrgId}
+          )
+        )
+      )
+    LIMIT 1
+  `);
+  const [row] = rowsOf<{ storage_key: string }>(res);
+  if (!row) throw new Error("Attachment not visible");
+  return getBlobStore().getSignedUrl(row.storage_key, { ttl: ttlSeconds });
 }
