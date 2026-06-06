@@ -25,6 +25,8 @@ import {
 } from "./bidValidation";
 import {
   uploadAttachmentMetaInput,
+  deleteAttachmentInput,
+  type DeleteAttachmentInput,
 } from "./attachmentValidation";
 import { detectKindFromBytes } from "./attachmentMime";
 import { getBlobStore } from "@/lib/storage/blobStore";
@@ -540,4 +542,49 @@ export async function uploadDealAttachment(formData: FormData): Promise<ActionRe
   revalidatePath("/");
   revalidatePath("/deals");
   return { ok: true };
+}
+
+/** Server action: owner-only delete of a single attachment.
+ *  Uses runWithUser (JSON input, ForbiddenError → "Forbidden"). Delete order
+ *  is reversed from upload: blob FIRST, then DB row. If the blob delete
+ *  fails, we leave the DB row in place so a future reconciliation sweep
+ *  can find it — better orphan-blob than orphan-DB-row pointing at a
+ *  nonexistent blob. */
+export async function deleteDealAttachment(raw: unknown): Promise<ActionResult> {
+  return runWithUser(deleteAttachmentInput, raw, async (input: DeleteAttachmentInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        attachmentId: dealAttachments.id,
+        storageKey: dealAttachments.storageKey,
+        dealOwnerOrgId: deals.orgId,
+      })
+      .from(dealAttachments)
+      .innerJoin(deals, eq(deals.id, dealAttachments.dealId))
+      .where(eq(dealAttachments.id, input.attachmentId))
+      .limit(1);
+    if (!row) throw new ForbiddenError();
+    if (row.dealOwnerOrgId !== orgId) throw new ForbiddenError();
+
+    // Delete blob FIRST. If blob delete fails, the DB row stays and a future
+    // GC sweep can reconcile. Better orphan-blob than orphan-DB-row pointing
+    // at a nonexistent blob.
+    const store = getBlobStore();
+    try {
+      await store.delete(row.storageKey);
+    } catch (e) {
+      console.error("[deals action] blob delete failed for", row.storageKey, e);
+      throw e;
+    }
+    // Defense-in-depth: WHERE pins the row's uploaded_by_org_id so a race
+    // between SELECT and DELETE cannot remove a row that doesn't belong to
+    // the caller. The owner check above (dealOwnerOrgId === orgId) already
+    // gates this; the extra WHERE clause is belt-and-suspenders.
+    await d
+      .delete(dealAttachments)
+      .where(and(
+        eq(dealAttachments.id, input.attachmentId),
+        eq(dealAttachments.uploadedByOrgId, orgId),
+      ));
+  });
 }

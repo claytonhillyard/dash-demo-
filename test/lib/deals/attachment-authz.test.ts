@@ -9,7 +9,7 @@ vi.mock("@/lib/auth/requireSession", () => ({
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
 import { deals, dealAttachments, circles, circleMembers } from "@/db/schema";
-import { uploadDealAttachment, __setTestDb } from "@/lib/deals/actions";
+import { uploadDealAttachment, deleteDealAttachment, __setTestDb } from "@/lib/deals/actions";
 import { requireSession } from "@/lib/auth/requireSession";
 import { __setTestBlobStore, type BlobStore } from "@/lib/storage/blobStore";
 
@@ -137,5 +137,38 @@ describe("uploadDealAttachment — MIME validation", () => {
       buildFormData({ dealId, kind: "image", bodyBytes: new Uint8Array([0xff, 0xd8]) }),
     );
     expect(res).toEqual({ ok: false, error: "Forbidden" });
+  });
+});
+
+describe("deleteDealAttachment — authz", () => {
+  it("allows the deal owner to delete an attachment + deletes the blob", async () => {
+    const dealId = await seedDeal(1);
+    const [a] = await db.insert(dealAttachments).values({
+      dealId, uploadedByOrgId: 1, kind: "image",
+      storageKey: "k", mimeType: "image/jpeg", sizeBytes: 1, altText: null,
+    }).returning();
+    storeDeletes = [];
+    const res = await deleteDealAttachment({ attachmentId: a.id });
+    expect(res).toEqual({ ok: true });
+    expect(storeDeletes).toEqual(["k"]);
+    const rows = await db.select().from(dealAttachments);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("forbids a non-owner from deleting (blob untouched)", async () => {
+    const dealId = await seedDeal(1);
+    const [a] = await db.insert(dealAttachments).values({
+      dealId, uploadedByOrgId: 1, kind: "image",
+      storageKey: "k2", mimeType: "image/jpeg", sizeBytes: 1, altText: null,
+    }).returning();
+    storeDeletes = [];
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "stranger", orgId: 888,
+    });
+    const res = await deleteDealAttachment({ attachmentId: a.id });
+    expect(res).toEqual({ ok: false, error: "Forbidden" });
+    expect(storeDeletes).toEqual([]);
+    const rows = await db.select().from(dealAttachments);
+    expect(rows).toHaveLength(1); // unchanged
   });
 });
