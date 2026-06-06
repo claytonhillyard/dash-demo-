@@ -153,7 +153,14 @@ export async function getTodaysBidsForOwner(
     JOIN deals d ON d.id = b.deal_id
     WHERE d.org_id = ${viewerOrgId}
       AND b.status = 'pending'
-      AND b.created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+      -- The trailing "AT TIME ZONE 'UTC'" re-wraps the truncated value as a
+      -- timestamptz. Without it, the RHS is a timestamp WITHOUT time zone and
+      -- the comparison with b.created_at (timestamptz) uses the SESSION TZ to
+      -- reinterpret it. Under a non-UTC session (e.g. PDT), the cutoff slides
+      -- by the offset and bids between 00:00 UTC and session-tz-midnight are
+      -- wrongly excluded. Reproduced during slice-17 Phase A when the test
+      -- suite happened to run shortly after UTC midnight.
+      AND b.created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
     ORDER BY b.created_at DESC
     LIMIT 30
   `);
