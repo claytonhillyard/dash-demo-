@@ -59,10 +59,13 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export async function createCircle(raw: unknown): Promise<ActionResult> {
   return runWithUser(createCircleInput, raw, async (input: CreateCircleInput, _user, orgId) => {
     await db().transaction(async (tx) => {
+      // TODO(slice-4c review): plan used `.returning({ id: circles.id })`, but
+      // Drizzle's TS overload only resolves with no-arg .returning() in this
+      // chain. Match the slice-5 workaround.
       const [c] = await tx
         .insert(circles)
         .values({ name: input.name, slug: input.slug, ownerOrgId: orgId })
-        .returning({ id: circles.id });
+        .returning();
       await tx
         .insert(circleMembers)
         .values({ circleId: c.id, orgId });

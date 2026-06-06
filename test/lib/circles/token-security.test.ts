@@ -20,14 +20,14 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 describe("token security", () => {
   it("inviteOrgToCircle generates a v4-shaped UUID token", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await inviteOrgToCircle({ circleId: c.id, toOrgSlug: "fixture" });
     const [inv] = await db.select().from(circleInvitations);
     expect(inv.token).toMatch(UUID_RE);
   });
 
   it("two consecutive invites produce different tokens", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await inviteOrgToCircle({ circleId: c.id, toOrgSlug: "a" });
     await inviteOrgToCircle({ circleId: c.id, toOrgSlug: "b" });
     const rows = await db.select({ token: circleInvitations.token }).from(circleInvitations);
@@ -35,7 +35,7 @@ describe("token security", () => {
   });
 
   it("Forbidden rejection does NOT log the token to console.warn / console.error", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await inviteOrgToCircle({ circleId: c.id, toOrgSlug: "partner" });
     const [inv] = await db.select().from(circleInvitations);
     const secretToken = inv.token;

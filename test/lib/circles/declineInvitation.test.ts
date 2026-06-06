@@ -27,7 +27,7 @@ const NX = "no-such-token-xyz-EEEEEEE";
 
 describe("declineInvitation", () => {
   it("happy path: status → declined, no membership row written", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "fixture",
       token: T1, expiresAt: new Date(Date.now() + 60 * 60 * 1000),
@@ -41,7 +41,7 @@ describe("declineInvitation", () => {
   });
 
   it("wrong-slug session: Forbidden, status stays pending", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "partner",
       token: T2, expiresAt: new Date(Date.now() + 60 * 60 * 1000),
@@ -53,7 +53,7 @@ describe("declineInvitation", () => {
   });
 
   it("already declined: Forbidden", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "fixture",
       token: T3, expiresAt: new Date(Date.now() + 60 * 60 * 1000),
@@ -63,7 +63,7 @@ describe("declineInvitation", () => {
   });
 
   it("expired: Forbidden", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "fixture",
       token: TX, expiresAt: new Date(Date.now() - 1000),

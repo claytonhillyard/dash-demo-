@@ -19,7 +19,7 @@ afterAll(async () => { await __setTestDb(null); await closeSharedDb(); });
 
 describe("removeOrgFromCircle action", () => {
   it("owner removes a member: row gone", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleMembers).values([{ circleId: c.id, orgId: 1 }, { circleId: c.id, orgId: 888 }]);
     const res = await removeOrgFromCircle({ circleId: c.id, orgId: 888 });
     expect(res).toEqual({ ok: true });
@@ -28,7 +28,7 @@ describe("removeOrgFromCircle action", () => {
   });
 
   it("non-owner attempts: Forbidden", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 999 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 999 }).returning();
     await db.insert(circleMembers).values({ circleId: c.id, orgId: 888 });
     const res = await removeOrgFromCircle({ circleId: c.id, orgId: 888 });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
@@ -38,7 +38,7 @@ describe("removeOrgFromCircle action", () => {
   });
 
   it("cannot remove the owner: Forbidden", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleMembers).values({ circleId: c.id, orgId: 1 });
     const res = await removeOrgFromCircle({ circleId: c.id, orgId: 1 });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
@@ -50,7 +50,7 @@ describe("removeOrgFromCircle action", () => {
   });
 
   it("idempotent: removing a non-member is ok=true with zero deleted rows", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleMembers).values({ circleId: c.id, orgId: 1 });
     const res = await removeOrgFromCircle({ circleId: c.id, orgId: 888 });
     expect(res).toEqual({ ok: true });

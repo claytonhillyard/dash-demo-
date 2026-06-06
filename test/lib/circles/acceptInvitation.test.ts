@@ -28,7 +28,7 @@ afterAll(async () => { await __setTestDb(null); await closeSharedDb(); });
 async function makePendingInvite(): Promise<{ circleId: number; token: string }> {
   const [c] = await db.insert(circles)
     .values({ name: "Trusted", slug: "trusted", ownerOrgId: 1 })
-    .returning({ id: circles.id });
+    .returning();
   const token = `tok-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
   await db.insert(circleInvitations).values({
     circleId: c.id, fromOrgId: 1, toOrgSlug: "fixture",
@@ -56,7 +56,7 @@ describe("acceptInvitation — slug cross-check (THE security gate)", () => {
   it("rejects when session.orgId's slug does not match invite.to_org_slug", async () => {
     const [c] = await db.insert(circles)
       .values({ name: "Trusted", slug: "trusted", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     const token = `tok-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
     // Invite addressed to "partner" (org 888 in fixture), but session is org 999 (slug "fixture").
     await db.insert(circleInvitations).values({
@@ -77,7 +77,7 @@ describe("acceptInvitation — expiry / already-responded / nonexistent", () => 
   it("rejects an expired invite (uniform Forbidden)", async () => {
     const [c] = await db.insert(circles)
       .values({ name: "Trusted", slug: "trusted", ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     const token = `tok-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
     await db.insert(circleInvitations).values({
       circleId: c.id, fromOrgId: 1, toOrgSlug: "fixture",

@@ -19,7 +19,7 @@ afterAll(async () => { await __setTestDb(null); await closeSharedDb(); });
 
 describe("leaveCircle", () => {
   it("member leaves: row gone", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 999 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 999 }).returning();
     await db.insert(circleMembers).values([{ circleId: c.id, orgId: 999 }, { circleId: c.id, orgId: 1 }]);
     const res = await leaveCircle({ circleId: c.id });
     expect(res).toEqual({ ok: true });
@@ -28,7 +28,7 @@ describe("leaveCircle", () => {
   });
 
   it("owner cannot leave their own circle: Forbidden", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 1 }).returning();
     await db.insert(circleMembers).values({ circleId: c.id, orgId: 1 });
     const res = await leaveCircle({ circleId: c.id });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
@@ -41,7 +41,7 @@ describe("leaveCircle", () => {
   });
 
   it("idempotent: leaving a circle the caller is not in returns ok=true", async () => {
-    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 999 }).returning({ id: circles.id });
+    const [c] = await db.insert(circles).values({ name: "T", slug: "t", ownerOrgId: 999 }).returning();
     await db.insert(circleMembers).values({ circleId: c.id, orgId: 999 });
     const res = await leaveCircle({ circleId: c.id });
     expect(res).toEqual({ ok: true });

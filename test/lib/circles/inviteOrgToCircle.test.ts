@@ -21,7 +21,7 @@ afterAll(async () => { await __setTestDb(null); await closeSharedDb(); });
 async function makeCircle(owner = 1, slug = "trusted"): Promise<number> {
   const [c] = await db.insert(circles)
     .values({ name: "Trusted", slug, ownerOrgId: owner })
-    .returning({ id: circles.id });
+    .returning();
   return c.id;
 }
 
