@@ -362,6 +362,58 @@ export function getSeedDealsVisibleTo(orgId: number): DealRow[] {
   );
 }
 
+// --- Slice 4c demo seed: pending invite + owned-circle helper ---
+
+/** Demo-only org id for the recipient of the seeded pending invite.
+ *  Outside the slice-4 partner range (501-503), high enough to read as
+ *  fixture-only. The org itself does NOT exist in any membership graph —
+ *  the recipient is, by definition, "not yet a member". */
+export const DEMO_ARGYLE_ORG_ID = 504;
+
+export interface SeedInvitation {
+  id: number;
+  circleId: number;
+  circleName: string;
+  fromOrgId: number;
+  fromOrgName: string;
+  toOrgSlug: string;
+  /** Static demo token — never produced by crypto.randomUUID() in demo mode.
+   *  The demo UI never displays the token (same as real invites). */
+  token: string;
+  status: "pending";
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+const DEMO_INVITE_ID = 301;
+// Far enough in the future that the demo UI always shows the invite as
+// pending (demo time is frozen at DEMO_REF for deals; this expiry sits
+// 7 days after now() at module-eval — sufficient for any preview deploy).
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function getSeedPendingInvitesForOrg(orgId: number): SeedInvitation[] {
+  if (orgId !== DEMO_AIYA_ORG_ID) return [];
+  return [
+    {
+      id: DEMO_INVITE_ID,
+      circleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      circleName: "AIYA Trusted Partners",
+      fromOrgId: DEMO_AIYA_ORG_ID,
+      fromOrgName: "AIYA Designs",
+      toOrgSlug: "argyle-mining",
+      token: "demo-static-token-do-not-display",
+      status: "pending",
+      createdAt: new Date(Date.now() - 60 * 60 * 1000), // 1h ago
+      expiresAt: new Date(Date.now() + SEVEN_DAYS_MS - 60 * 60 * 1000),
+    },
+  ];
+}
+
+export function getSeedOwnedCirclesForOrg(orgId: number): SeedCircle[] {
+  if (orgId !== DEMO_AIYA_ORG_ID) return [];
+  return getSeedCircles();
+}
+
 // --- Slice 5 demo seed: weekly website KPI snapshots ---
 import type { WebsiteSnapshotRow } from "@/db/website";
 
