@@ -299,3 +299,58 @@ describe("getSeedWebsiteSnapshotTrend", () => {
     expect(getSeedWebsiteSnapshotTrend(7777)).toEqual([]);
   });
 });
+
+import {
+  DEMO_ARGYLE_ORG_ID,
+  getSeedPendingInvitesForOrg,
+  getSeedOwnedCirclesForOrg,
+} from "@/lib/demo/seed";
+
+describe("DEMO_ARGYLE_ORG_ID", () => {
+  it("is a numeric id outside the partner-org range", () => {
+    expect(typeof DEMO_ARGYLE_ORG_ID).toBe("number");
+    expect(DEMO_ARGYLE_ORG_ID).toBeGreaterThan(503); // beyond the slice-4 partner range
+  });
+});
+
+describe("getSeedPendingInvitesForOrg", () => {
+  it("returns one pending invite from AIYA to argyle-mining", () => {
+    const invites = getSeedPendingInvitesForOrg(DEMO_AIYA_ORG_ID);
+    expect(invites).toHaveLength(1);
+    expect(invites[0]).toMatchObject({
+      circleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      circleName: "AIYA Trusted Partners",
+      fromOrgId: DEMO_AIYA_ORG_ID,
+      fromOrgName: "AIYA Designs",
+      toOrgSlug: "argyle-mining",
+      status: "pending",
+    });
+    // Token is present but is a static demo string — the UI never displays it.
+    expect(typeof invites[0].token).toBe("string");
+    expect(invites[0].token.length).toBeGreaterThan(0);
+    // Expiry is in the future so the demo UI shows the invite as pending.
+    expect(invites[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("returns [] for any non-AIYA org", () => {
+    expect(getSeedPendingInvitesForOrg(999)).toEqual([]);
+    expect(getSeedPendingInvitesForOrg(DEMO_PARTNER_ORG_IDS.MEHTA)).toEqual([]);
+  });
+});
+
+describe("getSeedOwnedCirclesForOrg", () => {
+  it("returns the demo Trusted Partners circle for AIYA", () => {
+    const owned = getSeedOwnedCirclesForOrg(DEMO_AIYA_ORG_ID);
+    expect(owned).toHaveLength(1);
+    expect(owned[0]).toMatchObject({
+      id: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      name: "AIYA Trusted Partners",
+      ownerOrgId: DEMO_AIYA_ORG_ID,
+    });
+  });
+
+  it("returns [] for any non-AIYA org", () => {
+    expect(getSeedOwnedCirclesForOrg(999)).toEqual([]);
+    expect(getSeedOwnedCirclesForOrg(DEMO_PARTNER_ORG_IDS.MEHTA)).toEqual([]);
+  });
+});

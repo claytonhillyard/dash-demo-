@@ -1,78 +1,57 @@
 // @vitest-environment node
 //
-// SLICE-4C RACE SENTINEL
-// ----------------------
-// This test asserts that no membership-mutation helpers exist in the
-// codebase today. Slice 4 ships *no* API to add or remove circle members
-// (memberships are seeded via SQL or the demo seed file). That means the
-// "isOrgMemberOfCircle check → INSERT INTO deals" pattern in postDeal has
-// no race window in slice 4 — there is no concurrent membership mutation
-// that could invalidate the check between read and write.
+// SLICE-4C RACE RESOLUTION SENTINEL (repurposed in slice 4c)
+// ----------------------------------------------------------
+// Slice 4 armed this sentinel to detect the moment slice 4c shipped
+// membership-mutation helpers. Slice 4c lands them — and chooses the
+// FOR UPDATE transaction + ON CONFLICT idempotent insert mitigation per
+// spec §11.1. The assertions below LOCK IN the chosen mitigation so a
+// future refactor cannot silently regress it.
 //
-// When slice 4c ("Circle Onboarding") ships, it will introduce
-// addOrgToCircle / removeOrgFromCircle helpers. At that moment THIS TEST
-// FAILS, and the slice-4c author MUST choose one of:
-//   (a) accept the race and document the user-visible window in the
-//       postDeal call site,
-//   (b) re-check membership inside a transaction wrapping the INSERT,
-//   (c) take a `SELECT … FOR UPDATE` lock on the membership row before
-//       the check.
-// Do NOT delete this test to "fix" the failure — the failure IS the
-// obligation. Mark the chosen mitigation in postDeal + this sentinel's
-// docblock, then update the test to assert the chosen mitigation exists.
+// If a maintainer rips out the FOR UPDATE clause or the ON CONFLICT
+// clause without consciously redesigning, this test fails and forces
+// the same "choose a mitigation" conversation that slice 4's sentinel
+// forced. Do NOT delete or weaken these assertions to "fix" a failure;
+// re-do the design.
 //
-// See: docs/superpowers/specs/2026-05-28-aiya-circles-slice-4-design.md §8.9
+// See: docs/superpowers/specs/2026-06-05-aiya-circle-onboarding-slice-4c-design.md §11.1
 
 import { describe, it, expect } from "vitest";
 
-describe("slice-4c race sentinel — fails when membership mutation lands", () => {
-  it("there is no membership-mutation module (slice 4c has not landed yet)", async () => {
-    // Vitest treats a failed import as a rejected promise. We use a
-    // dynamic import wrapped in a try/catch so the assertion phrasing
-    // is "module not found" regardless of bundler error shape.
-    let modulePresent = false;
-    try {
-      // TODO(slice-4 review): the plan code uses a literal dynamic import
-      // string, but tsc tries to resolve it and errors because the module
-      // doesn't exist yet (which is the entire point of this sentinel).
-      // We defeat the resolver with a runtime-built path; same runtime
-      // behavior — when slice 4c lands the module, the import resolves
-      // and the sentinel fires.
-      const modulePath = ["@/lib/circles", "membership-mutations"].join("/");
-      const mod = await import(/* @vite-ignore */ modulePath);
-      // If the module exists, check whether it exports either of the
-      // expected helper names — that's the actual slice-4c signal.
-      modulePresent =
-        typeof (mod as Record<string, unknown>).addOrgToCircle === "function" ||
-        typeof (mod as Record<string, unknown>).removeOrgFromCircle === "function";
-    } catch {
-      modulePresent = false;
-    }
-    expect(
-      modulePresent,
-      [
-        "Slice-4c membership-mutation helpers detected.",
-        "The 'isOrgMemberOfCircle check → INSERT INTO deals' race in postDeal",
-        "now has a real window. Choose a mitigation (transaction re-check,",
-        "FOR UPDATE lock, or accepted-race documentation) and update both",
-        "src/lib/deals/actions.ts::postDeal AND this sentinel before merging.",
-        "See: docs/superpowers/specs/2026-05-28-aiya-circles-slice-4-design.md §8.9",
-      ].join("\n"),
-    ).toBe(false);
+describe("slice-4c race resolution sentinel — locks in the chosen mitigation", () => {
+  it("membership-mutations module exists and exports addOrgToCircle + removeOrgFromCircle", async () => {
+    const modulePath = ["@/lib/circles", "membership-mutations"].join("/");
+    const mod = await import(/* @vite-ignore */ modulePath);
+    expect(typeof (mod as Record<string, unknown>).addOrgToCircle).toBe("function");
+    expect(typeof (mod as Record<string, unknown>).removeOrgFromCircle).toBe("function");
   });
 
-  it("isOrgMemberOfCircle still does NOT use a transaction (slice-4 assumption)", async () => {
-    // Lightweight code-shape assertion: the helper file does not import
-    // 'transaction' or use a SELECT FOR UPDATE. If a future maintainer
-    // adds either without updating this sentinel, the test forces a
-    // conscious review.
+  it("acceptInvitation closes the check-then-insert race with FOR UPDATE inside a transaction", async () => {
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
     const src = await fs.readFile(
-      path.resolve(process.cwd(), "src/lib/circles/membership.ts"),
+      path.resolve(process.cwd(), "src/lib/circles/actions.ts"),
       "utf8",
     );
-    expect(src).not.toMatch(/FOR\s+UPDATE/i);
-    expect(src).not.toMatch(/\btransaction\s*\(/);
+    expect(src).toMatch(/FOR\s+UPDATE/i);
+    expect(src).toMatch(/\.transaction\s*\(/);
+  });
+
+  it("circle_members INSERT goes through ON CONFLICT (circle_id, org_id) DO NOTHING", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const actions = await fs.readFile(
+      path.resolve(process.cwd(), "src/lib/circles/actions.ts"),
+      "utf8",
+    );
+    const mutations = await fs.readFile(
+      path.resolve(process.cwd(), "src/lib/circles/membership-mutations.ts"),
+      "utf8",
+    );
+    // At least one of the two files must contain the canonical ON CONFLICT
+    // clause. (Both do in practice — actions.ts inlines it in the accept
+    // transaction; membership-mutations.ts exports it as addOrgToCircle.)
+    const combined = actions + "\n" + mutations;
+    expect(combined).toMatch(/ON\s+CONFLICT\s*\(\s*circle_id\s*,\s*org_id\s*\)\s+DO\s+NOTHING/i);
   });
 });

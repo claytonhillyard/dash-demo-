@@ -1,17 +1,24 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { circles, circleMembers } from "@/db/schema";
+import { circles, circleMembers, circleInvitations } from "@/db/schema";
 import {
   getCircleIdsForOrg,
   getCirclesForOrg,
   getCircleNamesForOrg,
+  getOwnedCirclesForOrg,
+  listCircleMemberOrgs,
+  getPendingInvitesIssuedByOrg,
+  getPendingInvitesForSlug,
 } from "@/lib/circles/queries";
 import {
   DEMO_AIYA_ORG_ID,
   DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
 } from "@/lib/demo/seed";
+
+const fiveMinFromNow = () => new Date(Date.now() + 5 * 60 * 1000);
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); });
@@ -141,5 +148,96 @@ describe("queries — demo mode", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe("getOwnedCirclesForOrg", () => {
+  it("returns only circles owned by the caller", async () => {
+    const a = await makeCircle("A", "a", 1);
+    const b = await makeCircle("B", "b", 999);
+    await db.insert(circleMembers).values({ circleId: b, orgId: 1 }); // 1 is a member but not owner
+
+    const owned = await getOwnedCirclesForOrg(db, 1);
+    expect(owned.map((c) => c.id)).toEqual([a]);
+  });
+
+  it("returns [] when the caller owns no circles", async () => {
+    await db.insert(circles).values({ name: "A", slug: "a", ownerOrgId: 999 });
+    expect(await getOwnedCirclesForOrg(db, 1)).toEqual([]);
+  });
+});
+
+describe("listCircleMemberOrgs", () => {
+  it("returns the joined org rows for a circle the viewer is in", async () => {
+    const c = await makeCircle("C", "c", 1);
+    await db.insert(circleMembers).values([
+      { circleId: c, orgId: 1 },
+      { circleId: c, orgId: 888 },
+    ]);
+    const members = await listCircleMemberOrgs(db, c, 1);
+    const ids = members.map((m) => m.orgId).sort();
+    expect(ids).toEqual([1, 888]);
+    const aiya = members.find((m) => m.orgId === 1);
+    expect(aiya?.name).toBe("AIYA Designs");
+  });
+
+  it("returns [] when the viewer is NOT a member of the circle (defense-in-depth)", async () => {
+    const c = await makeCircle("C", "c", 999);
+    await db.insert(circleMembers).values({ circleId: c, orgId: 999 });
+    // viewer is org 1, NOT a member of c.
+    expect(await listCircleMemberOrgs(db, c, 1)).toEqual([]);
+  });
+});
+
+describe("getPendingInvitesIssuedByOrg", () => {
+  it("returns the outbox with circleName + fromOrgName joined", async () => {
+    const c = await makeCircle("Trusted", "trusted", 1);
+    await db.insert(circleInvitations).values({
+      circleId: c, fromOrgId: 1, toOrgSlug: "argyle-mining",
+      token: "tok-1", expiresAt: fiveMinFromNow(),
+    });
+    const rows = await getPendingInvitesIssuedByOrg(db, 1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      circleId: c,
+      circleName: "Trusted",
+      fromOrgId: 1,
+      fromOrgName: "AIYA Designs",
+      toOrgSlug: "argyle-mining",
+      status: "pending",
+    });
+  });
+
+  it("does NOT return non-pending invites", async () => {
+    const c = await makeCircle("C", "c", 1);
+    const [inv] = await db.insert(circleInvitations).values({
+      circleId: c, fromOrgId: 1, toOrgSlug: "alpha",
+      token: "tok-1", expiresAt: fiveMinFromNow(),
+    }).returning();
+    await db.update(circleInvitations).set({ status: "declined" }).where(eq(circleInvitations.id, inv.id));
+
+    expect(await getPendingInvitesIssuedByOrg(db, 1)).toEqual([]);
+  });
+});
+
+describe("getPendingInvitesForSlug", () => {
+  it("returns invites addressed to the given slug, joined with circle + inviter org", async () => {
+    const c = await makeCircle("Trusted", "trusted", 1);
+    await db.insert(circleInvitations).values({
+      circleId: c, fromOrgId: 1, toOrgSlug: "fixture",
+      token: "tok-x", expiresAt: fiveMinFromNow(),
+    });
+    const rows = await getPendingInvitesForSlug(db, "fixture");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      circleName: "Trusted",
+      fromOrgName: "AIYA Designs",
+      toOrgSlug: "fixture",
+      status: "pending",
+    });
+  });
+
+  it("returns [] for a slug with no pending invites", async () => {
+    expect(await getPendingInvitesForSlug(db, "nobody")).toEqual([]);
   });
 });
