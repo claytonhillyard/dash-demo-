@@ -70,5 +70,48 @@ export async function createCircle(raw: unknown): Promise<ActionResult> {
   });
 }
 
-// inviteOrgToCircle, acceptInvitation, declineInvitation, removeOrgFromCircle,
-// leaveCircle land in B5..B9.
+// TODO(slice-4c review): plan listed only top-level `.code` check; in practice
+// Drizzle wraps driver errors in DrizzleQueryError and exposes the PG SQLSTATE
+// on `.cause.code`. Checking both keeps Neon (pg) compatibility and unblocks
+// the pglite test path.
+function isUniqueViolation(e: unknown): boolean {
+  // PG SQLSTATE 23505 = unique_violation.
+  if (typeof e !== "object" || e === null) return false;
+  const top = (e as { code?: string }).code;
+  if (top === "23505") return true;
+  const cause = (e as { cause?: { code?: string } }).cause;
+  return cause?.code === "23505";
+}
+
+export async function inviteOrgToCircle(raw: unknown): Promise<ActionResult> {
+  return runWithUser(inviteOrgToCircleInput, raw, async (input: InviteOrgToCircleInput, _user, orgId) => {
+    const d = db();
+    // Owner-only gate.
+    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId }).from(circles)
+      .where(eq(circles.id, input.circleId)).limit(1);
+    if (!c || c.ownerOrgId !== orgId) throw new ForbiddenError();
+    // Self-invite: no-op if the target slug is the caller's own.
+    const [me] = await d.select({ slug: orgs.slug }).from(orgs).where(eq(orgs.id, orgId)).limit(1);
+    if (me && me.slug === input.toOrgSlug) return;
+    // Generate token + expiry server-side.
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+    try {
+      await d.insert(circleInvitations).values({
+        circleId: input.circleId,
+        fromOrgId: orgId,
+        toOrgSlug: input.toOrgSlug,
+        token,
+        expiresAt,
+      });
+    } catch (e) {
+      // Partial unique index throws on duplicate-pending. Translate to
+      // Forbidden — we don't tell the inviter "an invite already exists".
+      if (isUniqueViolation(e)) throw new ForbiddenError();
+      throw e;
+    }
+  });
+}
+
+// acceptInvitation, declineInvitation, removeOrgFromCircle,
+// leaveCircle land in B6..B9.
