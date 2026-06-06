@@ -27,18 +27,27 @@ export function getBlobStore(): BlobStore {
       await real.set(k, d);
     },
     delete: (k) => real.delete(k),
-    // ⚠ The real SDK's signed-URL method shape has shifted across versions.
-    // Plan referenced `getDownloadUrl({ expiry })` on v8; @netlify/blobs v10
-    // (currently installed) exposes no public signed-URL method on Store. The
-    // production path here is a placeholder — Phase B/C will likely replace
-    // this with a Next.js route handler that streams via Store.get() while
-    // signing access with a short-TTL HMAC. Tests inject __setTestBlobStore
-    // and never exercise this branch.
-    getSignedUrl: async (k, opts) => {
-      // @ts-expect-error — v10 SDK shape may differ; production-only path,
-      // not exercised by tests. See comment block above.
-      const url: string = await real.getDownloadUrl(k, { expiry: opts?.ttl ?? 900 });
-      return url;
+    // ⚠ @netlify/blobs v10 exposes NO public signed-URL method on Store.
+    // (v8 had `getDownloadUrl({ expiry })`; v10 removed it.) The production
+    // path here will be a Next.js route handler that streams via Store.get()
+    // while signing access with a short-TTL HMAC — Phase C work.
+    //
+    // For now, this branch throws a CLEAR runtime error rather than a cryptic
+    // `TypeError: real.getDownloadUrl is not a function`. Tests inject a stub
+    // via __setTestBlobStore and never reach this code. If you see this
+    // thrown in production, it means a Phase C consumer (RSC, server action)
+    // forgot to route through the upcoming route handler.
+    getSignedUrl: async (_k, _opts) => {
+      // Acknowledge the unused `real` reference so tsc doesn't strip the lazy
+      // store construction (also useful — the construction itself is the
+      // smoke test that @netlify/blobs is configured).
+      void real;
+      throw new Error(
+        "BlobStore.getSignedUrl: no signed-URL method on @netlify/blobs v10. " +
+          "Phase C must replace this branch with a route-handler-based flow " +
+          "(stream via Store.get + HMAC-signed query string). Tests should " +
+          "inject a stub via __setTestBlobStore.",
+      );
     },
   };
 }
