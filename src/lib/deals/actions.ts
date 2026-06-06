@@ -9,6 +9,7 @@ import { deals, dealMessages, circleMembers, orgs, bids } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
+import { ForbiddenError } from "@/lib/auth/errors";
 import {
   postDealInput, updateDealStatusInput, firstZodError,
   type PostDealInput, type UpdateDealStatusInput,
@@ -23,18 +24,6 @@ import {
   type PostBidInput, type AcceptBidInput, type RejectBidInput,
   type WithdrawBidInput, type SetDealBidModeInput,
 } from "./bidValidation";
-
-/** Thrown inside a postDeal callback when the session's org is not a member
- *  of the requested visibility circle. Caught by runWithUser's catch and
- *  converted to { ok: false, error: "Forbidden" } with zero DB writes.
- *  Kept local to deals/actions.ts for slice 4 — promote to src/lib/auth/errors.ts
- *  if another action needs the same semantics. */
-class ForbiddenError extends Error {
-  constructor(message = "Forbidden") {
-    super(message);
-    this.name = "ForbiddenError";
-  }
-}
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
