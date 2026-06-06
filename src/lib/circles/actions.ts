@@ -182,4 +182,17 @@ export async function declineInvitation(raw: unknown): Promise<ActionResult> {
   });
 }
 
-// removeOrgFromCircle, leaveCircle land in B8..B9.
+export async function removeOrgFromCircle(raw: unknown): Promise<ActionResult> {
+  return runWithUser(removeOrgFromCircleInput, raw, async (input: RemoveOrgFromCircleInput, _user, orgId) => {
+    const d = db();
+    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId }).from(circles)
+      .where(eq(circles.id, input.circleId)).limit(1);
+    if (!c || c.ownerOrgId !== orgId) throw new ForbiddenError();
+    if (input.orgId === c.ownerOrgId) throw new ForbiddenError(); // cannot remove the owner
+    await d
+      .delete(circleMembers)
+      .where(and(eq(circleMembers.circleId, input.circleId), eq(circleMembers.orgId, input.orgId)));
+  });
+}
+
+// leaveCircle lands in B9.
