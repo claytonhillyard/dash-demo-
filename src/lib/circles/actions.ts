@@ -153,4 +153,33 @@ export async function acceptInvitation(raw: unknown): Promise<ActionResult> {
   });
 }
 
-// declineInvitation, removeOrgFromCircle, leaveCircle land in B7..B9.
+export async function declineInvitation(raw: unknown): Promise<ActionResult> {
+  return runWithUser(tokenInput, raw, async (input: TokenInput, _user, orgId) => {
+    await db().transaction(async (tx) => {
+      const rows = await tx.execute(drizzleSql`
+        SELECT id, to_org_slug, status, expires_at
+        FROM circle_invitations
+        WHERE token = ${input.token}
+        LIMIT 1
+        FOR UPDATE
+      `);
+      const inv = ((rows as { rows?: Array<Record<string, unknown>> }).rows
+        ?? (rows as unknown as Array<Record<string, unknown>>))[0];
+      if (!inv) throw new ForbiddenError();
+      if (inv.status !== "pending") throw new ForbiddenError();
+      const expiresAt = inv.expires_at instanceof Date
+        ? inv.expires_at
+        : new Date(inv.expires_at as string);
+      if (expiresAt <= new Date()) throw new ForbiddenError();
+      const [me] = await tx.select({ slug: orgs.slug }).from(orgs)
+        .where(eq(orgs.id, orgId)).limit(1);
+      if (!me || me.slug !== inv.to_org_slug) throw new ForbiddenError();
+      await tx
+        .update(circleInvitations)
+        .set({ status: "declined", respondedAt: new Date() })
+        .where(eq(circleInvitations.id, inv.id as number));
+    });
+  });
+}
+
+// removeOrgFromCircle, leaveCircle land in B8..B9.
