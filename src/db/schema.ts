@@ -10,6 +10,7 @@ import {
   unique,
   uniqueIndex,
   index,
+  uniqueIndex,
   primaryKey,
 } from "drizzle-orm/pg-core";
 
@@ -54,6 +55,42 @@ export const circleMembers = pgTable(
     orgIdx: index("circle_members_org_idx").on(t.orgId),
     circleIdx: index("circle_members_circle_idx").on(t.circleId),
   })
+);
+
+export const circleInvitations = pgTable(
+  "circle_invitations",
+  {
+    id: serial("id").primaryKey(),
+    circleId: integer("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    fromOrgId: integer("from_org_id")
+      .notNull()
+      .references(() => orgs.id),
+    toOrgSlug: text("to_org_slug").notNull(),
+    token: text("token").notNull(),
+    status: text("status", {
+      enum: ["pending", "accepted", "declined", "withdrawn", "expired"],
+    })
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (t) => ({
+    tokenUniq: unique("circle_invitations_token_uniq").on(t.token),
+    // Partial UNIQUE: only one pending invite per (circle, target slug) at a time.
+    // Historical accepted/declined/withdrawn rows do NOT occupy the index, so
+    // re-invites after a non-pending response are allowed.
+    pendingUniq: uniqueIndex("circle_invitations_pending_uniq")
+      .on(t.circleId, t.toOrgSlug)
+      .where(sql`${t.status} = 'pending'`),
+    toSlugStatusIdx: index("circle_invitations_to_slug_status_idx")
+      .on(t.toOrgSlug, t.status),
+    fromOrgStatusIdx: index("circle_invitations_from_org_status_idx")
+      .on(t.fromOrgId, t.status),
+  }),
 );
 
 export const revenueMonths = pgTable(
@@ -123,32 +160,44 @@ export const projectionAssumptions = pgTable("projection_assumptions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const inventoryItems = pgTable("inventory_items", {
-  id: serial("id").primaryKey(),
-  orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
-  category: text("category", {
-    enum: [
-      "Rings", "Necklaces", "Earrings", "Bracelets", "Pendants",
-      "Chains", "Watch Bands", "Diamonds", "Gems",
-    ],
-  }).notNull(),
-  name: text("name").notNull(),
-  sku: text("sku"),
-  quantity: integer("quantity").notNull().default(1),
-  status: text("status", { enum: ["in_stock", "reserved", "sold"] })
-    .notNull()
-    .default("in_stock"),
-  unitCostCents: integer("unit_cost_cents").notNull().default(0),
-  retailPriceCents: integer("retail_price_cents").notNull().default(0),
-  metal: text("metal", { enum: ["gold", "silver", "platinum", "other"] }),
-  weightMg: integer("weight_mg"),
-  caratX100: integer("carat_x100"),
-  cut: text("cut"),
-  color: text("color"),
-  clarity: text("clarity"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const inventoryItems = pgTable(
+  "inventory_items",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().default(1).references(() => orgs.id), // 1 = AIYA
+    category: text("category", {
+      enum: [
+        "Rings", "Necklaces", "Earrings", "Bracelets", "Pendants",
+        "Chains", "Watch Bands", "Diamonds", "Gems",
+      ],
+    }).notNull(),
+    name: text("name").notNull(),
+    sku: text("sku"),
+    quantity: integer("quantity").notNull().default(1),
+    status: text("status", { enum: ["in_stock", "reserved", "sold"] })
+      .notNull()
+      .default("in_stock"),
+    unitCostCents: integer("unit_cost_cents").notNull().default(0),
+    retailPriceCents: integer("retail_price_cents").notNull().default(0),
+    metal: text("metal", { enum: ["gold", "silver", "platinum", "other"] }),
+    weightMg: integer("weight_mg"),
+    caratX100: integer("carat_x100"),
+    cut: text("cut"),
+    color: text("color"),
+    clarity: text("clarity"),
+    visibilityCircleId: integer("visibility_circle_id").references(
+      () => circles.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    visibilityCircleIdx: index("inventory_items_visibility_circle_idx")
+      .on(t.visibilityCircleId, t.orgId)
+      .where(sql`${t.visibilityCircleId} IS NOT NULL`),
+  }),
+);
 
 export const diamondMatrixPrices = pgTable(
   "diamond_matrix_prices",

@@ -8,6 +8,7 @@ import { DealRoomPanel } from "@/components/dashboard/DealRoomPanel";
 import { WebsiteOverviewPanel } from "@/components/dashboard/WebsiteOverviewPanel";
 import { ProviderStatusPanel } from "@/components/dashboard/ProviderStatusPanel";
 import { TodaysBidsPanel } from "@/components/dashboard/TodaysBidsPanel";
+import { TradeNetInventoryPanel } from "@/components/dashboard/TradeNetInventoryPanel";
 import type { LayoutItem, PanelEntry, PanelSize } from "./types";
 
 export const PANEL_REGISTRY: PanelEntry[] = [
@@ -82,6 +83,15 @@ export const PANEL_REGISTRY: PanelEntry[] = [
             attachmentActions={ctx.deals.attachmentActions}
           />
         : <BusinessPlaceholder title="Deal Room" testid="panel-tradenet-exchange" />,
+  },
+  {
+    id: "tradenet-inventory",
+    title: "TradeNet Inventory",
+    defaultSize: 1,
+    render: (ctx) =>
+      ctx.tradenetInventory
+        ? <TradeNetInventoryPanel items={ctx.tradenetInventory.items} />
+        : <BusinessPlaceholder title="TradeNet Inventory" testid="panel-tradenet-inventory" />,
   },
   {
     id: "website-overview",

@@ -8,7 +8,7 @@ import { LogoutButton } from "./LogoutButton";
 // repurposing the umbrella "Marketing Suite" slot. The standalone entry sits
 // next to "Diamonds" so all owner-entered ledgers cluster together.
 const SECTIONS = [
-  "Dashboard", "Command Center", "TradeNet Exchange", "Market Intelligence",
+  "Dashboard", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
   "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
   "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
   "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
@@ -19,7 +19,9 @@ const ROUTES: Record<string, string> = {
   Inventory: "/inventory",
   Diamonds: "/diamonds",
   Website: "/website",
+  Circles: "/circles",
   "Orders & Deals": "/deals",
+  "TradeNet Exchange": "/exchange",
 };
 
 export function Nav() {

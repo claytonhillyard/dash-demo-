@@ -8,7 +8,7 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { inventoryItems } from "@/db/schema";
+import { inventoryItems, circles, circleMembers } from "@/db/schema";
 import { getInventorySummary } from "@/db/inventory";
 import {
   createInventoryItem, updateInventoryItem, deleteInventoryItem, __setTestDb,
@@ -166,5 +166,222 @@ describe("getInventorySummary cross-org isolation", () => {
     expect(other.counts.Necklaces).toBe(50);
     expect(other.counts.Diamonds).toBe(0); // belongs to AIYA
     expect(other.total).toBe(150);
+  });
+});
+
+describe("slice 15 — visibility authz truth table", () => {
+  /** Seeds a circle owned by org 1 and adds members. Returns the circle id.
+   *  Note: pglite's drizzle typing in this repo accepts only argument-less
+   *  `.returning()` — see TODO(slice-4 review) in test/lib/circles/queries.test.ts. */
+  async function seedCircle(memberOrgIds: number[]): Promise<number> {
+    const [c] = await db
+      .insert(circles)
+      .values({ name: "Test Circle", slug: `test-${Date.now()}-${Math.random()}`, ownerOrgId: 1 })
+      .returning();
+    for (const orgId of memberOrgIds) {
+      await db.insert(circleMembers).values({ circleId: c.id, orgId });
+    }
+    return c.id;
+  }
+
+  /** Seed an inventory item for an org and return the id. */
+  async function seedItem(orgId: number, overrides: Partial<typeof inventoryItems.$inferInsert> = {}): Promise<number> {
+    const [row] = await db
+      .insert(inventoryItems)
+      .values({
+        orgId,
+        category: "Rings",
+        name: "fixture-item",
+        quantity: 1,
+        status: "in_stock",
+        unitCostCents: 0,
+        retailPriceCents: 0,
+        ...overrides,
+      })
+      .returning();
+    return row.id;
+  }
+
+  it("authorized update sets visibilityCircleId", async () => {
+    const circleId = await seedCircle([1]);
+    const id = await seedItem(1);
+    const res = await updateInventoryItem({
+      id,
+      category: "Rings",
+      name: "fixture-item",
+      quantity: 1,
+      status: "in_stock",
+      unitCostCents: 0,
+      retailPriceCents: 0,
+      visibilityCircleId: circleId,
+    });
+    expect(res).toEqual({ ok: true });
+    const [after] = await db
+      .select({ vis: inventoryItems.visibilityCircleId })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+    expect(after.vis).toBe(circleId);
+  });
+
+  it("unauthorized update rejects with Forbidden, zero writes", async () => {
+    // Circle has org 999 but NOT org 1.
+    const circleId = await seedCircle([999]);
+    const id = await seedItem(1);
+    const res = await updateInventoryItem({
+      id,
+      category: "Rings",
+      name: "PWNED",
+      quantity: 99,
+      status: "in_stock",
+      unitCostCents: 0,
+      retailPriceCents: 0,
+      visibilityCircleId: circleId,
+    });
+    expect(res).toEqual({ ok: false, error: "Forbidden" });
+    const [after] = await db
+      .select({
+        name: inventoryItems.name,
+        quantity: inventoryItems.quantity,
+        vis: inventoryItems.visibilityCircleId,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+    expect(after.name).toBe("fixture-item");
+    expect(after.quantity).toBe(1);
+    expect(after.vis).toBeNull();
+  });
+
+  it("nonexistent circle id rejects with Forbidden", async () => {
+    const id = await seedItem(1);
+    const res = await updateInventoryItem({
+      id,
+      category: "Rings",
+      name: "fixture-item",
+      quantity: 1,
+      status: "in_stock",
+      unitCostCents: 0,
+      retailPriceCents: 0,
+      visibilityCircleId: 99999,
+    });
+    expect(res).toEqual({ ok: false, error: "Forbidden" });
+    const [after] = await db
+      .select({ vis: inventoryItems.visibilityCircleId })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+    expect(after.vis).toBeNull();
+  });
+
+  it("null visibilityCircleId reverts a previously-shared item to private", async () => {
+    const circleId = await seedCircle([1]);
+    const id = await seedItem(1, { visibilityCircleId: circleId });
+    const res = await updateInventoryItem({
+      id,
+      category: "Rings",
+      name: "fixture-item",
+      quantity: 1,
+      status: "in_stock",
+      unitCostCents: 0,
+      retailPriceCents: 0,
+      visibilityCircleId: null,
+    });
+    expect(res).toEqual({ ok: true });
+    const [after] = await db
+      .select({ vis: inventoryItems.visibilityCircleId })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+    expect(after.vis).toBeNull();
+  });
+
+  it("omitted visibilityCircleId PRESERVES the existing value", async () => {
+    // LOAD-BEARING: the spec's "undefined preserves" invariant. Editing qty
+    // through the action without including visibilityCircleId must NOT clobber
+    // the shared row to NULL.
+    const circleId = await seedCircle([1]);
+    const id = await seedItem(1, { visibilityCircleId: circleId });
+    const res = await updateInventoryItem({
+      id,
+      category: "Rings",
+      name: "fixture-item",
+      quantity: 42, // changed
+      status: "reserved", // changed
+      unitCostCents: 0,
+      retailPriceCents: 0,
+      // visibilityCircleId intentionally omitted
+    });
+    expect(res).toEqual({ ok: true });
+    const [after] = await db
+      .select({
+        quantity: inventoryItems.quantity,
+        status: inventoryItems.status,
+        vis: inventoryItems.visibilityCircleId,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+    expect(after.quantity).toBe(42);
+    expect(after.status).toBe("reserved");
+    expect(after.vis).toBe(circleId); // STILL shared.
+  });
+
+  it("slice-3 cross-org isolation preserved (UPDATE scoped by session orgId)", async () => {
+    // Item owned by org 999; session is org 1. WHERE id = $1 AND org_id = 1
+    // means the update touches zero rows, even though id matches.
+    const id = await seedItem(999, { name: "untouchable", quantity: 7 });
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: "boss", orgId: 1,
+    });
+    const res = await updateInventoryItem({
+      id,
+      category: "Rings",
+      name: "PWNED",
+      quantity: 1,
+      status: "in_stock",
+      unitCostCents: 0,
+      retailPriceCents: 0,
+    });
+    // No membership check triggered (no visibilityCircleId in input), and the
+    // UPDATE WHERE clause filters by org 1, so it's a no-op. Action returns ok.
+    expect(res).toEqual({ ok: true });
+    const [after] = await db
+      .select({ name: inventoryItems.name, quantity: inventoryItems.quantity })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, id));
+    expect(after.name).toBe("untouchable");
+    expect(after.quantity).toBe(7);
+  });
+
+  it("createInventoryItem authz parity — unauthorized create rejects with zero inserts", async () => {
+    // Session = org 1, no memberships in circle 99999.
+    const before = await db.select({ id: inventoryItems.id }).from(inventoryItems);
+    const res = await createInventoryItem({
+      category: "Rings",
+      name: "should-not-exist",
+      quantity: 1,
+      status: "in_stock",
+      unitCostCents: 0,
+      retailPriceCents: 0,
+      visibilityCircleId: 99999,
+    });
+    expect(res).toEqual({ ok: false, error: "Forbidden" });
+    const after = await db.select({ id: inventoryItems.id }).from(inventoryItems);
+    expect(after.length).toBe(before.length); // no inserts
+  });
+
+  it("demo guard precedes membership check", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    try {
+      const res = await updateInventoryItem({
+        id: 1,
+        category: "Rings",
+        name: "x",
+        quantity: 1,
+        status: "in_stock",
+        unitCostCents: 0,
+        retailPriceCents: 0,
+        visibilityCircleId: 201,
+      });
+      expect(res).toEqual({ ok: false, error: "Demo mode — changes are disabled" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

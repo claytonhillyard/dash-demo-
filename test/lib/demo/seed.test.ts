@@ -300,7 +300,95 @@ describe("getSeedWebsiteSnapshotTrend", () => {
   });
 });
 
-import { DEMO_DEAL_ATTACHMENTS } from "@/lib/demo/seed";
+import {
+  DEMO_ARGYLE_ORG_ID,
+  getSeedPendingInvitesForOrg,
+  getSeedOwnedCirclesForOrg,
+  DEMO_DEAL_ATTACHMENTS,
+} from "@/lib/demo/seed";
+
+describe("DEMO_ARGYLE_ORG_ID", () => {
+  it("is a numeric id outside the partner-org range", () => {
+    expect(typeof DEMO_ARGYLE_ORG_ID).toBe("number");
+    expect(DEMO_ARGYLE_ORG_ID).toBeGreaterThan(503); // beyond the slice-4 partner range
+  });
+});
+
+describe("getSeedPendingInvitesForOrg", () => {
+  it("returns one pending invite from AIYA to argyle-mining", () => {
+    const invites = getSeedPendingInvitesForOrg(DEMO_AIYA_ORG_ID);
+    expect(invites).toHaveLength(1);
+    expect(invites[0]).toMatchObject({
+      circleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      circleName: "AIYA Trusted Partners",
+      fromOrgId: DEMO_AIYA_ORG_ID,
+      fromOrgName: "AIYA Designs",
+      toOrgSlug: "argyle-mining",
+      status: "pending",
+    });
+    // Token is present but is a static demo string — the UI never displays it.
+    expect(typeof invites[0].token).toBe("string");
+    expect(invites[0].token.length).toBeGreaterThan(0);
+    // Expiry is in the future so the demo UI shows the invite as pending.
+    expect(invites[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("returns [] for any non-AIYA org", () => {
+    expect(getSeedPendingInvitesForOrg(999)).toEqual([]);
+    expect(getSeedPendingInvitesForOrg(DEMO_PARTNER_ORG_IDS.MEHTA)).toEqual([]);
+  });
+});
+
+describe("getSeedOwnedCirclesForOrg", () => {
+  it("returns the demo Trusted Partners circle for AIYA", () => {
+    const owned = getSeedOwnedCirclesForOrg(DEMO_AIYA_ORG_ID);
+    expect(owned).toHaveLength(1);
+    expect(owned[0]).toMatchObject({
+      id: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      name: "AIYA Trusted Partners",
+      ownerOrgId: DEMO_AIYA_ORG_ID,
+    });
+  });
+
+  it("returns [] for any non-AIYA org", () => {
+    expect(getSeedOwnedCirclesForOrg(999)).toEqual([]);
+    expect(getSeedOwnedCirclesForOrg(DEMO_PARTNER_ORG_IDS.MEHTA)).toEqual([]);
+  });
+});
+
+import {
+  getSeedSharedInventoryRows,
+  getSeedSharedInventoryForOrg,
+} from "@/lib/demo/seed";
+
+describe("slice 15 shared inventory seed", () => {
+  it("getSeedSharedInventoryRows returns 3 partner-org rows", () => {
+    const rows = getSeedSharedInventoryRows();
+    expect(rows.map((r) => r.id).sort()).toEqual([601, 602, 603]);
+    for (const r of rows) {
+      expect(r.visibilityCircleId).toBe(DEMO_TRUSTED_PARTNERS_CIRCLE_ID);
+      // No AIYA-owned rows in the partner seed — Option A in spec §6.2.
+      expect(r.orgId).not.toBe(DEMO_AIYA_ORG_ID);
+      // Honest "demo · simulated" provenance.
+      expect(r.name).toMatch(/demo · simulated/);
+    }
+  });
+
+  it("getSeedSharedInventoryForOrg(AIYA) returns the 3 partner rows", () => {
+    const rows = getSeedSharedInventoryForOrg(DEMO_AIYA_ORG_ID);
+    expect(rows.length).toBe(3);
+  });
+
+  it("getSeedSharedInventoryForOrg(999) returns [] (no circle memberships)", () => {
+    expect(getSeedSharedInventoryForOrg(999)).toEqual([]);
+  });
+
+  it("getSeedSharedInventoryForOrg(MEHTA) returns 2 rows (excludes own)", () => {
+    const rows = getSeedSharedInventoryForOrg(DEMO_PARTNER_ORG_IDS.MEHTA);
+    // 601 is Mehta's own item — excluded by ne(orgId).
+    expect(rows.map((r) => r.id).sort()).toEqual([602, 603]);
+  });
+});
 
 describe("DEMO_DEAL_ATTACHMENTS — slice-17 authored seed", () => {
   it("exports 3 image attachments across deals 109 + 110", () => {

@@ -9,6 +9,7 @@ import {
   INVENTORY_CATEGORIES, INVENTORY_STATUSES, METALS,
   type InventoryCategory,
 } from "@/lib/inventory/validation";
+import { formatInventoryVisibility } from "@/lib/inventory/format";
 
 export interface InventoryRow {
   id: number;
@@ -18,16 +19,25 @@ export interface InventoryRow {
   status: string;
   unitCostCents: number;
   retailPriceCents: number;
+  visibilityCircleId: number | null;
 }
 
 const STONE_CATEGORIES = new Set<InventoryCategory>(["Diamonds", "Gems"]);
 
 export function InventoryAdmin({
-  items, createAction, deleteAction,
+  items,
+  createAction,
+  updateAction,
+  deleteAction,
+  circles,
+  circleNamesById,
 }: {
   items: InventoryRow[];
   createAction: (raw: unknown) => Promise<ActionResult>;
+  updateAction: (raw: unknown) => Promise<ActionResult>;
   deleteAction: (id: number) => Promise<ActionResult>;
+  circles: { id: number; name: string }[];
+  circleNamesById: Map<number, string>;
 }) {
   const [category, setCategory] = useState<InventoryCategory>("Rings");
   const [name, setName] = useState("");
@@ -91,6 +101,25 @@ export function InventoryAdmin({
   async function remove(id: number) {
     setError(null);
     const res = await deleteAction(id);
+    if (res.ok) router.refresh();
+    else setError(res.error);
+  }
+
+  async function onShare(id: number, visibilityCircleId: number | null) {
+    // Find the row so we can pass through the existing field values.
+    const it = items.find((x) => x.id === id);
+    if (!it) return;
+    const raw = {
+      id,
+      category: it.category,
+      name: it.name,
+      quantity: it.quantity,
+      status: it.status,
+      unitCostCents: it.unitCostCents,
+      retailPriceCents: it.retailPriceCents,
+      visibilityCircleId,
+    };
+    const res = await updateAction(raw);
     if (res.ok) router.refresh();
     else setError(res.error);
   }
@@ -188,17 +217,39 @@ export function InventoryAdmin({
         <p className="text-sm text-text/40">Add your first item to start tracking inventory.</p>
       ) : (
         <ul className="divide-y divide-text/10 text-sm">
-          {items.map((it) => (
-            <li key={it.id} className="flex items-center justify-between gap-2 py-2">
-              <span className="flex-1">{it.name}</span>
-              <span className="text-text/50">{it.category}</span>
-              <span className="text-text/60">×{it.quantity}</span>
-              <span className="text-text/60">{it.status}</span>
-              <span className="text-text/60">{formatCents(it.retailPriceCents)}</span>
-              <button className="text-bad" onClick={() => remove(it.id)}
-                aria-label={`delete ${it.name}`}>Delete</button>
-            </li>
-          ))}
+          {items.map((it) => {
+            const vis = formatInventoryVisibility(it.visibilityCircleId, circleNamesById);
+            return (
+              <li key={it.id} className="flex items-center justify-between gap-2 py-2">
+                <span className="flex-1">{it.name}</span>
+                <span className="text-text/50">{it.category}</span>
+                <span className="text-text/60">×{it.quantity}</span>
+                <span className="text-text/60">{it.status}</span>
+                <select
+                  aria-label={`share ${it.name}`}
+                  className="bg-bg p-1 text-xs"
+                  value={it.visibilityCircleId ?? ""}
+                  onChange={(e) => onShare(it.id, e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Private</option>
+                  {circles.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {vis.kind === "circle" && (
+                  <span
+                    className="rounded-full border border-gold/30 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-gold/80"
+                    title={`Shared with ${vis.circleName}`}
+                  >
+                    {vis.circleName}
+                  </span>
+                )}
+                <span className="text-text/60">{formatCents(it.retailPriceCents)}</span>
+                <button className="text-bad" onClick={() => remove(it.id)}
+                  aria-label={`delete ${it.name}`}>Delete</button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

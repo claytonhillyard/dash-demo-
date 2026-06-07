@@ -80,6 +80,12 @@ describe("db schema", () => {
     expect(schema.deals.visibilityCircleId.notNull).toBe(false);
   });
 
+  it("exports inventoryItems.visibilityCircleId as a nullable PgInteger", () => {
+    expect(schema.inventoryItems.visibilityCircleId).toBeDefined();
+    expect(schema.inventoryItems.visibilityCircleId.columnType).toBe("PgInteger");
+    expect(schema.inventoryItems.visibilityCircleId.notNull).toBe(false);
+  });
+
   it("declares a FK from every tenanted table's orgId to orgs.id", () => {
     // The drizzle column metadata records `.references()` targets on `_columns._references`.
     // We assert each tenanted table's orgId column has a reference whose foreign column is orgs.id.
@@ -118,5 +124,21 @@ describe("db schema", () => {
     expect(schema.websiteSnapshots.pageViews.notNull).toBe(true);
     expect(schema.websiteSnapshots.avgSessionDurationSeconds.notNull).toBe(true);
     expect(schema.websiteSnapshots.bounceRatePercent.notNull).toBe(true);
+  });
+
+  it("exports circleInvitations with id/circleId/fromOrgId/toOrgSlug/token/status/expiresAt", () => {
+    expect(schema.circleInvitations).toBeDefined();
+    expect(schema.circleInvitations.id.columnType).toBe("PgSerial");
+    expect(schema.circleInvitations.circleId.columnType).toBe("PgInteger");
+    expect(schema.circleInvitations.fromOrgId.columnType).toBe("PgInteger");
+    expect(schema.circleInvitations.toOrgSlug.columnType).toBe("PgText");
+    expect(schema.circleInvitations.token.columnType).toBe("PgText");
+    expect(schema.circleInvitations.status.columnType).toBe("PgText");
+    expect(schema.circleInvitations.createdAt.columnType).toBe("PgTimestamp");
+    expect(schema.circleInvitations.expiresAt.columnType).toBe("PgTimestamp");
+    expect(schema.circleInvitations.respondedAt.columnType).toBe("PgTimestamp");
+    // respondedAt is nullable; expiresAt is NOT null.
+    expect(schema.circleInvitations.respondedAt.notNull).toBe(false);
+    expect(schema.circleInvitations.expiresAt.notNull).toBe(true);
   });
 });
