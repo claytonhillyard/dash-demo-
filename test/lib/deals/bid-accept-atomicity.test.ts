@@ -85,4 +85,39 @@ describe("acceptBid — atomicity", () => {
     const res = await acceptBid({ bidId: b.id });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
   });
+
+  // Slice-16 backport of slice-18 spec §9.3: two acceptBid calls racing on
+  // different bids of the same deal — exactly one wins; the other returns
+  // Forbidden. Protection is the parent-row SELECT FOR UPDATE inside the tx
+  // plus the post-lock status re-read. Without the lock, both txs' snapshots
+  // see both bids as 'pending' under PG Read Committed and both UPDATEs
+  // commit → double-accept.
+  it("two concurrent accepts on the same deal — exactly one wins", async () => {
+    const [d] = await db.insert(deals).values({
+      orgId: 1, kind: "SELL", category: "Diamond", subject: "race-deal",
+      quantity: 1, priceCents: 1000, postedByLabel: "x", bidMode: "single",
+    }).returning();
+    const [bidA, bidB] = await db.insert(bids).values([
+      { dealId: d.id, bidderOrgId: 999, bidderOrgLabel: "A", priceCents: 1100, bidMode: "single" },
+      { dealId: d.id, bidderOrgId: 888, bidderOrgLabel: "B", priceCents: 1200, bidMode: "single" },
+    ]).returning();
+
+    const [resA, resB] = await Promise.all([
+      acceptBid({ bidId: bidA.id }),
+      acceptBid({ bidId: bidB.id }),
+    ]);
+
+    const oks = [resA, resB].filter((r) => r.ok === true);
+    const fails = [resA, resB].filter((r) => r.ok === false);
+    expect(oks).toHaveLength(1);
+    expect(fails).toHaveLength(1);
+    expect(fails[0]).toEqual({ ok: false, error: "Forbidden" });
+
+    const after = await db.select().from(bids).where(eq(bids.dealId, d.id));
+    expect(after.filter((b) => b.status === "accepted")).toHaveLength(1);
+    expect(after.filter((b) => b.status === "auto_rejected")).toHaveLength(1);
+
+    const [dealAfter] = await db.select({ status: deals.status }).from(deals).where(eq(deals.id, d.id));
+    expect(dealAfter.status).toBe("Filled");
+  });
 });
