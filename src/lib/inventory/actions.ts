@@ -1,21 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
-import { inventoryItems } from "@/db/schema";
+import { inventoryItems, inventoryBids } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
 import { ForbiddenError } from "@/lib/auth/errors";
+import { resolveOrgLabel } from "@/lib/auth/orgLabel";
 import {
   inventoryItemInput,
   inventoryItemUpdateInput,
   firstZodError,
   type InventoryItemInput,
 } from "./validation";
+import {
+  postInventoryBidInput,
+  acceptInventoryBidInput,
+  rejectInventoryBidInput,
+  withdrawInventoryBidInput,
+  setInventoryItemBidModeInput,
+} from "./bidValidation";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -134,5 +142,71 @@ export async function deleteInventoryItem(id: number): Promise<ActionResult> {
     await db()
       .delete(inventoryItems)
       .where(and(eq(inventoryItems.id, rid), eq(inventoryItems.orgId, orgId)));
+  });
+}
+
+/** Slice-18 write-side gate: can the caller bid on this inventory item?
+ *  Five preconditions, evaluated in order. ALL must pass:
+ *    1. Item exists.
+ *    2. Caller is NOT the item owner (self-bid block).
+ *    3. Item's bid_mode is non-null (owner has enabled bidding).
+ *    4. Item has a visibility_circle_id (private items are non-biddable
+ *       except by owner — but owner is rejected at step 2; combination is
+ *       Forbidden by construction).
+ *    5. Caller is a member of the item's visibility circle.
+ *
+ *  ⚠ Mirrors getInventoryBidsForItem's bidder|owner SQL visibility, with
+ *  the added "no self-bidding" + "bid_mode non-null" + "must be circle
+ *  member" rules. If you change visibility in either place, change both. */
+async function canBidOnItem(
+  d: Db,
+  orgId: number,
+  inventoryItemId: number,
+): Promise<
+  | {
+      ok: true;
+      ownerOrgId: number;
+      bidMode: "single" | "history";
+      visibilityCircleId: number;
+    }
+  | { ok: false }
+> {
+  const [row] = await d
+    .select({
+      ownerOrgId: inventoryItems.orgId,
+      bidMode: inventoryItems.bidMode,
+      visibilityCircleId: inventoryItems.visibilityCircleId,
+    })
+    .from(inventoryItems)
+    .where(eq(inventoryItems.id, inventoryItemId))
+    .limit(1);
+  if (!row) return { ok: false };
+  if (row.ownerOrgId === orgId) return { ok: false };
+  if (row.bidMode === null) return { ok: false };
+  if (row.visibilityCircleId === null) return { ok: false };
+  const isMember = await isOrgMemberOfCircle(d, orgId, row.visibilityCircleId);
+  if (!isMember) return { ok: false };
+  return {
+    ok: true,
+    ownerOrgId: row.ownerOrgId,
+    bidMode: row.bidMode,
+    visibilityCircleId: row.visibilityCircleId,
+  };
+}
+
+export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(postInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const access = await canBidOnItem(d, orgId, input.inventoryItemId);
+    if (!access.ok) throw new ForbiddenError("Forbidden");
+    const label = await resolveOrgLabel(d, orgId);
+    await d.insert(inventoryBids).values({
+      inventoryItemId: input.inventoryItemId,
+      bidderOrgId: orgId,
+      bidderOrgLabel: label,
+      priceCents: input.priceCents,
+      currency: input.currency,
+      notes: input.notes ?? null,
+    });
   });
 }
