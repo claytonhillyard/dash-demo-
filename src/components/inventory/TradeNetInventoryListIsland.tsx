@@ -34,7 +34,14 @@ export function TradeNetInventoryListIsland({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4">
           <div className="w-full max-w-lg">
             <InventoryBidsTab
-              inventoryItem={{ id: open.id, name: open.name, ownerOrgId: open.orgId, bidMode: open.bidMode }}
+              inventoryItem={{
+                id: open.id,
+                name: open.name,
+                ownerOrgId: open.orgId,
+                bidMode: open.bidMode,
+                quantity: open.quantity,
+                status: open.status,
+              }}
               viewerOrgId={viewerOrgId}
               bids={bidsByItemId.get(open.id) ?? []}
               actions={{
