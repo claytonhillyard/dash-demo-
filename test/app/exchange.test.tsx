@@ -11,6 +11,9 @@ vi.mock("@/lib/auth/getCurrentOrgId", () => ({
 vi.mock("@/db/inventory", () => ({
   getSharedInventoryForOrg: vi.fn(async () => []),
 }));
+vi.mock("@/db/inventoryBids", () => ({
+  getInventoryBidsForItem: vi.fn(async () => []),
+}));
 vi.mock("@/lib/circles/queries", () => ({
   getCircleNamesForOrg: vi.fn(async () => new Map()),
 }));
@@ -38,6 +41,7 @@ describe("/exchange RSC", () => {
         id: 1, orgId: 501, ownerOrgLabel: "Mehta",
         category: "Diamonds", name: "Round 2.51ct demo",
         quantity: 1, status: "in_stock", visibilityCircleId: 201,
+        bidMode: null,
         updatedAt: new Date(),
       },
     ] as never);
