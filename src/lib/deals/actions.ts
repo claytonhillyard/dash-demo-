@@ -5,11 +5,12 @@ import { and, eq, ne, sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
-import { deals, dealMessages, circleMembers, orgs, bids } from "@/db/schema";
+import { deals, dealMessages, circleMembers, bids } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
 import { ForbiddenError } from "@/lib/auth/errors";
+import { resolveOrgLabel } from "@/lib/auth/orgLabel";
 import {
   postDealInput, updateDealStatusInput, firstZodError,
   type PostDealInput, type UpdateDealStatusInput,
@@ -151,11 +152,6 @@ export async function withdrawDeal(id: number): Promise<ActionResult> {
 // ---------------------------------------------------------------------------
 // Slice 10: Deal reply threads
 // ---------------------------------------------------------------------------
-
-async function resolveOrgLabel(d: Db, orgId: number): Promise<string> {
-  const [row] = await d.select({ name: orgs.name }).from(orgs).where(eq(orgs.id, orgId)).limit(1);
-  return row?.name ?? `Org ${orgId}`;
-}
 
 /** Returns true iff `orgId` is the deal owner OR an in-circle member when the
  *  deal is circle-scoped. Slice-4 predicate, re-encoded here for the message
