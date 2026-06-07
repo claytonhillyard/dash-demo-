@@ -349,6 +349,30 @@ export async function acceptBid(raw: unknown): Promise<ActionResult> {
 
     const now = new Date();
     await d.transaction(async (tx) => {
+      // Serialize concurrent accepts on the SAME deal by taking a row-lock on
+      // the parent deals row. Two acceptBid() calls in flight on different
+      // bids of the same deal will queue at this SELECT FOR UPDATE — only one
+      // tx holds the lock at a time. Without this, each tx's snapshot under
+      // PG Read Committed sees the other's bid as still 'pending' and both
+      // UPDATEs succeed → double-accept (and deal.status flipped to Filled
+      // twice, masked by idempotent UPDATE). Backports the slice-18 fix in
+      // 293f3fd (acceptInventoryBid); see test/lib/deals/bid-accept-atomicity.test.ts
+      // "two concurrent accepts on the same deal — exactly one wins".
+      await tx.execute(
+        drizzleSql`SELECT id FROM deals WHERE id = ${row.dealId} FOR UPDATE`,
+      );
+
+      // Re-read bid status inside the locked tx — the pre-tx SELECT above
+      // may have observed pending even if a sibling tx has since flipped
+      // this bid to auto_rejected.
+      const fresh = await tx.execute(
+        drizzleSql`SELECT status FROM bids WHERE id = ${input.bidId}`,
+      );
+      const freshRows = (fresh as unknown as { rows: { status: string }[] }).rows;
+      if (freshRows.length === 0 || freshRows[0].status !== "pending") {
+        throw new ForbiddenError();
+      }
+
       await tx
         .update(bids)
         .set({ status: "accepted", decidedAt: now })
