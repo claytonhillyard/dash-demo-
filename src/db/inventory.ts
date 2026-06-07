@@ -1,14 +1,30 @@
-import { and, eq, ne, sql, desc } from "drizzle-orm";
+import { and, eq, ne, or, sql, desc, inArray, type SQL } from "drizzle-orm";
 import type { Db } from "./client";
-import { inventoryItems } from "./schema";
+import { inventoryItems, orgs } from "./schema";
 import { INVENTORY_CATEGORIES, type InventoryCategory } from "@/lib/inventory/validation";
 import { isDemoMode } from "@/lib/demo/mode";
-import { seedInventorySummary } from "@/lib/demo/seed";
+import {
+  seedInventorySummary,
+  getSeedSharedInventoryForOrg,
+} from "@/lib/demo/seed";
+import { getCircleIdsForOrg } from "@/lib/circles/queries";
 
 export interface InventorySummary {
   counts: Record<InventoryCategory, number>;
   total: number;
   updatedAt: Date | null;
+}
+
+export interface SharedInventoryRow {
+  id: number;
+  orgId: number;
+  ownerOrgLabel: string;
+  category: InventoryCategory;
+  name: string;
+  quantity: number;
+  status: "in_stock" | "reserved" | "sold";
+  visibilityCircleId: number;
+  updatedAt: Date;
 }
 
 function zeroCounts(): Record<InventoryCategory, number> {
@@ -46,4 +62,53 @@ export async function getInventorySummary(
     .limit(1);
 
   return { counts, total, updatedAt: latest[0]?.updatedAt ?? null };
+}
+
+// Slice 15 review finding: a previous draft kept an `inventoryVisibilityClause`
+// helper for "parity with slice 4" but its zero-circles fallback returned
+// `eq(orgId, currentOrg)` — semantically WRONG for `getSharedInventoryForOrg`
+// (which is "what partners are offering", explicitly EXCLUDING own items).
+// Removed to prevent future readers from accidentally re-wiring it back in
+// without noticing the inverted semantics. A future "include own items"
+// variant should build its own clause from first principles.
+
+/** Slice 15: returns inventory items shared into a circle the viewer is in,
+ *  EXCLUDING the viewer's own items. /exchange is "what partners are
+ *  offering" — own items live on /inventory. Zero-circles short-circuits
+ *  to [] without touching the DB. */
+export async function getSharedInventoryForOrg(
+  db: Db,
+  orgId: number,
+  limit: number | null = null,
+): Promise<SharedInventoryRow[]> {
+  if (isDemoMode()) {
+    const rows = getSeedSharedInventoryForOrg(orgId);
+    return limit != null ? rows.slice(0, limit) : rows;
+  }
+  const circleIds = await getCircleIdsForOrg(db, orgId);
+  if (circleIds.length === 0) return [];
+  const q = db
+    .select({
+      id: inventoryItems.id,
+      orgId: inventoryItems.orgId,
+      ownerOrgLabel: orgs.name,
+      category: inventoryItems.category,
+      name: inventoryItems.name,
+      quantity: inventoryItems.quantity,
+      status: inventoryItems.status,
+      visibilityCircleId: inventoryItems.visibilityCircleId,
+      updatedAt: inventoryItems.updatedAt,
+    })
+    .from(inventoryItems)
+    .innerJoin(orgs, eq(orgs.id, inventoryItems.orgId))
+    .where(
+      and(
+        ne(inventoryItems.orgId, orgId),
+        inArray(inventoryItems.visibilityCircleId, circleIds),
+        ne(inventoryItems.status, "sold"),
+      ),
+    )
+    .orderBy(desc(inventoryItems.updatedAt));
+  const rows = limit != null ? await q.limit(limit) : await q;
+  return rows as SharedInventoryRow[];
 }

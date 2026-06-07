@@ -80,6 +80,12 @@ describe("db schema", () => {
     expect(schema.deals.visibilityCircleId.notNull).toBe(false);
   });
 
+  it("exports inventoryItems.visibilityCircleId as a nullable PgInteger", () => {
+    expect(schema.inventoryItems.visibilityCircleId).toBeDefined();
+    expect(schema.inventoryItems.visibilityCircleId.columnType).toBe("PgInteger");
+    expect(schema.inventoryItems.visibilityCircleId.notNull).toBe(false);
+  });
+
   it("declares a FK from every tenanted table's orgId to orgs.id", () => {
     // The drizzle column metadata records `.references()` targets on `_columns._references`.
     // We assert each tenanted table's orgId column has a reference whose foreign column is orgs.id.

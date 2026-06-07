@@ -26,6 +26,7 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     "/", "/api/quotes", "/api/convert", "/api/history", "/api/diamond-history",
-    "/inventory", "/diamonds", "/deals", "/website", "/circles", "/company/:path*",
+    "/inventory", "/diamonds", "/deals", "/website", "/circles", "/exchange",
+    "/company/:path*",
   ],
 };

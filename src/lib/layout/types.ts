@@ -6,6 +6,7 @@ import type { DealRow } from "@/lib/deals/queries";
 import type { DealMessageView } from "@/db/dealMessages";
 import type { BidView, TodaysBidView } from "@/db/bids";
 import type { DealRoomPanelActions, DealRoomPanelBidActions } from "@/components/dashboard/DealRoomPanel";
+import type { SharedInventoryRow } from "@/db/inventory";
 
 export type PanelSize = 1 | 2 | 4;
 
@@ -86,6 +87,10 @@ export interface TodaysBidsView {
   };
 }
 
+export interface TradeNetInventoryView {
+  items: SharedInventoryRow[];
+}
+
 /** Server-read context the page passes into each panel's render. */
 export interface PanelCtx {
   inventory?: InventoryView;
@@ -94,6 +99,7 @@ export interface PanelCtx {
   website?: WebsiteOverviewView;
   providerStatus?: ProviderStatusView; // slice 11
   todaysBids?: TodaysBidsView; // slice 16
+  tradenetInventory?: TradeNetInventoryView; // slice 15
 }
 
 export interface PanelEntry {
