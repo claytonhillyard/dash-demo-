@@ -75,10 +75,6 @@
     {
       "idx": 10,
       "version": "7",
-<<<<<<< HEAD
-      "when": 1780713074067,
-      "tag": "0010_fresh_frank_castle",
-=======
       "when": 1780710224843,
       "tag": "0010_jazzy_juggernaut",
       "breakpoints": true
@@ -88,7 +84,13 @@
       "version": "7",
       "when": 1780730733179,
       "tag": "0011_giant_bishop",
->>>>>>> origin/main
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780818178259,
+      "tag": "0012_lush_dracula",
       "breakpoints": true
     }
   ]

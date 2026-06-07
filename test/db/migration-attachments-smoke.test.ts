@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { createTestDb } from "@/db/client";
 import { sql } from "drizzle-orm";
 
-describe("migration 0010 — deal_attachments (slice 17)", () => {
+describe("migration 0012 — deal_attachments (slice 17)", () => {
   it("creates the table with expected columns and UNIQUE on storage_key", async () => {
     const { db, close } = await createTestDb();
     try {

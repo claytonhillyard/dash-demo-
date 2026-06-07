@@ -1,10 +1,6 @@
 {
-<<<<<<< HEAD
-  "id": "b9ec4ad4-7451-4e8b-ac3e-a9e432b962d9",
-=======
-  "id": "c09b3f2c-c54d-4eba-80b3-7ed2dbfd392e",
->>>>>>> origin/main
-  "prevId": "8c6bd5a6-652c-4958-b741-f0202018660d",
+  "id": "317db502-aaee-4968-b2c4-55a9d8d91e40",
+  "prevId": "7f171062-c9af-4931-be0d-2dadbab7b51b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -182,8 +178,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-<<<<<<< HEAD
-=======
     "public.circle_invitations": {
       "name": "circle_invitations",
       "schema": "",
@@ -353,7 +347,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
->>>>>>> origin/main
     "public.circle_members": {
       "name": "circle_members",
       "schema": "",
@@ -599,7 +592,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-<<<<<<< HEAD
     "public.deal_attachments": {
       "name": "deal_attachments",
       "schema": "",
@@ -738,8 +730,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-=======
->>>>>>> origin/main
     "public.deal_messages": {
       "name": "deal_messages",
       "schema": "",
@@ -1558,6 +1548,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "visibility_circle_id": {
+          "name": "visibility_circle_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1573,7 +1569,30 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "inventory_items_visibility_circle_idx": {
+          "name": "inventory_items_visibility_circle_idx",
+          "columns": [
+            {
+              "expression": "visibility_circle_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"inventory_items\".\"visibility_circle_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "inventory_items_org_id_orgs_id_fk": {
           "name": "inventory_items_org_id_orgs_id_fk",
@@ -1586,6 +1605,19 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inventory_items_visibility_circle_id_circles_id_fk": {
+          "name": "inventory_items_visibility_circle_id_circles_id_fk",
+          "tableFrom": "inventory_items",
+          "tableTo": "circles",
+          "columnsFrom": [
+            "visibility_circle_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
