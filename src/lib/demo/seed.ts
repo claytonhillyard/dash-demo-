@@ -428,6 +428,7 @@ export interface SeedSharedInventoryRow {
   quantity: number;
   status: "in_stock" | "reserved" | "sold";
   visibilityCircleId: number;
+  bidMode: "single" | "history" | null; // slice 18
   updatedAt: Date;
 }
 
@@ -443,6 +444,7 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
       quantity: 1,
       status: "in_stock",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      bidMode: null,
       updatedAt: hAgo(3),
     },
     {
@@ -454,6 +456,7 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
       quantity: 1,
       status: "in_stock",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      bidMode: null,
       updatedAt: hAgo(12),
     },
     {
@@ -465,6 +468,7 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
       quantity: 50,
       status: "in_stock",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      bidMode: null,
       updatedAt: hAgo(30),
     },
   ];
