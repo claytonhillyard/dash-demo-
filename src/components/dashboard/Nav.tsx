@@ -21,6 +21,7 @@ const ROUTES: Record<string, string> = {
   Website: "/website",
   Circles: "/circles",
   "Orders & Deals": "/deals",
+  "TradeNet Exchange": "/exchange",
 };
 
 export function Nav() {
