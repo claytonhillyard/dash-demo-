@@ -170,12 +170,14 @@ describe("getInventorySummary cross-org isolation", () => {
 });
 
 describe("slice 15 — visibility authz truth table", () => {
-  /** Seeds a circle owned by org 1 and adds members. Returns the circle id. */
+  /** Seeds a circle owned by org 1 and adds members. Returns the circle id.
+   *  Note: pglite's drizzle typing in this repo accepts only argument-less
+   *  `.returning()` — see TODO(slice-4 review) in test/lib/circles/queries.test.ts. */
   async function seedCircle(memberOrgIds: number[]): Promise<number> {
     const [c] = await db
       .insert(circles)
       .values({ name: "Test Circle", slug: `test-${Date.now()}-${Math.random()}`, ownerOrgId: 1 })
-      .returning({ id: circles.id });
+      .returning();
     for (const orgId of memberOrgIds) {
       await db.insert(circleMembers).values({ circleId: c.id, orgId });
     }
@@ -196,7 +198,7 @@ describe("slice 15 — visibility authz truth table", () => {
         retailPriceCents: 0,
         ...overrides,
       })
-      .returning({ id: inventoryItems.id });
+      .returning();
     return row.id;
   }
 
