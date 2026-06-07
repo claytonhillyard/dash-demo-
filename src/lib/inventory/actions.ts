@@ -210,3 +210,45 @@ export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
     });
   });
 }
+
+export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(acceptInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidId: inventoryBids.id,
+        bidStatus: inventoryBids.status,
+        inventoryItemId: inventoryBids.inventoryItemId,
+        itemOwnerOrgId: inventoryItems.orgId,
+      })
+      .from(inventoryBids)
+      .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBids.inventoryItemId))
+      .where(eq(inventoryBids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError("Forbidden");
+    if (row.itemOwnerOrgId !== orgId) throw new ForbiddenError("Forbidden");
+    if (row.bidStatus !== "pending") throw new ForbiddenError("Forbidden");
+
+    const now = new Date();
+    await d.transaction(async (tx) => {
+      await tx
+        .update(inventoryBids)
+        .set({ status: "accepted", decidedAt: now })
+        .where(and(
+          eq(inventoryBids.id, input.bidId),
+          eq(inventoryBids.status, "pending"),
+        ));
+      await tx
+        .update(inventoryBids)
+        .set({ status: "auto_rejected", decidedAt: now })
+        .where(and(
+          eq(inventoryBids.inventoryItemId, row.inventoryItemId),
+          eq(inventoryBids.status, "pending"),
+          ne(inventoryBids.id, input.bidId),
+        ));
+      // NOTE: we do NOT touch inventory_items.status. Bidding is a price
+      // negotiation; stock-deduction is a separate concern (slice 18b).
+      // See spec §5.3.
+    });
+  });
+}
