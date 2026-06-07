@@ -20,6 +20,7 @@ export interface InventoryRow {
   unitCostCents: number;
   retailPriceCents: number;
   visibilityCircleId: number | null;
+  bidMode: "single" | "history" | null;
 }
 
 const STONE_CATEGORIES = new Set<InventoryCategory>(["Diamonds", "Gems"]);
@@ -29,6 +30,7 @@ export function InventoryAdmin({
   createAction,
   updateAction,
   deleteAction,
+  setBidModeAction,
   circles,
   circleNamesById,
 }: {
@@ -36,6 +38,7 @@ export function InventoryAdmin({
   createAction: (raw: unknown) => Promise<ActionResult>;
   updateAction: (raw: unknown) => Promise<ActionResult>;
   deleteAction: (id: number) => Promise<ActionResult>;
+  setBidModeAction: (raw: { inventoryItemId: number; mode: "single" | "history" | null }) => Promise<ActionResult>;
   circles: { id: number; name: string }[];
   circleNamesById: Map<number, string>;
 }) {
@@ -101,6 +104,13 @@ export function InventoryAdmin({
   async function remove(id: number) {
     setError(null);
     const res = await deleteAction(id);
+    if (res.ok) router.refresh();
+    else setError(res.error);
+  }
+
+  async function onSetBidMode(id: number, mode: "single" | "history" | null) {
+    setError(null);
+    const res = await setBidModeAction({ inventoryItemId: id, mode });
     if (res.ok) router.refresh();
     else setError(res.error);
   }
@@ -242,6 +252,26 @@ export function InventoryAdmin({
                     title={`Shared with ${vis.circleName}`}
                   >
                     {vis.circleName}
+                  </span>
+                )}
+                <select
+                  aria-label={`bidding mode for ${it.name}`}
+                  className="bg-bg p-1 text-xs"
+                  value={it.bidMode ?? ""}
+                  onChange={(e) =>
+                    onSetBidMode(
+                      it.id,
+                      e.target.value === "" ? null : (e.target.value as "single" | "history"),
+                    )
+                  }
+                >
+                  <option value="">Bidding off</option>
+                  <option value="single">Bidding: Single</option>
+                  <option value="history">Bidding: History</option>
+                </select>
+                {it.bidMode !== null && (
+                  <span className="rounded-full border border-text/20 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-text/60">
+                    Bidding · {it.bidMode}
                   </span>
                 )}
                 <span className="text-text/60">{formatCents(it.retailPriceCents)}</span>
