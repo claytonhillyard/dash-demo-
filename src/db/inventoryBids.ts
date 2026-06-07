@@ -17,6 +17,7 @@ export type InventoryBidView = {
   priceCents: number;
   currency: string;
   notes: string | null;
+  quantityRequested: number;
   status: InventoryBidStatus;
   decidedAt: Date | null;
   createdAt: Date;
@@ -52,6 +53,7 @@ export async function getInventoryBidsForItem(
   const res = await db.execute(sql`
     SELECT ib.id, ib.inventory_item_id, ib.bidder_org_id, ib.bidder_org_label,
            ib.price_cents, ib.currency, ib.notes,
+           ib.quantity_requested,
            ib.status, ib.decided_at, ib.created_at
     FROM inventory_bids ib
     JOIN inventory_items i ON i.id = ib.inventory_item_id
@@ -67,6 +69,7 @@ export async function getInventoryBidsForItem(
     price_cents: number;
     currency: string;
     notes: string | null;
+    quantity_requested: number;
     status: InventoryBidStatus;
     decided_at: Date | string | null;
     created_at: Date | string;
@@ -79,6 +82,7 @@ export async function getInventoryBidsForItem(
     priceCents: r.price_cents,
     currency: r.currency,
     notes: r.notes,
+    quantityRequested: r.quantity_requested,
     status: r.status,
     decidedAt:
       r.decided_at === null

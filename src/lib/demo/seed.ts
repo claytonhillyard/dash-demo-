@@ -543,15 +543,22 @@ export interface SeedInventoryBid {
   priceCents: number;
   currency: string;
   notes: string | null;
+  // Slice 18b: how many units this bid is requesting. Defaults to 1 for
+  // slice-18-vintage seeds (semantically singular bids on quantity-1 items).
+  quantityRequested: number;
   status: "pending";
   createdAtOffsetMinutes: number;
 }
 
-/** Two pending bids from AIYA on partner items. The bids never enter pglite
- *  (the Netlify demo is in-memory); they exist as fixture data the eventual
- *  /exchange demo-shim can render. The real query getInventoryBidsForItem
- *  returns [] in demo mode per slice-16 convention; rendering them is the
- *  component's responsibility (consume the constant directly). */
+/** Three pending bids from AIYA on partner items. The bids never enter
+ *  pglite (the Netlify demo is in-memory); they exist as fixture data the
+ *  eventual /exchange demo-shim can render. The real query
+ *  getInventoryBidsForItem returns [] in demo mode per slice-16 convention;
+ *  rendering them is the component's responsibility (consume the constant
+ *  directly).
+ *
+ *  Slice 18b adds the item-603 partial-fill demo bid (5 of 50 units) so
+ *  reviewers can see the new mechanic in the canned demo. */
 export const DEMO_INVENTORY_BIDS: SeedInventoryBid[] = [
   {
     inventoryItemId: 601, // Mehta Round 2.51ct (slice 15 seed)
@@ -560,6 +567,7 @@ export const DEMO_INVENTORY_BIDS: SeedInventoryBid[] = [
     priceCents: 168_500_00,
     currency: "USD",
     notes: "Firm. 7-day inspection window.",
+    quantityRequested: 1,
     status: "pending",
     createdAtOffsetMinutes: 40,
   },
@@ -570,22 +578,32 @@ export const DEMO_INVENTORY_BIDS: SeedInventoryBid[] = [
     priceCents: 42_000_00,
     currency: "USD",
     notes: null,
+    quantityRequested: 1,
     status: "pending",
     createdAtOffsetMinutes: 12,
+  },
+  {
+    inventoryItemId: 603, // Marathi Princess parcel (quantity 50)
+    bidderOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgLabel: "AIYA Designs",
+    priceCents: 14_000_00,
+    currency: "USD",
+    notes: "Cherry-picking 5 stones from the parcel — please call to discuss.",
+    quantityRequested: 5,
+    status: "pending",
+    createdAtOffsetMinutes: 75,
   },
 ];
 
 /** Which seeded inventory items have bidding enabled, and in which mode.
  *  Item 601: single-bid mode (Mehta Round 2.51ct — one outstanding bid).
  *  Item 602: history mode (Saint-Cloud Padparadscha — owner sees a thread).
- *  Item 603: null (bidding OFF — demonstrates the opt-in default).
- *  Both 601 and 602 have a corresponding bid in DEMO_INVENTORY_BIDS so the
- *  fixture is internally consistent. 603 has no bid (matches bidMode=null). */
+ *  Item 603: history mode — slice 18b's partial-fill demo (5-of-50 bid). */
 export function getSeedInventoryBidModes(): Map<number, "single" | "history" | null> {
   return new Map<number, "single" | "history" | null>([
     [601, "single"],
     [602, "history"],
-    [603, null],
+    [603, "history"],
   ]);
 }
 

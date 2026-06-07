@@ -25,7 +25,14 @@ const STATUS_CLASS: Record<InventoryBidView["status"], string> = {
 };
 
 type Props = {
-  inventoryItem: { id: number; name: string; ownerOrgId: number; bidMode: "single" | "history" | null };
+  inventoryItem: {
+    id: number;
+    name: string;
+    ownerOrgId: number;
+    bidMode: "single" | "history" | null;
+    quantity: number;                            // slice 18b
+    status: "in_stock" | "reserved" | "sold";    // slice 18b
+  };
   viewerOrgId: number;
   bids: InventoryBidView[];
   actions: {
@@ -66,11 +73,8 @@ export function InventoryBidsTab({ inventoryItem, viewerOrgId, bids, actions, on
         <p className="text-xs text-text/50">Bidding is not enabled on this item.</p>
       )}
 
-      {inventoryItem.bidMode !== null && bids.length === 0 && !isOwner && (
-        <>
-          <p className="text-xs text-text/50">No bids yet — submit one below.</p>
-          <PostInventoryBidForm inventoryItemId={inventoryItem.id} postInventoryBid={actions.postInventoryBid} />
-        </>
+      {inventoryItem.bidMode !== null && bids.length === 0 && !isOwner && inventoryItem.status !== "sold" && (
+        <p className="text-xs text-text/50">No bids yet — submit one below.</p>
       )}
 
       {inventoryItem.bidMode !== null && (isOwner || bids.length > 0) && (
@@ -79,6 +83,9 @@ export function InventoryBidsTab({ inventoryItem, viewerOrgId, bids, actions, on
             <li key={b.id} aria-label="bid row" className="flex flex-wrap items-center gap-2 py-2">
               <span className="flex-1 text-text/80">{isOwner ? b.bidderOrgLabel : "You"}</span>
               <span className="font-mono text-text/70">{fmt(b.priceCents, b.currency)}</span>
+              <span className="text-[10px] uppercase tracking-wider text-text/40">
+                × {b.quantityRequested}
+              </span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${STATUS_CLASS[b.status]}`}>{b.status}</span>
               <span className="text-[10px] text-text/40">{timeAgo(b.createdAt)}</span>
               {isOwner && b.status === "pending" && (
@@ -117,8 +124,16 @@ export function InventoryBidsTab({ inventoryItem, viewerOrgId, bids, actions, on
         </ul>
       )}
 
-      {inventoryItem.bidMode !== null && !isOwner && bids.length > 0 && (
-        <PostInventoryBidForm inventoryItemId={inventoryItem.id} postInventoryBid={actions.postInventoryBid} />
+      {inventoryItem.bidMode !== null && !isOwner && inventoryItem.status !== "sold" && (
+        <PostInventoryBidForm
+          inventoryItemId={inventoryItem.id}
+          availableQuantity={inventoryItem.quantity}
+          postInventoryBid={actions.postInventoryBid}
+        />
+      )}
+
+      {inventoryItem.status === "sold" && (
+        <p className="text-xs text-text/40">This item is sold out — no further bids accepted.</p>
       )}
     </aside>
   );

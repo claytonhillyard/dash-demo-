@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, gt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
@@ -145,8 +145,8 @@ export async function deleteInventoryItem(id: number): Promise<ActionResult> {
   });
 }
 
-/** Slice-18 write-side gate: can the caller bid on this inventory item?
- *  Five preconditions, evaluated in order. ALL must pass:
+/** Slice-18 + 18b write-side gate: can the caller bid on this inventory item?
+ *  Six preconditions, evaluated in order. ALL must pass:
  *    1. Item exists.
  *    2. Caller is NOT the item owner (self-bid block).
  *    3. Item's bid_mode is non-null (owner has enabled bidding).
@@ -154,6 +154,12 @@ export async function deleteInventoryItem(id: number): Promise<ActionResult> {
  *       except by owner — but owner is rejected at step 2; combination is
  *       Forbidden by construction).
  *    5. Caller is a member of the item's visibility circle.
+ *    6. (Slice 18b) input.quantityRequested <= item.quantity AT POST TIME.
+ *       UX guard only — the accept-side check inside the locked tx is the
+ *       source of truth (stock can change between post and accept).
+ *
+ *  The 6th check sits AFTER membership for no-info-leak: a non-member who
+ *  happens to over-stock gets the same Forbidden as a member who over-stocks.
  *
  *  ⚠ Mirrors getInventoryBidsForItem's bidder|owner SQL visibility, with
  *  the added "no self-bidding" + "bid_mode non-null" + "must be circle
@@ -162,6 +168,7 @@ async function canBidOnItem(
   d: Db,
   orgId: number,
   inventoryItemId: number,
+  quantityRequested: number,
 ): Promise<
   | {
       ok: true;
@@ -176,6 +183,7 @@ async function canBidOnItem(
       ownerOrgId: inventoryItems.orgId,
       bidMode: inventoryItems.bidMode,
       visibilityCircleId: inventoryItems.visibilityCircleId,
+      quantity: inventoryItems.quantity,
     })
     .from(inventoryItems)
     .where(eq(inventoryItems.id, inventoryItemId))
@@ -186,6 +194,7 @@ async function canBidOnItem(
   if (row.visibilityCircleId === null) return { ok: false };
   const isMember = await isOrgMemberOfCircle(d, orgId, row.visibilityCircleId);
   if (!isMember) return { ok: false };
+  if (quantityRequested > row.quantity) return { ok: false };
   return {
     ok: true,
     ownerOrgId: row.ownerOrgId,
@@ -197,7 +206,7 @@ async function canBidOnItem(
 export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
   return run(postInventoryBidInput, raw, async (input, orgId) => {
     const d = db();
-    const access = await canBidOnItem(d, orgId, input.inventoryItemId);
+    const access = await canBidOnItem(d, orgId, input.inventoryItemId, input.quantityRequested);
     if (!access.ok) throw new ForbiddenError("Forbidden");
     const label = await resolveOrgLabel(d, orgId);
     await d.insert(inventoryBids).values({
@@ -207,6 +216,7 @@ export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
       priceCents: input.priceCents,
       currency: input.currency,
       notes: input.notes ?? null,
+      quantityRequested: input.quantityRequested,
     });
   });
 }
@@ -243,14 +253,31 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
         sql`SELECT id FROM inventory_items WHERE id = ${row.inventoryItemId} FOR UPDATE`,
       );
 
-      // Re-read bid status inside the locked tx — the previously-snapshotted
-      // pre-tx SELECT may have observed pending even if a sibling tx has
-      // since flipped this bid to auto_rejected.
-      const fresh = await tx.execute(
-        sql`SELECT status FROM inventory_bids WHERE id = ${input.bidId}`,
-      );
-      const freshRows = (fresh as unknown as { rows: { status: string }[] }).rows;
-      if (freshRows.length === 0 || freshRows[0].status !== "pending") {
+      // Re-read bid status + FRESH item.quantity inside the locked tx. The
+      // slice-18 re-read only checked bid.status; slice 18b ALSO reads
+      // item.quantity (and the bid's quantity_requested) because a prior
+      // accept on this same item — racing with us — may have decremented
+      // stock below what this bid asked for.
+      const fresh = await tx.execute(sql`
+        SELECT ib.status AS bid_status,
+               ib.quantity_requested AS bid_qty,
+               i.quantity AS item_qty
+        FROM inventory_bids ib
+        JOIN inventory_items i ON i.id = ib.inventory_item_id
+        WHERE ib.id = ${input.bidId}
+      `);
+      const freshRows = (fresh as unknown as {
+        rows: { bid_status: string; bid_qty: number; item_qty: number }[];
+      }).rows;
+      if (freshRows.length === 0) throw new ForbiddenError("Forbidden");
+      const f = freshRows[0];
+      if (f.bid_status !== "pending") throw new ForbiddenError("Forbidden");
+
+      // Slice 18b: bid asks for more than's currently available — throw
+      // Forbidden. Postgres tx semantics: the throw rolls back the entire tx;
+      // the bid stays pending. Owner can manually reject it on the next page
+      // render. NO pre-throw UPDATE — spec §4.4 Option A.
+      if (f.bid_qty > f.item_qty) {
         throw new ForbiddenError("Forbidden");
       }
 
@@ -261,17 +288,55 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
           eq(inventoryBids.id, input.bidId),
           eq(inventoryBids.status, "pending"),
         ));
+
+      // Slice 18b: decrement item.quantity; flip status to 'sold' on zero.
+      // Defense-in-depth: AND eq(orgId, sessionOrgId) — slice-3 verbatim.
+      // `status: undefined` in Drizzle's set semantics means "don't touch the
+      // column" — status stays whatever it was (typically 'in_stock') when
+      // stock remains. The §9.3 partial-accept test asserts this.
+      const newQuantity = f.item_qty - f.bid_qty;
       await tx
-        .update(inventoryBids)
-        .set({ status: "auto_rejected", decidedAt: now })
+        .update(inventoryItems)
+        .set({
+          quantity: newQuantity,
+          status: newQuantity === 0 ? "sold" : undefined,
+          updatedAt: now,
+        })
         .where(and(
-          eq(inventoryBids.inventoryItemId, row.inventoryItemId),
-          eq(inventoryBids.status, "pending"),
-          ne(inventoryBids.id, input.bidId),
+          eq(inventoryItems.id, row.inventoryItemId),
+          eq(inventoryItems.orgId, orgId),
         ));
-      // NOTE: we do NOT touch inventory_items.status. Bidding is a price
-      // negotiation; stock-deduction is a separate concern (slice 18b).
-      // See spec §5.3.
+
+      // Slice 18b: selective sibling sweep.
+      //  - If stock remains (newQuantity > 0): auto-reject only siblings
+      //    whose quantityRequested exceeds newQuantity. Bids that still fit
+      //    stay pending (the owner may want to accept them next).
+      //  - If sold-out (newQuantity === 0): unconditional auto-reject
+      //    (slice-18 shape — every remaining pending bid is stale).
+      if (newQuantity > 0) {
+        await tx
+          .update(inventoryBids)
+          .set({ status: "auto_rejected", decidedAt: now })
+          .where(and(
+            eq(inventoryBids.inventoryItemId, row.inventoryItemId),
+            eq(inventoryBids.status, "pending"),
+            ne(inventoryBids.id, input.bidId),
+            gt(inventoryBids.quantityRequested, newQuantity),
+          ));
+      } else {
+        await tx
+          .update(inventoryBids)
+          .set({ status: "auto_rejected", decidedAt: now })
+          .where(and(
+            eq(inventoryBids.inventoryItemId, row.inventoryItemId),
+            eq(inventoryBids.status, "pending"),
+            ne(inventoryBids.id, input.bidId),
+          ));
+      }
+      // Slice 18b: stock decrement + sold-on-zero + selective sibling sweep
+      // all happen INSIDE the same locked region established by the parent-row
+      // lock above. See spec §4.1 for the full transaction body and §4.4 for
+      // the Postgres rollback semantics on the over-subscribed failure path.
     });
   });
 }

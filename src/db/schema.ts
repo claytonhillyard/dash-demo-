@@ -409,6 +409,11 @@ export const inventoryBids = pgTable(
     priceCents: integer("price_cents").notNull(),
     currency: text("currency").notNull().default("USD"),
     notes: text("notes"),
+    // Slice 18b: quantity of units this bid is requesting. INTEGER NOT NULL
+    // DEFAULT 1. The default preserves existing slice-18-seeded rows without
+    // a data-fixup migration — they semantically interpret as "1 unit" which
+    // matches the slice-18 mental model (every bid was implicitly singular).
+    quantityRequested: integer("quantity_requested").notNull().default(1),
     status: text("status", {
       enum: ["pending", "accepted", "rejected", "withdrawn", "auto_rejected"],
     })

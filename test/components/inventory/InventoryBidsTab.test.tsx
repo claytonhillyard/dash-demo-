@@ -4,11 +4,26 @@ import { InventoryBidsTab } from "@/components/inventory/InventoryBidsTab";
 import type { InventoryBidView } from "@/db/inventoryBids";
 
 const noopActions = {
-  postInventoryBid: vi.fn(async (_i: { inventoryItemId: number; priceCents: number; currency?: string; notes?: string }) => ({ ok: true as const })),
+  postInventoryBid: vi.fn(async (_i: { inventoryItemId: number; priceCents: number; currency?: string; notes?: string; quantityRequested?: number }) => ({ ok: true as const })),
   acceptInventoryBid: vi.fn(async (_i: { bidId: number }) => ({ ok: true as const })),
   rejectInventoryBid: vi.fn(async (_i: { bidId: number }) => ({ ok: true as const })),
   withdrawInventoryBid: vi.fn(async (_i: { bidId: number }) => ({ ok: true as const })),
 };
+
+// Slice 18b: helper to satisfy the widened Props.inventoryItem shape
+// (quantity + status fields). Tests pass overrides for the specific
+// fields they want to assert on.
+function itemProps(overrides: Partial<{
+  id: number; name: string; ownerOrgId: number;
+  bidMode: "single" | "history" | null;
+  quantity: number; status: "in_stock" | "reserved" | "sold";
+}> = {}) {
+  return {
+    id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" as const,
+    quantity: 10, status: "in_stock" as const,
+    ...overrides,
+  };
+}
 
 function bid(over: Partial<InventoryBidView> = {}): InventoryBidView {
   return {
@@ -19,6 +34,7 @@ function bid(over: Partial<InventoryBidView> = {}): InventoryBidView {
     priceCents: 12_000_00,
     currency: "USD",
     notes: null,
+    quantityRequested: 1,
     status: "pending",
     decidedAt: null,
     createdAt: new Date(),
@@ -29,7 +45,7 @@ function bid(over: Partial<InventoryBidView> = {}): InventoryBidView {
 describe("InventoryBidsTab — state matrix", () => {
   it("renders bidding-disabled banner when bidMode === null", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: null }}
+      inventoryItem={itemProps({ bidMode: null })}
       viewerOrgId={999}
       bids={[]}
       actions={noopActions}
@@ -41,7 +57,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("non-owner with no bids sees empty hint + form", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[]}
       actions={noopActions}
@@ -53,7 +69,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("owner sees ALL bids on item with accept/reject buttons (single mode)", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={1}
       bids={[
         bid({ id: 10, bidderOrgId: 999, bidderOrgLabel: "Mehta" }),
@@ -70,7 +86,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("owner sees all bids in history mode too (same rendering)", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "history" }}
+      inventoryItem={itemProps({ bidMode: "history" })}
       viewerOrgId={1}
       bids={[
         bid({ id: 20 }),
@@ -84,7 +100,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("bidder sees only their own bids (not other bidders' bids)", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[
         bid({ id: 30, bidderOrgId: 999, bidderOrgLabel: "Me" }),
@@ -100,7 +116,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("bidder sees Withdraw button only on their own pending bid", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[bid({ id: 40, bidderOrgId: 999, status: "pending" })]}
       actions={noopActions}
@@ -111,7 +127,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("bidder does NOT see Withdraw on a non-pending bid", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[bid({ id: 41, bidderOrgId: 999, status: "accepted", decidedAt: new Date() })]}
       actions={noopActions}
@@ -122,7 +138,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("non-owner does NOT see Accept/Reject buttons", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[bid({ id: 50, bidderOrgId: 999 })]}
       actions={noopActions}
@@ -135,7 +151,7 @@ describe("InventoryBidsTab — state matrix", () => {
   it("Accept button fires acceptInventoryBid", async () => {
     const actions = { ...noopActions, acceptInventoryBid: vi.fn(async () => ({ ok: true as const })) };
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={1}
       bids={[bid({ id: 60 })]}
       actions={actions}
@@ -148,7 +164,7 @@ describe("InventoryBidsTab — state matrix", () => {
   it("Reject button fires rejectInventoryBid", async () => {
     const actions = { ...noopActions, rejectInventoryBid: vi.fn(async () => ({ ok: true as const })) };
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={1}
       bids={[bid({ id: 61 })]}
       actions={actions}
@@ -161,7 +177,7 @@ describe("InventoryBidsTab — state matrix", () => {
   it("Withdraw button fires withdrawInventoryBid", async () => {
     const actions = { ...noopActions, withdrawInventoryBid: vi.fn(async () => ({ ok: true as const })) };
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[bid({ id: 62, bidderOrgId: 999 })]}
       actions={actions}
@@ -174,10 +190,10 @@ describe("InventoryBidsTab — state matrix", () => {
   it("PostInventoryBidForm submits parsed cents via postInventoryBid", async () => {
     const actions = {
       ...noopActions,
-      postInventoryBid: vi.fn(async (_i: { inventoryItemId: number; priceCents: number; currency?: string; notes?: string }) => ({ ok: true as const })),
+      postInventoryBid: vi.fn(async (_i: { inventoryItemId: number; priceCents: number; currency?: string; notes?: string; quantityRequested?: number }) => ({ ok: true as const })),
     };
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[]}
       actions={actions}
@@ -191,12 +207,13 @@ describe("InventoryBidsTab — state matrix", () => {
       priceCents: 10050,
       currency: "USD",
       notes: undefined,
+      quantityRequested: 1,
     });
   });
 
   it("renders status badges for non-pending bids (accepted/rejected/withdrawn/auto_rejected)", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "history" }}
+      inventoryItem={itemProps({ bidMode: "history" })}
       viewerOrgId={1}
       bids={[
         bid({ id: 71, status: "accepted", decidedAt: new Date() }),
@@ -215,7 +232,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("XSS sanity: notes with HTML render as text children, not innerHTML", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={1}
       bids={[bid({ id: 80, notes: "<script>alert(1)</script>" })]}
       actions={noopActions}
@@ -226,7 +243,7 @@ describe("InventoryBidsTab — state matrix", () => {
 
   it("XSS sanity: bidder org label renders as text", () => {
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={1}
       bids={[bid({ id: 81, bidderOrgLabel: "<img src=x onerror=alert(1)>" })]}
       actions={noopActions}
@@ -241,7 +258,7 @@ describe("InventoryBidsTab — state matrix", () => {
       acceptInventoryBid: vi.fn(async () => ({ ok: false as const, error: "Forbidden" })),
     };
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={1}
       bids={[bid({ id: 90 })]}
       actions={actions}
@@ -255,7 +272,7 @@ describe("InventoryBidsTab — state matrix", () => {
   it("onClose fires when Close button clicked", () => {
     const onClose = vi.fn();
     render(<InventoryBidsTab
-      inventoryItem={{ id: 601, name: "Ring", ownerOrgId: 1, bidMode: "single" }}
+      inventoryItem={itemProps({ bidMode: "single" })}
       viewerOrgId={999}
       bids={[]}
       actions={noopActions}
@@ -263,5 +280,40 @@ describe("InventoryBidsTab — state matrix", () => {
     />);
     fireEvent.click(screen.getByLabelText("close"));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders quantityRequested as '× N' per bid row", () => {
+    render(<InventoryBidsTab
+      inventoryItem={itemProps({ ownerOrgId: 999, bidMode: "history", quantity: 10, status: "in_stock" })}
+      viewerOrgId={999}
+      bids={[bid({ id: 100, quantityRequested: 7 })]}
+      actions={noopActions}
+      onClose={vi.fn()}
+    />);
+    expect(screen.getByText(/× 7/)).toBeInTheDocument();
+  });
+
+  it("hides the form when inventoryItem.status === 'sold'", () => {
+    render(<InventoryBidsTab
+      inventoryItem={itemProps({ ownerOrgId: 999, bidMode: "history", quantity: 0, status: "sold" })}
+      viewerOrgId={1}
+      bids={[]}
+      actions={noopActions}
+      onClose={vi.fn()}
+    />);
+    expect(screen.queryByLabelText("price")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("quantity")).not.toBeInTheDocument();
+    expect(screen.getByText(/sold out/i)).toBeInTheDocument();
+  });
+
+  it("passes availableQuantity to PostInventoryBidForm equal to inventoryItem.quantity", () => {
+    render(<InventoryBidsTab
+      inventoryItem={itemProps({ ownerOrgId: 999, bidMode: "history", quantity: 12, status: "in_stock" })}
+      viewerOrgId={1}
+      bids={[]}
+      actions={noopActions}
+      onClose={vi.fn()}
+    />);
+    expect(screen.getByText(/available: 12 units/i)).toBeInTheDocument();
   });
 });

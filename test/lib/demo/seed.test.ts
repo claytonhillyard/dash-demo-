@@ -407,18 +407,18 @@ describe("DEMO_DEAL_ATTACHMENTS — slice-17 authored seed", () => {
 import { DEMO_INVENTORY_BIDS, getSeedInventoryBidModes } from "@/lib/demo/seed";
 
 describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
-  it("exposes exactly 2 pending bids from AIYA on items 601 + 602", () => {
-    expect(DEMO_INVENTORY_BIDS).toHaveLength(2);
+  it("exposes 3 pending bids from AIYA on items 601 + 602 + 603 (slice 18b)", () => {
+    expect(DEMO_INVENTORY_BIDS).toHaveLength(3);
     expect(DEMO_INVENTORY_BIDS.every((b) => b.bidderOrgId === DEMO_AIYA_ORG_ID)).toBe(true);
-    expect(DEMO_INVENTORY_BIDS.map((b) => b.inventoryItemId).sort()).toEqual([601, 602]);
+    expect(DEMO_INVENTORY_BIDS.map((b) => b.inventoryItemId).sort()).toEqual([601, 602, 603]);
     expect(DEMO_INVENTORY_BIDS.every((b) => b.status === "pending")).toBe(true);
   });
 
-  it("getSeedInventoryBidModes: 601 single, 602 history, 603 null", () => {
+  it("getSeedInventoryBidModes: 601 single, 602 history, 603 history (slice 18b)", () => {
     const modes = getSeedInventoryBidModes();
     expect(modes.get(601)).toBe("single");
     expect(modes.get(602)).toBe("history");
-    expect(modes.get(603)).toBeNull();
+    expect(modes.get(603)).toBe("history");
   });
 
   it("getSeedSharedInventoryForOrg threads bidMode through to AIYA's view", () => {
@@ -427,7 +427,7 @@ describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
     const byId = new Map(rows.map((r) => [r.id, r.bidMode]));
     expect(byId.get(601)).toBe("single");
     expect(byId.get(602)).toBe("history");
-    expect(byId.get(603)).toBeNull();
+    expect(byId.get(603)).toBe("history");
   });
 
   it("every DEMO_INVENTORY_BIDS item has a non-null bid mode (fixture consistency)", () => {
@@ -435,5 +435,17 @@ describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
     for (const bid of DEMO_INVENTORY_BIDS) {
       expect(modes.get(bid.inventoryItemId)).not.toBeNull();
     }
+  });
+
+  it("every DEMO_INVENTORY_BIDS entry has a positive integer quantityRequested (slice 18b)", () => {
+    for (const b of DEMO_INVENTORY_BIDS) {
+      expect(b.quantityRequested).toBeGreaterThan(0);
+      expect(Number.isInteger(b.quantityRequested)).toBe(true);
+    }
+  });
+
+  it("the slice-18b item-603 bid is 5 units (partial-fill demo)", () => {
+    const b603 = DEMO_INVENTORY_BIDS.find((b) => b.inventoryItemId === 603);
+    expect(b603?.quantityRequested).toBe(5);
   });
 });

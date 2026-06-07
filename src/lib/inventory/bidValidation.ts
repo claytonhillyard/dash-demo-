@@ -5,8 +5,15 @@ export const postInventoryBidInput = z.object({
   priceCents: z.number().int().positive(),
   currency: z.enum(["USD", "EUR", "INR", "JPY"]).default("USD"),
   notes: z.string().trim().max(500, "Notes too long").optional(),
+  // Slice 18b: how many units of the item this bid is for. No upper cap in
+  // the schema — canBidOnItem (post time) and the locked accept transaction
+  // are the sources of truth. default(1) preserves slice-18 caller back-compat.
+  quantityRequested: z.number().int().positive().default(1),
 });
-export type PostInventoryBidInput = z.infer<typeof postInventoryBidInput>;
+// Use z.input so callers can omit fields that have Zod defaults (currency,
+// quantityRequested). Server-side, run() always sees the parsed output type
+// where defaults are filled in.
+export type PostInventoryBidInput = z.input<typeof postInventoryBidInput>;
 
 export const acceptInventoryBidInput = z.object({
   bidId: z.number().int().positive(),

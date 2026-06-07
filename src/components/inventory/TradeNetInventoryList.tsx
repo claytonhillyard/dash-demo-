@@ -35,18 +35,27 @@ export function TradeNetInventoryList({
                 {vis.circleName}
               </span>
             )}
-            {it.bidMode !== null && it.orgId !== viewerOrgId && (
-              <button
-                type="button"
-                onClick={() => onPlaceBid(it)}
-                className="rounded border border-gold/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold/80 hover:bg-gold/10"
+            {it.status === "sold" ? (
+              <span
+                aria-label="sold badge"
+                className="rounded-full bg-zinc-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-300"
               >
-                Place Bid
-                {(() => {
-                  const pending = (bidsByItemId.get(it.id) ?? []).filter((b) => b.status === "pending").length;
-                  return pending > 0 ? ` · ${pending} pending` : "";
-                })()}
-              </button>
+                Sold
+              </span>
+            ) : (
+              it.bidMode !== null && it.orgId !== viewerOrgId && (
+                <button
+                  type="button"
+                  onClick={() => onPlaceBid(it)}
+                  className="rounded border border-gold/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold/80 hover:bg-gold/10"
+                >
+                  Place Bid
+                  {(() => {
+                    const pending = (bidsByItemId.get(it.id) ?? []).filter((b) => b.status === "pending").length;
+                    return pending > 0 ? ` · ${pending} pending` : "";
+                  })()}
+                </button>
+              )
             )}
             <span className="text-[10px] text-text/40">{timeAgo(it.updatedAt)}</span>
           </li>

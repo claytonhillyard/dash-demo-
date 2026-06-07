@@ -26,6 +26,36 @@ describe("postInventoryBidInput", () => {
   it("rejects zero inventoryItemId", () => {
     expect(postInventoryBidInput.safeParse({ inventoryItemId: 0, priceCents: 1 }).success).toBe(false);
   });
+  it("defaults quantityRequested to 1 when omitted", () => {
+    const parsed = postInventoryBidInput.parse({
+      inventoryItemId: 1, priceCents: 100,
+    });
+    expect(parsed.quantityRequested).toBe(1);
+  });
+  it("rejects quantityRequested = 0", () => {
+    const parsed = postInventoryBidInput.safeParse({
+      inventoryItemId: 1, priceCents: 100, quantityRequested: 0,
+    });
+    expect(parsed.success).toBe(false);
+  });
+  it("rejects negative quantityRequested", () => {
+    const parsed = postInventoryBidInput.safeParse({
+      inventoryItemId: 1, priceCents: 100, quantityRequested: -5,
+    });
+    expect(parsed.success).toBe(false);
+  });
+  it("rejects fractional quantityRequested", () => {
+    const parsed = postInventoryBidInput.safeParse({
+      inventoryItemId: 1, priceCents: 100, quantityRequested: 1.5,
+    });
+    expect(parsed.success).toBe(false);
+  });
+  it("accepts large quantityRequested (no Zod cap)", () => {
+    const parsed = postInventoryBidInput.parse({
+      inventoryItemId: 1, priceCents: 100, quantityRequested: 1_000_000,
+    });
+    expect(parsed.quantityRequested).toBe(1_000_000);
+  });
 });
 
 describe("acceptInventoryBidInput", () => {

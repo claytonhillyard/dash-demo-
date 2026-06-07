@@ -120,4 +120,26 @@ describe("getInventoryBidsForItem — visibility truth table", () => {
       process.env.NEXT_PUBLIC_DEMO_MODE = prev;
     }
   });
+
+  it("projects quantityRequested for each visible bid", async () => {
+    const itemId = await seedItem(1);
+    await db.insert(inventoryBids).values({
+      inventoryItemId: itemId, bidderOrgId: 999, bidderOrgLabel: "Mehta",
+      priceCents: 100, quantityRequested: 7,
+    });
+    const rows = await getInventoryBidsForItem(db, 1, itemId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].quantityRequested).toBe(7);
+  });
+
+  it("defaults quantityRequested to 1 when omitted on insert", async () => {
+    const itemId = await seedItem(1);
+    await db.insert(inventoryBids).values({
+      inventoryItemId: itemId, bidderOrgId: 999, bidderOrgLabel: "Mehta",
+      priceCents: 100,
+      // quantityRequested omitted — DB DEFAULT 1 should apply
+    });
+    const rows = await getInventoryBidsForItem(db, 1, itemId);
+    expect(rows[0].quantityRequested).toBe(1);
+  });
 });

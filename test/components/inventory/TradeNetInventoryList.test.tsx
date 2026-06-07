@@ -47,8 +47,8 @@ describe("TradeNetInventoryList — Place Bid button visibility", () => {
 
   it("shows pending count when bidsByItemId has pending entries", () => {
     const bids = new Map([[1, [
-      { id: 10, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, status: "pending" as const, decidedAt: null, createdAt: new Date() },
-      { id: 11, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, status: "pending" as const, decidedAt: null, createdAt: new Date() },
+      { id: 10, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, quantityRequested: 1, status: "pending" as const, decidedAt: null, createdAt: new Date() },
+      { id: 11, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, quantityRequested: 1, status: "pending" as const, decidedAt: null, createdAt: new Date() },
     ]]]);
     render(<TradeNetInventoryList
       items={[makeItem()]}
@@ -58,5 +58,34 @@ describe("TradeNetInventoryList — Place Bid button visibility", () => {
       onPlaceBid={vi.fn()}
     />);
     expect(screen.getByRole("button", { name: /Place Bid · 2 pending/i })).toBeInTheDocument();
+  });
+
+  it("renders Sold badge when item.status === 'sold'", () => {
+    render(<TradeNetInventoryList
+      items={[makeItem({ status: "sold", quantity: 0 })]}
+      circleNamesById={new Map([[201, "Trusted"]])}
+      viewerOrgId={1}
+      bidsByItemId={new Map()}
+      onPlaceBid={vi.fn()}
+    />);
+    expect(screen.getByLabelText(/sold badge/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /place bid/i })).not.toBeInTheDocument();
+  });
+
+  it("hides Place Bid when item.status === 'sold' even if bidMode is set", () => {
+    // Belt-and-suspenders test for the slice-18b regression: even if the
+    // owner forgot to flip bidMode to null, the sold-status short-circuit
+    // must suppress the Place Bid button.
+    const bids = new Map([[1, [
+      { id: 10, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, quantityRequested: 1, status: "pending" as const, decidedAt: null, createdAt: new Date() },
+    ]]]);
+    render(<TradeNetInventoryList
+      items={[makeItem({ status: "sold", quantity: 0, bidMode: "history" })]}
+      circleNamesById={new Map([[201, "Trusted"]])}
+      viewerOrgId={1}
+      bidsByItemId={bids}
+      onPlaceBid={vi.fn()}
+    />);
+    expect(screen.queryByRole("button", { name: /place bid/i })).not.toBeInTheDocument();
   });
 });
