@@ -480,9 +480,63 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
 export function getSeedSharedInventoryForOrg(orgId: number): SeedSharedInventoryRow[] {
   const circleIds = new Set(getSeedCircleIdsForOrg(orgId));
   if (circleIds.size === 0) return [];
-  return getSeedSharedInventoryRows().filter(
-    (r) => r.orgId !== orgId && circleIds.has(r.visibilityCircleId),
-  );
+  const modes = getSeedInventoryBidModes();
+  return getSeedSharedInventoryRows()
+    .filter((r) => r.orgId !== orgId && circleIds.has(r.visibilityCircleId))
+    .map((r) => ({ ...r, bidMode: modes.get(r.id) ?? null }));
+}
+
+// --- Slice 18 demo seed: inventory bids + per-item bid-mode ---
+
+export interface SeedInventoryBid {
+  inventoryItemId: number;
+  bidderOrgId: number;
+  bidderOrgLabel: string;
+  priceCents: number;
+  currency: string;
+  notes: string | null;
+  status: "pending";
+  createdAtOffsetMinutes: number;
+}
+
+/** Two pending bids from AIYA on partner items. The bids never enter pglite
+ *  (the Netlify demo is in-memory); they exist as fixture data the eventual
+ *  /exchange demo-shim can render. The real query getInventoryBidsForItem
+ *  returns [] in demo mode per slice-16 convention; rendering them is the
+ *  component's responsibility (consume the constant directly). */
+export const DEMO_INVENTORY_BIDS: SeedInventoryBid[] = [
+  {
+    inventoryItemId: 601, // Mehta Round 2.51ct (slice 15 seed)
+    bidderOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgLabel: "AIYA Designs",
+    priceCents: 168_500_00,
+    currency: "USD",
+    notes: "Firm. 7-day inspection window.",
+    status: "pending",
+    createdAtOffsetMinutes: 40,
+  },
+  {
+    inventoryItemId: 602, // Saint-Cloud Cushion Padparadscha (slice 15 seed)
+    bidderOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgLabel: "AIYA Designs",
+    priceCents: 42_000_00,
+    currency: "USD",
+    notes: null,
+    status: "pending",
+    createdAtOffsetMinutes: 12,
+  },
+];
+
+/** Which seeded inventory items have bidding enabled, and in which mode.
+ *  Item 601 has bidding ON in single mode so the demo /exchange row shows
+ *  the Place Bid button. 602 + 603 stay null (bidding off) to demonstrate
+ *  the opt-in-only default. */
+export function getSeedInventoryBidModes(): Map<number, "single" | "history" | null> {
+  return new Map<number, "single" | "history" | null>([
+    [601, "single"],
+    [602, null],
+    [603, null],
+  ]);
 }
 
 // --- Slice 5 demo seed: weekly website KPI snapshots ---

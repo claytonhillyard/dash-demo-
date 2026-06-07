@@ -388,3 +388,30 @@ describe("slice 15 shared inventory seed", () => {
     expect(rows.map((r) => r.id).sort()).toEqual([602, 603]);
   });
 });
+
+import { DEMO_INVENTORY_BIDS, getSeedInventoryBidModes } from "@/lib/demo/seed";
+
+describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
+  it("exposes exactly 2 pending bids from AIYA on items 601 + 602", () => {
+    expect(DEMO_INVENTORY_BIDS).toHaveLength(2);
+    expect(DEMO_INVENTORY_BIDS.every((b) => b.bidderOrgId === DEMO_AIYA_ORG_ID)).toBe(true);
+    expect(DEMO_INVENTORY_BIDS.map((b) => b.inventoryItemId).sort()).toEqual([601, 602]);
+    expect(DEMO_INVENTORY_BIDS.every((b) => b.status === "pending")).toBe(true);
+  });
+
+  it("getSeedInventoryBidModes enables bidding only on item 601", () => {
+    const modes = getSeedInventoryBidModes();
+    expect(modes.get(601)).toBe("single");
+    expect(modes.get(602)).toBeNull();
+    expect(modes.get(603)).toBeNull();
+  });
+
+  it("getSeedSharedInventoryForOrg threads bidMode through to AIYA's view", () => {
+    const rows = getSeedSharedInventoryForOrg(DEMO_AIYA_ORG_ID);
+    expect(rows).toHaveLength(3);
+    const byId = new Map(rows.map((r) => [r.id, r.bidMode]));
+    expect(byId.get(601)).toBe("single");
+    expect(byId.get(602)).toBeNull();
+    expect(byId.get(603)).toBeNull();
+  });
+});
