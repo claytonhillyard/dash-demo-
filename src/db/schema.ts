@@ -10,7 +10,6 @@ import {
   unique,
   uniqueIndex,
   index,
-  uniqueIndex,
   primaryKey,
 } from "drizzle-orm/pg-core";
 
