@@ -354,3 +354,37 @@ describe("getSeedOwnedCirclesForOrg", () => {
     expect(getSeedOwnedCirclesForOrg(DEMO_PARTNER_ORG_IDS.MEHTA)).toEqual([]);
   });
 });
+
+import {
+  getSeedSharedInventoryRows,
+  getSeedSharedInventoryForOrg,
+} from "@/lib/demo/seed";
+
+describe("slice 15 shared inventory seed", () => {
+  it("getSeedSharedInventoryRows returns 3 partner-org rows", () => {
+    const rows = getSeedSharedInventoryRows();
+    expect(rows.map((r) => r.id).sort()).toEqual([601, 602, 603]);
+    for (const r of rows) {
+      expect(r.visibilityCircleId).toBe(DEMO_TRUSTED_PARTNERS_CIRCLE_ID);
+      // No AIYA-owned rows in the partner seed — Option A in spec §6.2.
+      expect(r.orgId).not.toBe(DEMO_AIYA_ORG_ID);
+      // Honest "demo · simulated" provenance.
+      expect(r.name).toMatch(/demo · simulated/);
+    }
+  });
+
+  it("getSeedSharedInventoryForOrg(AIYA) returns the 3 partner rows", () => {
+    const rows = getSeedSharedInventoryForOrg(DEMO_AIYA_ORG_ID);
+    expect(rows.length).toBe(3);
+  });
+
+  it("getSeedSharedInventoryForOrg(999) returns [] (no circle memberships)", () => {
+    expect(getSeedSharedInventoryForOrg(999)).toEqual([]);
+  });
+
+  it("getSeedSharedInventoryForOrg(MEHTA) returns 2 rows (excludes own)", () => {
+    const rows = getSeedSharedInventoryForOrg(DEMO_PARTNER_ORG_IDS.MEHTA);
+    // 601 is Mehta's own item — excluded by ne(orgId).
+    expect(rows.map((r) => r.id).sort()).toEqual([602, 603]);
+  });
+});

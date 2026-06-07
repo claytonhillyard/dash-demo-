@@ -414,6 +414,73 @@ export function getSeedOwnedCirclesForOrg(orgId: number): SeedCircle[] {
   return getSeedCircles();
 }
 
+// --- Slice 15 demo seed: cross-circle inventory shared via Trusted Partners ---
+
+const DEMO_INV_REF = new Date("2026-06-06T12:00:00Z").getTime();
+const hAgo = (h: number) => new Date(DEMO_INV_REF - h * 60 * 60 * 1000);
+
+export interface SeedSharedInventoryRow {
+  id: number;
+  orgId: number;
+  ownerOrgLabel: string;
+  category: InventoryCategory;
+  name: string;
+  quantity: number;
+  status: "in_stock" | "reserved" | "sold";
+  visibilityCircleId: number;
+  updatedAt: Date;
+}
+
+/** Three partner-org inventory items, all shared with Trusted Partners. */
+export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
+  return [
+    {
+      id: 601,
+      orgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+      ownerOrgLabel: "Mehta Diamonds — Mumbai",
+      category: "Diamonds",
+      name: "Round 2.51ct E/VVS1 GIA — Mumbai cutting — demo · simulated",
+      quantity: 1,
+      status: "in_stock",
+      visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      updatedAt: hAgo(3),
+    },
+    {
+      id: 602,
+      orgId: DEMO_PARTNER_ORG_IDS.SAINT_CLOUD,
+      ownerOrgLabel: "Saint-Cloud Gems — Geneva",
+      category: "Gems",
+      name: "Cushion Padparadscha 1.8ct AGL cert — demo · simulated",
+      quantity: 1,
+      status: "in_stock",
+      visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      updatedAt: hAgo(12),
+    },
+    {
+      id: 603,
+      orgId: DEMO_PARTNER_ORG_IDS.MARATHI,
+      ownerOrgLabel: "Marathi Trading — Surat",
+      category: "Diamonds",
+      name: "Princess 1.05ct G/SI1 IGI parcel x 50 — demo · simulated",
+      quantity: 50,
+      status: "in_stock",
+      visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      updatedAt: hAgo(30),
+    },
+  ];
+}
+
+/** Demo widening: rows visible to a given org via the seed circle graph,
+ *  excluding the viewer's own rows. Mirrors the real getSharedInventoryForOrg
+ *  shape — same WHERE clause logic, in-memory. */
+export function getSeedSharedInventoryForOrg(orgId: number): SeedSharedInventoryRow[] {
+  const circleIds = new Set(getSeedCircleIdsForOrg(orgId));
+  if (circleIds.size === 0) return [];
+  return getSeedSharedInventoryRows().filter(
+    (r) => r.orgId !== orgId && circleIds.has(r.visibilityCircleId),
+  );
+}
+
 // --- Slice 5 demo seed: weekly website KPI snapshots ---
 import type { WebsiteSnapshotRow } from "@/db/website";
 
