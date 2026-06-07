@@ -106,6 +106,13 @@ describe("acceptInventoryBid — atomicity", () => {
   // transaction. The losing tx sees the sibling row already auto_rejected (or
   // its own row already accepted by the winner) and the UPDATE matches 0 rows,
   // re-asserting pending and re-emitting Forbidden via the post-tx re-read.
+  //
+  // Slice 18b note: both bids are seeded with quantityRequested=5 (matching
+  // the item's full stock) so they truly compete. Under slice-18 semantics
+  // the field is ignored — the race still holds. Once Phase B's selective-
+  // sweep lands, this seeding ensures both bids remain mutually exclusive
+  // (neither fits in the residual after the other accepts) so "exactly one
+  // wins" continues to be the correct assertion.
   it("two concurrent accepts on the same item — exactly one wins", async () => {
     const [item] = await db
       .insert(inventoryItems)
@@ -116,8 +123,8 @@ describe("acceptInventoryBid — atomicity", () => {
       })
       .returning();
     const [bidA, bidB] = await db.insert(inventoryBids).values([
-      { inventoryItemId: item.id, bidderOrgId: 999, bidderOrgLabel: "A", priceCents: 100 },
-      { inventoryItemId: item.id, bidderOrgId: 888, bidderOrgLabel: "B", priceCents: 200 },
+      { inventoryItemId: item.id, bidderOrgId: 999, bidderOrgLabel: "A", priceCents: 100, quantityRequested: 5 },
+      { inventoryItemId: item.id, bidderOrgId: 888, bidderOrgLabel: "B", priceCents: 200, quantityRequested: 5 },
     ]).returning();
 
     const [resA, resB] = await Promise.all([
@@ -139,7 +146,9 @@ describe("acceptInventoryBid — atomicity", () => {
     expect(accepted).toHaveLength(1);
     expect(autoRejected).toHaveLength(1);
 
-    // Inventory item still untouched
+    // Inventory item still untouched — slice-18 accept doesn't decrement.
+    // Phase B will flip this to status=sold/quantity=0; the assertion will
+    // be revised in the B2 TDD step. Keeping the slice-18 expectation here.
     const [itemAfter] = await db
       .select({ status: inventoryItems.status, quantity: inventoryItems.quantity })
       .from(inventoryItems)
