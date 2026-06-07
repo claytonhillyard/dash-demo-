@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import type { DealAttachmentView } from "@/db/dealAttachments";
 
@@ -21,6 +21,19 @@ export function DealAttachmentCarousel(props: DealAttachmentCarouselProps) {
   const [lightboxId, setLightboxId] = useState<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const certInputRef = useRef<HTMLInputElement>(null);
+
+  // Esc-to-close the lightbox. `<dialog open>` (declarative) does NOT activate
+  // the browser's native modal Esc handling — that only fires when the dialog
+  // is opened via `.showModal()`. Without this, the spec's "Esc/click-outside
+  // closes" promise was only half-true.
+  useEffect(() => {
+    if (lightboxId === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxId]);
 
   const images = props.attachments.filter((a) => a.kind === "image");
   const certs = props.attachments.filter((a) => a.kind === "cert");
@@ -181,14 +194,23 @@ export function DealAttachmentCarousel(props: DealAttachmentCarouselProps) {
       {lightboxAttachment && (
         <dialog open className="bg-zinc-900/95 fixed inset-0 z-50 flex items-center justify-center p-4 w-full h-full"
                 aria-label="image lightbox"
+                aria-modal="true"
                 onClick={() => setLightboxId(null)}>
-          <Image
-            src={props.signedUrls.get(lightboxAttachment.id) ?? ""}
-            alt={lightboxAttachment.altText ?? "deal photo"}
-            width={800}
-            height={800}
-            className="max-w-full max-h-full object-contain rounded"
-          />
+          {/* Stop propagation on the image so clicking the photo itself
+              doesn't trigger the dialog's onClick (which would close the
+              lightbox while the user is trying to look at the image). */}
+          <span
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex max-w-full max-h-full"
+          >
+            <Image
+              src={props.signedUrls.get(lightboxAttachment.id) ?? ""}
+              alt={lightboxAttachment.altText ?? "deal photo"}
+              width={800}
+              height={800}
+              className="max-w-full max-h-full object-contain rounded"
+            />
+          </span>
           <button
             type="button"
             aria-label="close lightbox"

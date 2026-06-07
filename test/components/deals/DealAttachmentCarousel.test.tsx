@@ -93,6 +93,19 @@ describe("DealAttachmentCarousel", () => {
     expect(screen.queryByLabelText("image lightbox")).toBeNull();
   });
 
+  it("Esc key closes the lightbox", () => {
+    render(<DealAttachmentCarousel
+      dealId={1} isOwner={false}
+      attachments={[att({ id: 1, altText: "front" })]}
+      signedUrls={new Map([[1, "https://stub/1"]])}
+      actions={noopActions}
+    />);
+    fireEvent.click(screen.getByLabelText(/Open front/));
+    expect(screen.getByLabelText("image lightbox")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByLabelText("image lightbox")).toBeNull();
+  });
+
   it("renders alert when upload returns ok:false", async () => {
     const actions = {
       ...noopActions,
