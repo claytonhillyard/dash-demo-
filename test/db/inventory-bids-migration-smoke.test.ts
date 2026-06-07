@@ -51,3 +51,27 @@ describe("migration 0013 — inventory bidding (slice 18)", () => {
     }
   });
 });
+
+describe("migration 0014 — inventory_bids.quantity_requested (slice 18b)", () => {
+  it("adds quantity_requested as integer NOT NULL DEFAULT 1", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const cols = await db.execute(sql`
+        SELECT column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_name = 'inventory_bids' AND column_name = 'quantity_requested'
+      `);
+      const colRows = (cols as unknown as {
+        rows: { column_name: string; data_type: string; is_nullable: "YES" | "NO"; column_default: string | null }[];
+      }).rows;
+      expect(colRows).toHaveLength(1);
+      expect(colRows[0].data_type).toBe("integer");
+      expect(colRows[0].is_nullable).toBe("NO");
+      // pglite/Postgres typically renders integer defaults as the literal "1"
+      // (sometimes as "1::integer"). Accept either.
+      expect(String(colRows[0].column_default)).toMatch(/^1(::integer)?$/);
+    } finally {
+      await close();
+    }
+  });
+});
