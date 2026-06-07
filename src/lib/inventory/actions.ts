@@ -303,3 +303,19 @@ export async function withdrawInventoryBid(raw: unknown): Promise<ActionResult> 
       ));
   });
 }
+
+export async function setInventoryItemBidMode(raw: unknown): Promise<ActionResult> {
+  return run(setInventoryItemBidModeInput, raw, async (input, orgId) => {
+    // Defense-in-depth: slice-3 verbatim — UPDATE scoped to the session org.
+    // If the row doesn't exist or belongs to another org, zero rows update
+    // and the call returns { ok: true } silently — matches the slice-15
+    // updateInventoryItem convention.
+    await db()
+      .update(inventoryItems)
+      .set({ bidMode: input.mode, updatedAt: new Date() })
+      .where(and(
+        eq(inventoryItems.id, input.inventoryItemId),
+        eq(inventoryItems.orgId, orgId),
+      ));
+  });
+}
