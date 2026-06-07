@@ -25,6 +25,7 @@ export const inventoryItemInput = z.object({
   cut: z.string().max(40).optional(),
   color: z.string().max(40).optional(),
   clarity: z.string().max(40).optional(),
+  visibilityCircleId: z.number().int().positive().nullable().optional(),
 });
 export type InventoryItemInput = z.infer<typeof inventoryItemInput>;
 
