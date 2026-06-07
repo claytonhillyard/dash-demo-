@@ -145,8 +145,8 @@ export async function deleteInventoryItem(id: number): Promise<ActionResult> {
   });
 }
 
-/** Slice-18 write-side gate: can the caller bid on this inventory item?
- *  Five preconditions, evaluated in order. ALL must pass:
+/** Slice-18 + 18b write-side gate: can the caller bid on this inventory item?
+ *  Six preconditions, evaluated in order. ALL must pass:
  *    1. Item exists.
  *    2. Caller is NOT the item owner (self-bid block).
  *    3. Item's bid_mode is non-null (owner has enabled bidding).
@@ -154,6 +154,12 @@ export async function deleteInventoryItem(id: number): Promise<ActionResult> {
  *       except by owner — but owner is rejected at step 2; combination is
  *       Forbidden by construction).
  *    5. Caller is a member of the item's visibility circle.
+ *    6. (Slice 18b) input.quantityRequested <= item.quantity AT POST TIME.
+ *       UX guard only — the accept-side check inside the locked tx is the
+ *       source of truth (stock can change between post and accept).
+ *
+ *  The 6th check sits AFTER membership for no-info-leak: a non-member who
+ *  happens to over-stock gets the same Forbidden as a member who over-stocks.
  *
  *  ⚠ Mirrors getInventoryBidsForItem's bidder|owner SQL visibility, with
  *  the added "no self-bidding" + "bid_mode non-null" + "must be circle
@@ -162,6 +168,7 @@ async function canBidOnItem(
   d: Db,
   orgId: number,
   inventoryItemId: number,
+  quantityRequested: number,
 ): Promise<
   | {
       ok: true;
@@ -176,6 +183,7 @@ async function canBidOnItem(
       ownerOrgId: inventoryItems.orgId,
       bidMode: inventoryItems.bidMode,
       visibilityCircleId: inventoryItems.visibilityCircleId,
+      quantity: inventoryItems.quantity,
     })
     .from(inventoryItems)
     .where(eq(inventoryItems.id, inventoryItemId))
@@ -186,6 +194,7 @@ async function canBidOnItem(
   if (row.visibilityCircleId === null) return { ok: false };
   const isMember = await isOrgMemberOfCircle(d, orgId, row.visibilityCircleId);
   if (!isMember) return { ok: false };
+  if (quantityRequested > row.quantity) return { ok: false };
   return {
     ok: true,
     ownerOrgId: row.ownerOrgId,
@@ -197,7 +206,7 @@ async function canBidOnItem(
 export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
   return run(postInventoryBidInput, raw, async (input, orgId) => {
     const d = db();
-    const access = await canBidOnItem(d, orgId, input.inventoryItemId);
+    const access = await canBidOnItem(d, orgId, input.inventoryItemId, input.quantityRequested);
     if (!access.ok) throw new ForbiddenError("Forbidden");
     const label = await resolveOrgLabel(d, orgId);
     await d.insert(inventoryBids).values({
@@ -207,6 +216,7 @@ export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
       priceCents: input.priceCents,
       currency: input.currency,
       notes: input.notes ?? null,
+      quantityRequested: input.quantityRequested,
     });
   });
 }

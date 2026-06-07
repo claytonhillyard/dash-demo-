@@ -11,6 +11,7 @@ import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-
 import { inventoryItems, inventoryBids, circles, circleMembers, orgs } from "@/db/schema";
 import { postInventoryBid, __setTestDb } from "@/lib/inventory/actions";
 import { requireSession } from "@/lib/auth/requireSession";
+import { eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -112,5 +113,48 @@ describe("postInventoryBid — authz", () => {
     (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ user: "p", orgId: 999 });
     const res = await postInventoryBid({ inventoryItemId: 99999, priceCents: 1 });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
+  });
+
+  it("rejects postInventoryBid when quantityRequested > item.quantity", async () => {
+    // Item has 3 units; bidder asks for 5.
+    await db.insert(circles).values({ id: 5001, name: "C", slug: "c5001", ownerOrgId: 1 }).onConflictDoNothing();
+    await db.insert(circleMembers).values([
+      { circleId: 5001, orgId: 1 }, { circleId: 5001, orgId: 999 },
+    ]).onConflictDoNothing();
+    const [item] = await db.insert(inventoryItems).values({
+      orgId: 1, category: "Diamonds", name: "small-parcel", quantity: 3,
+      status: "in_stock", unitCostCents: 100, retailPriceCents: 200,
+      bidMode: "history", visibilityCircleId: 5001,
+    }).returning();
+
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ user: "x", orgId: 999 });
+
+    const res = await postInventoryBid({
+      inventoryItemId: item.id, priceCents: 100, quantityRequested: 5,
+    });
+    expect(res).toEqual({ ok: false, error: "Forbidden" });
+
+    // Zero rows inserted
+    const after = await db.select().from(inventoryBids).where(eq(inventoryBids.inventoryItemId, item.id));
+    expect(after).toHaveLength(0);
+  });
+
+  it("accepts postInventoryBid when quantityRequested === item.quantity (boundary)", async () => {
+    await db.insert(circles).values({ id: 5002, name: "C", slug: "c5002", ownerOrgId: 1 }).onConflictDoNothing();
+    await db.insert(circleMembers).values([
+      { circleId: 5002, orgId: 1 }, { circleId: 5002, orgId: 999 },
+    ]).onConflictDoNothing();
+    const [item] = await db.insert(inventoryItems).values({
+      orgId: 1, category: "Diamonds", name: "exact-match", quantity: 7,
+      status: "in_stock", unitCostCents: 100, retailPriceCents: 200,
+      bidMode: "history", visibilityCircleId: 5002,
+    }).returning();
+
+    (requireSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ user: "x", orgId: 999 });
+
+    const res = await postInventoryBid({
+      inventoryItemId: item.id, priceCents: 100, quantityRequested: 7,
+    });
+    expect(res).toEqual({ ok: true });
   });
 });
