@@ -4,7 +4,7 @@ import { ensureDbReady } from "@/db/client";
 import { inventoryItems } from "@/db/schema";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { InventoryAdmin, type InventoryRow } from "@/components/inventory/InventoryAdmin";
-import { createInventoryItem, updateInventoryItem, deleteInventoryItem } from "@/lib/inventory/actions";
+import { createInventoryItem, updateInventoryItem, deleteInventoryItem, setInventoryItemBidMode } from "@/lib/inventory/actions";
 import { getCirclesForOrg } from "@/lib/circles/queries";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +27,7 @@ export default async function InventoryPage() {
         unitCostCents: inventoryItems.unitCostCents,
         retailPriceCents: inventoryItems.retailPriceCents,
         visibilityCircleId: inventoryItems.visibilityCircleId,
+        bidMode: inventoryItems.bidMode,
       })
       .from(inventoryItems)
       .where(eq(inventoryItems.orgId, orgId))
@@ -46,6 +47,7 @@ export default async function InventoryPage() {
         createAction={createInventoryItem}
         updateAction={updateInventoryItem}
         deleteAction={deleteInventoryItem}
+        setBidModeAction={setInventoryItemBidMode}
         circles={myCircles.map((c) => ({ id: c.id, name: c.name }))}
         circleNamesById={circleNamesById}
       />

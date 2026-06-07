@@ -24,6 +24,7 @@ export interface SharedInventoryRow {
   quantity: number;
   status: "in_stock" | "reserved" | "sold";
   visibilityCircleId: number;
+  bidMode: "single" | "history" | null; // slice 18
   updatedAt: Date;
 }
 
@@ -97,6 +98,7 @@ export async function getSharedInventoryForOrg(
       quantity: inventoryItems.quantity,
       status: inventoryItems.status,
       visibilityCircleId: inventoryItems.visibilityCircleId,
+      bidMode: inventoryItems.bidMode,
       updatedAt: inventoryItems.updatedAt,
     })
     .from(inventoryItems)

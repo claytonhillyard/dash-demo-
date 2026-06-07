@@ -1,21 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
-import { inventoryItems } from "@/db/schema";
+import { inventoryItems, inventoryBids } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
 import { ForbiddenError } from "@/lib/auth/errors";
+import { resolveOrgLabel } from "@/lib/auth/orgLabel";
 import {
   inventoryItemInput,
   inventoryItemUpdateInput,
   firstZodError,
   type InventoryItemInput,
 } from "./validation";
+import {
+  postInventoryBidInput,
+  acceptInventoryBidInput,
+  rejectInventoryBidInput,
+  withdrawInventoryBidInput,
+  setInventoryItemBidModeInput,
+} from "./bidValidation";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -134,5 +142,207 @@ export async function deleteInventoryItem(id: number): Promise<ActionResult> {
     await db()
       .delete(inventoryItems)
       .where(and(eq(inventoryItems.id, rid), eq(inventoryItems.orgId, orgId)));
+  });
+}
+
+/** Slice-18 write-side gate: can the caller bid on this inventory item?
+ *  Five preconditions, evaluated in order. ALL must pass:
+ *    1. Item exists.
+ *    2. Caller is NOT the item owner (self-bid block).
+ *    3. Item's bid_mode is non-null (owner has enabled bidding).
+ *    4. Item has a visibility_circle_id (private items are non-biddable
+ *       except by owner — but owner is rejected at step 2; combination is
+ *       Forbidden by construction).
+ *    5. Caller is a member of the item's visibility circle.
+ *
+ *  ⚠ Mirrors getInventoryBidsForItem's bidder|owner SQL visibility, with
+ *  the added "no self-bidding" + "bid_mode non-null" + "must be circle
+ *  member" rules. If you change visibility in either place, change both. */
+async function canBidOnItem(
+  d: Db,
+  orgId: number,
+  inventoryItemId: number,
+): Promise<
+  | {
+      ok: true;
+      ownerOrgId: number;
+      bidMode: "single" | "history";
+      visibilityCircleId: number;
+    }
+  | { ok: false }
+> {
+  const [row] = await d
+    .select({
+      ownerOrgId: inventoryItems.orgId,
+      bidMode: inventoryItems.bidMode,
+      visibilityCircleId: inventoryItems.visibilityCircleId,
+    })
+    .from(inventoryItems)
+    .where(eq(inventoryItems.id, inventoryItemId))
+    .limit(1);
+  if (!row) return { ok: false };
+  if (row.ownerOrgId === orgId) return { ok: false };
+  if (row.bidMode === null) return { ok: false };
+  if (row.visibilityCircleId === null) return { ok: false };
+  const isMember = await isOrgMemberOfCircle(d, orgId, row.visibilityCircleId);
+  if (!isMember) return { ok: false };
+  return {
+    ok: true,
+    ownerOrgId: row.ownerOrgId,
+    bidMode: row.bidMode,
+    visibilityCircleId: row.visibilityCircleId,
+  };
+}
+
+export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(postInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const access = await canBidOnItem(d, orgId, input.inventoryItemId);
+    if (!access.ok) throw new ForbiddenError("Forbidden");
+    const label = await resolveOrgLabel(d, orgId);
+    await d.insert(inventoryBids).values({
+      inventoryItemId: input.inventoryItemId,
+      bidderOrgId: orgId,
+      bidderOrgLabel: label,
+      priceCents: input.priceCents,
+      currency: input.currency,
+      notes: input.notes ?? null,
+    });
+  });
+}
+
+export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(acceptInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidId: inventoryBids.id,
+        bidStatus: inventoryBids.status,
+        inventoryItemId: inventoryBids.inventoryItemId,
+        itemOwnerOrgId: inventoryItems.orgId,
+      })
+      .from(inventoryBids)
+      .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBids.inventoryItemId))
+      .where(eq(inventoryBids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError("Forbidden");
+    if (row.itemOwnerOrgId !== orgId) throw new ForbiddenError("Forbidden");
+    if (row.bidStatus !== "pending") throw new ForbiddenError("Forbidden");
+
+    const now = new Date();
+    await d.transaction(async (tx) => {
+      // Serialize concurrent accepts on the SAME item by taking a row-lock on
+      // the parent inventory_item. Two acceptInventoryBid() calls in flight on
+      // different bids of the same item will queue at this SELECT FOR UPDATE
+      // — only one tx holds the lock at a time. Without this, each tx's
+      // snapshot sees the other's bid as still 'pending' and both UPDATEs
+      // succeed → double-accept. Caught by the spec §9.3 concurrent-accept
+      // test in bid-accept-atomicity.test.ts.
+      // TODO(slice-16 backport): src/lib/deals/actions.ts::acceptBid has the
+      // same race (no FOR UPDATE). Backport this pattern there as a separate
+      // fix-only commit; the slice-16 BidsTab is owner-only UI, so the
+      // exposure is lower than slice-18 (anyone who can see the item can
+      // bid), but the fix is the same shape.
+      await tx.execute(
+        sql`SELECT id FROM inventory_items WHERE id = ${row.inventoryItemId} FOR UPDATE`,
+      );
+
+      // Re-read bid status inside the locked tx — the previously-snapshotted
+      // pre-tx SELECT may have observed pending even if a sibling tx has
+      // since flipped this bid to auto_rejected.
+      const fresh = await tx.execute(
+        sql`SELECT status FROM inventory_bids WHERE id = ${input.bidId}`,
+      );
+      const freshRows = (fresh as unknown as { rows: { status: string }[] }).rows;
+      if (freshRows.length === 0 || freshRows[0].status !== "pending") {
+        throw new ForbiddenError("Forbidden");
+      }
+
+      await tx
+        .update(inventoryBids)
+        .set({ status: "accepted", decidedAt: now })
+        .where(and(
+          eq(inventoryBids.id, input.bidId),
+          eq(inventoryBids.status, "pending"),
+        ));
+      await tx
+        .update(inventoryBids)
+        .set({ status: "auto_rejected", decidedAt: now })
+        .where(and(
+          eq(inventoryBids.inventoryItemId, row.inventoryItemId),
+          eq(inventoryBids.status, "pending"),
+          ne(inventoryBids.id, input.bidId),
+        ));
+      // NOTE: we do NOT touch inventory_items.status. Bidding is a price
+      // negotiation; stock-deduction is a separate concern (slice 18b).
+      // See spec §5.3.
+    });
+  });
+}
+
+export async function rejectInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(rejectInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidStatus: inventoryBids.status,
+        itemOwnerOrgId: inventoryItems.orgId,
+      })
+      .from(inventoryBids)
+      .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBids.inventoryItemId))
+      .where(eq(inventoryBids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError("Forbidden");
+    if (row.itemOwnerOrgId !== orgId) throw new ForbiddenError("Forbidden");
+    if (row.bidStatus !== "pending") throw new ForbiddenError("Forbidden");
+    await d
+      .update(inventoryBids)
+      .set({ status: "rejected", decidedAt: new Date() })
+      .where(and(
+        eq(inventoryBids.id, input.bidId),
+        eq(inventoryBids.status, "pending"),
+      ));
+  });
+}
+
+export async function withdrawInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(withdrawInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidderOrgId: inventoryBids.bidderOrgId,
+        status: inventoryBids.status,
+      })
+      .from(inventoryBids)
+      .where(eq(inventoryBids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError("Forbidden");
+    if (row.bidderOrgId !== orgId) throw new ForbiddenError("Forbidden");
+    if (row.status === "withdrawn") return; // idempotent
+    if (row.status !== "pending") throw new ForbiddenError("Forbidden");
+    await d
+      .update(inventoryBids)
+      .set({ status: "withdrawn", decidedAt: new Date() })
+      .where(and(
+        eq(inventoryBids.id, input.bidId),
+        eq(inventoryBids.bidderOrgId, orgId),
+        eq(inventoryBids.status, "pending"),
+      ));
+  });
+}
+
+export async function setInventoryItemBidMode(raw: unknown): Promise<ActionResult> {
+  return run(setInventoryItemBidModeInput, raw, async (input, orgId) => {
+    // Defense-in-depth: slice-3 verbatim — UPDATE scoped to the session org.
+    // If the row doesn't exist or belongs to another org, zero rows update
+    // and the call returns { ok: true } silently — matches the slice-15
+    // updateInventoryItem convention.
+    await db()
+      .update(inventoryItems)
+      .set({ bidMode: input.mode, updatedAt: new Date() })
+      .where(and(
+        eq(inventoryItems.id, input.inventoryItemId),
+        eq(inventoryItems.orgId, orgId),
+      ));
   });
 }

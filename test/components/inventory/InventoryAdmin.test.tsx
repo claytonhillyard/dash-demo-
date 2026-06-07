@@ -11,11 +11,13 @@ it("shows an empty state and submits a new item", async () => {
   const createAction = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
   const updateAction = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
   const deleteAction = vi.fn(async (_id: number) => ({ ok: true as const }));
+  const setBidModeAction = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
   render(<InventoryAdmin
     items={rows}
     createAction={createAction}
     updateAction={updateAction}
     deleteAction={deleteAction}
+    setBidModeAction={setBidModeAction}
     circles={[]}
     circleNamesById={new Map()}
   />);
@@ -34,11 +36,13 @@ it("surfaces an action error", async () => {
   const createAction = vi.fn(async () => ({ ok: false as const, error: "name is required" }));
   const updateAction = vi.fn(async () => ({ ok: true as const }));
   const deleteAction = vi.fn(async () => ({ ok: true as const }));
+  const setBidModeAction = vi.fn(async () => ({ ok: true as const }));
   render(<InventoryAdmin
     items={rows}
     createAction={createAction}
     updateAction={updateAction}
     deleteAction={deleteAction}
+    setBidModeAction={setBidModeAction}
     circles={[]}
     circleNamesById={new Map()}
   />);
@@ -50,6 +54,7 @@ const baseItem = {
   id: 1, category: "Diamonds" as const, name: "Round 1.02ct G/VS1",
   quantity: 1, status: "in_stock", unitCostCents: 0, retailPriceCents: 1240000,
   visibilityCircleId: null as number | null,
+  bidMode: null as "single" | "history" | null,
 };
 
 describe("InventoryAdmin slice 15", () => {
@@ -59,6 +64,7 @@ describe("InventoryAdmin slice 15", () => {
       createAction={vi.fn(async () => ({ ok: true as const }))}
       updateAction={vi.fn(async () => ({ ok: true as const }))}
       deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
       circles={[{ id: 7, name: "Trusted Partners" }]}
       circleNamesById={new Map([[7, "Trusted Partners"]])}
     />);
@@ -72,6 +78,7 @@ describe("InventoryAdmin slice 15", () => {
       createAction={vi.fn(async () => ({ ok: true as const }))}
       updateAction={vi.fn(async () => ({ ok: true as const }))}
       deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
       circles={[{ id: 7, name: "Trusted Partners" }]}
       circleNamesById={new Map([[7, "Trusted Partners"]])}
     />);
@@ -92,6 +99,7 @@ describe("InventoryAdmin slice 15", () => {
       createAction={vi.fn(async () => ({ ok: true as const }))}
       updateAction={vi.fn(async () => ({ ok: true as const }))}
       deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
       circles={[{ id: 7, name: xss }]}
       circleNamesById={new Map([[7, xss]])}
     />);
@@ -108,6 +116,7 @@ describe("InventoryAdmin slice 15", () => {
       createAction={vi.fn(async () => ({ ok: true as const }))}
       updateAction={vi.fn(async () => ({ ok: true as const }))}
       deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
       circles={[]}
       circleNamesById={new Map()}
     />);
@@ -121,6 +130,7 @@ describe("InventoryAdmin slice 15", () => {
       createAction={vi.fn(async () => ({ ok: true as const }))}
       updateAction={updateAction}
       deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
       circles={[{ id: 7, name: "Trusted Partners" }]}
       circleNamesById={new Map([[7, "Trusted Partners"]])}
     />);
@@ -132,5 +142,126 @@ describe("InventoryAdmin slice 15", () => {
     const arg = updateAction.mock.calls[0][0] as Record<string, unknown>;
     expect(arg.id).toBe(1);
     expect(arg.visibilityCircleId).toBe(7);
+  });
+});
+
+describe("InventoryAdmin slice 18 — Bidding selector", () => {
+  it("renders the per-row bidding selector with default 'Off' when bidMode is null", () => {
+    render(<InventoryAdmin
+      items={[{ ...baseItem }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    const select = screen.getByLabelText(/bidding mode for Round 1.02/i) as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  it("reflects current bidMode in the selector default", () => {
+    render(<InventoryAdmin
+      items={[{ ...baseItem, bidMode: "single" }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    const select = screen.getByLabelText(/bidding mode for Round 1.02/i) as HTMLSelectElement;
+    expect(select.value).toBe("single");
+  });
+
+  it("renders the 'Bidding · single' badge when bidMode === 'single'", () => {
+    render(<InventoryAdmin
+      items={[{ ...baseItem, bidMode: "single" }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    expect(screen.getByText(/Bidding · single/i)).toBeInTheDocument();
+  });
+
+  it("renders the 'Bidding · history' badge when bidMode === 'history'", () => {
+    render(<InventoryAdmin
+      items={[{ ...baseItem, bidMode: "history" }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    expect(screen.getByText(/Bidding · history/i)).toBeInTheDocument();
+  });
+
+  it("does NOT render the badge when bidMode === null", () => {
+    render(<InventoryAdmin
+      items={[{ ...baseItem, bidMode: null }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={vi.fn(async () => ({ ok: true as const }))}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    expect(screen.queryByText(/Bidding ·/i)).not.toBeInTheDocument();
+  });
+
+  it("selecting 'Single' fires setBidModeAction with mode='single'", async () => {
+    const setBidModeAction = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
+    render(<InventoryAdmin
+      items={[{ ...baseItem }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={setBidModeAction}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    const select = screen.getByLabelText(/bidding mode for Round 1.02/i) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "single" } });
+    await Promise.resolve();
+    expect(setBidModeAction).toHaveBeenCalledTimes(1);
+    expect(setBidModeAction.mock.calls[0][0]).toEqual({ inventoryItemId: 1, mode: "single" });
+  });
+
+  it("selecting 'History' fires setBidModeAction with mode='history'", async () => {
+    const setBidModeAction = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
+    render(<InventoryAdmin
+      items={[{ ...baseItem, bidMode: "single" }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={setBidModeAction}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    const select = screen.getByLabelText(/bidding mode for Round 1.02/i) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "history" } });
+    await Promise.resolve();
+    expect(setBidModeAction).toHaveBeenCalledWith({ inventoryItemId: 1, mode: "history" });
+  });
+
+  it("selecting 'Off' fires setBidModeAction with mode=null", async () => {
+    const setBidModeAction = vi.fn(async (_raw: unknown) => ({ ok: true as const }));
+    render(<InventoryAdmin
+      items={[{ ...baseItem, bidMode: "single" }]}
+      createAction={vi.fn(async () => ({ ok: true as const }))}
+      updateAction={vi.fn(async () => ({ ok: true as const }))}
+      deleteAction={vi.fn(async () => ({ ok: true as const }))}
+      setBidModeAction={setBidModeAction}
+      circles={[]}
+      circleNamesById={new Map()}
+    />);
+    const select = screen.getByLabelText(/bidding mode for Round 1.02/i) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "" } });
+    await Promise.resolve();
+    expect(setBidModeAction).toHaveBeenCalledWith({ inventoryItemId: 1, mode: null });
   });
 });

@@ -476,6 +476,7 @@ export interface SeedSharedInventoryRow {
   quantity: number;
   status: "in_stock" | "reserved" | "sold";
   visibilityCircleId: number;
+  bidMode: "single" | "history" | null; // slice 18
   updatedAt: Date;
 }
 
@@ -491,6 +492,7 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
       quantity: 1,
       status: "in_stock",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      bidMode: null,
       updatedAt: hAgo(3),
     },
     {
@@ -502,6 +504,7 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
       quantity: 1,
       status: "in_stock",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      bidMode: null,
       updatedAt: hAgo(12),
     },
     {
@@ -513,6 +516,7 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
       quantity: 50,
       status: "in_stock",
       visibilityCircleId: DEMO_TRUSTED_PARTNERS_CIRCLE_ID,
+      bidMode: null,
       updatedAt: hAgo(30),
     },
   ];
@@ -524,9 +528,65 @@ export function getSeedSharedInventoryRows(): SeedSharedInventoryRow[] {
 export function getSeedSharedInventoryForOrg(orgId: number): SeedSharedInventoryRow[] {
   const circleIds = new Set(getSeedCircleIdsForOrg(orgId));
   if (circleIds.size === 0) return [];
-  return getSeedSharedInventoryRows().filter(
-    (r) => r.orgId !== orgId && circleIds.has(r.visibilityCircleId),
-  );
+  const modes = getSeedInventoryBidModes();
+  return getSeedSharedInventoryRows()
+    .filter((r) => r.orgId !== orgId && circleIds.has(r.visibilityCircleId))
+    .map((r) => ({ ...r, bidMode: modes.get(r.id) ?? null }));
+}
+
+// --- Slice 18 demo seed: inventory bids + per-item bid-mode ---
+
+export interface SeedInventoryBid {
+  inventoryItemId: number;
+  bidderOrgId: number;
+  bidderOrgLabel: string;
+  priceCents: number;
+  currency: string;
+  notes: string | null;
+  status: "pending";
+  createdAtOffsetMinutes: number;
+}
+
+/** Two pending bids from AIYA on partner items. The bids never enter pglite
+ *  (the Netlify demo is in-memory); they exist as fixture data the eventual
+ *  /exchange demo-shim can render. The real query getInventoryBidsForItem
+ *  returns [] in demo mode per slice-16 convention; rendering them is the
+ *  component's responsibility (consume the constant directly). */
+export const DEMO_INVENTORY_BIDS: SeedInventoryBid[] = [
+  {
+    inventoryItemId: 601, // Mehta Round 2.51ct (slice 15 seed)
+    bidderOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgLabel: "AIYA Designs",
+    priceCents: 168_500_00,
+    currency: "USD",
+    notes: "Firm. 7-day inspection window.",
+    status: "pending",
+    createdAtOffsetMinutes: 40,
+  },
+  {
+    inventoryItemId: 602, // Saint-Cloud Cushion Padparadscha (slice 15 seed)
+    bidderOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgLabel: "AIYA Designs",
+    priceCents: 42_000_00,
+    currency: "USD",
+    notes: null,
+    status: "pending",
+    createdAtOffsetMinutes: 12,
+  },
+];
+
+/** Which seeded inventory items have bidding enabled, and in which mode.
+ *  Item 601: single-bid mode (Mehta Round 2.51ct — one outstanding bid).
+ *  Item 602: history mode (Saint-Cloud Padparadscha — owner sees a thread).
+ *  Item 603: null (bidding OFF — demonstrates the opt-in default).
+ *  Both 601 and 602 have a corresponding bid in DEMO_INVENTORY_BIDS so the
+ *  fixture is internally consistent. 603 has no bid (matches bidMode=null). */
+export function getSeedInventoryBidModes(): Map<number, "single" | "history" | null> {
+  return new Map<number, "single" | "history" | null>([
+    [601, "single"],
+    [602, "history"],
+    [603, null],
+  ]);
 }
 
 // --- Slice 5 demo seed: weekly website KPI snapshots ---

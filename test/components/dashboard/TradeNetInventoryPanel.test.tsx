@@ -14,6 +14,7 @@ describe("TradeNetInventoryPanel", () => {
         id: 1, orgId: 501, ownerOrgLabel: "Mehta Diamonds — Mumbai",
         category: "Diamonds", name: "Round 2.51ct E/VVS1 — demo",
         quantity: 1, status: "in_stock", visibilityCircleId: 201,
+        bidMode: null,
         updatedAt: new Date(),
       },
     ]} />);
@@ -26,7 +27,7 @@ describe("TradeNetInventoryPanel", () => {
     render(<TradeNetInventoryPanel items={[
       { id: 1, orgId: 501, ownerOrgLabel: xss, category: "Diamonds",
         name: "demo", quantity: 1, status: "in_stock", visibilityCircleId: 201,
-        updatedAt: new Date() },
+        bidMode: null, updatedAt: new Date() },
     ]} />);
     expect(screen.getByText(xss)).toBeInTheDocument();
     expect(document.querySelector("script")).toBeNull();

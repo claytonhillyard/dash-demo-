@@ -1,12 +1,16 @@
 import type { SharedInventoryRow } from "@/db/inventory";
+import type { InventoryBidView } from "@/db/inventoryBids";
 import { formatInventoryVisibility } from "@/lib/inventory/format";
 import { timeAgo } from "@/lib/company/format";
 
 export function TradeNetInventoryList({
-  items, circleNamesById,
+  items, circleNamesById, viewerOrgId, bidsByItemId, onPlaceBid,
 }: {
   items: SharedInventoryRow[];
   circleNamesById: Map<number, string>;
+  viewerOrgId: number;
+  bidsByItemId: Map<number, InventoryBidView[]>;
+  onPlaceBid: (item: SharedInventoryRow) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -30,6 +34,19 @@ export function TradeNetInventoryList({
               >
                 {vis.circleName}
               </span>
+            )}
+            {it.bidMode !== null && it.orgId !== viewerOrgId && (
+              <button
+                type="button"
+                onClick={() => onPlaceBid(it)}
+                className="rounded border border-gold/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold/80 hover:bg-gold/10"
+              >
+                Place Bid
+                {(() => {
+                  const pending = (bidsByItemId.get(it.id) ?? []).filter((b) => b.status === "pending").length;
+                  return pending > 0 ? ` · ${pending} pending` : "";
+                })()}
+              </button>
             )}
             <span className="text-[10px] text-text/40">{timeAgo(it.updatedAt)}</span>
           </li>
