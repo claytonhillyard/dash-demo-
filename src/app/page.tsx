@@ -4,7 +4,7 @@ import { TickerStrip } from "@/components/market/TickerStrip";
 import { DashboardGrid } from "./DashboardGrid";
 import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
-import { getInventorySummary } from "@/db/inventory";
+import { getInventorySummary, getSharedInventoryForOrg } from "@/db/inventory";
 import { getDiamondSummary } from "@/db/diamonds";
 import { getActiveDeals } from "@/lib/deals/queries";
 import { getCircleNamesForOrg, getCircleIdsForOrg } from "@/lib/circles/queries";
@@ -41,7 +41,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
-  const [invSummary, dia, activeDeals, circleNamesById, viewerCircleIdList, websiteTrend] =
+  const [invSummary, dia, activeDeals, circleNamesById, viewerCircleIdList, websiteTrend, sharedInventory] =
     await Promise.all([
       getInventorySummary(db, orgId),
       getDiamondSummary(db, orgId),
@@ -49,6 +49,7 @@ export default async function Home() {
       getCircleNamesForOrg(db, orgId),
       getCircleIdsForOrg(db, orgId),
       getWebsiteSnapshotTrend(db, orgId, 8),
+      getSharedInventoryForOrg(db, orgId, 5),
     ]);
 
   // Slice 10 + 16: per-deal fetches. Parallelized via Promise.all so the 4
@@ -137,10 +138,11 @@ export default async function Home() {
     bids: todaysBids,
     actions: { acceptBid, rejectBid },
   };
+  const tradenetInventory = { items: sharedInventory };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>
-        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} />
+        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} tradenetInventory={tradenetInventory} />
       </Shell>
     </QuotesProvider>
   );
