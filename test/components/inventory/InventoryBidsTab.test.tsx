@@ -19,6 +19,7 @@ function bid(over: Partial<InventoryBidView> = {}): InventoryBidView {
     priceCents: 12_000_00,
     currency: "USD",
     notes: null,
+    quantityRequested: 1,
     status: "pending",
     decidedAt: null,
     createdAt: new Date(),

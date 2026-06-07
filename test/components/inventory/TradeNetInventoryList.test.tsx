@@ -47,8 +47,8 @@ describe("TradeNetInventoryList — Place Bid button visibility", () => {
 
   it("shows pending count when bidsByItemId has pending entries", () => {
     const bids = new Map([[1, [
-      { id: 10, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, status: "pending" as const, decidedAt: null, createdAt: new Date() },
-      { id: 11, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, status: "pending" as const, decidedAt: null, createdAt: new Date() },
+      { id: 10, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, quantityRequested: 1, status: "pending" as const, decidedAt: null, createdAt: new Date() },
+      { id: 11, inventoryItemId: 1, bidderOrgId: 1, bidderOrgLabel: "AIYA", priceCents: 1, currency: "USD", notes: null, quantityRequested: 1, status: "pending" as const, decidedAt: null, createdAt: new Date() },
     ]]]);
     render(<TradeNetInventoryList
       items={[makeItem()]}
