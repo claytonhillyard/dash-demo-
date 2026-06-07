@@ -188,6 +188,7 @@ export const inventoryItems = pgTable(
       () => circles.id,
       { onDelete: "set null" },
     ),
+    bidMode: text("bid_mode", { enum: ["single", "history"] }), // NULLABLE — null = bidding off
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -361,6 +362,45 @@ export const bids = pgTable(
     bidderStatusIdx: index("bids_bidder_status_idx").on(t.bidderOrgId, t.status),
     pendingByDealIdx: index("bids_pending_by_deal_idx")
       .on(t.dealId, t.status)
+      .where(sql`${t.status} = 'pending'`),
+  }),
+);
+
+export const inventoryBids = pgTable(
+  "inventory_bids",
+  {
+    id: serial("id").primaryKey(),
+    inventoryItemId: integer("inventory_item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    bidderOrgId: integer("bidder_org_id")
+      .notNull()
+      .references(() => orgs.id),
+    bidderOrgLabel: text("bidder_org_label").notNull(),
+    priceCents: integer("price_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    notes: text("notes"),
+    status: text("status", {
+      enum: ["pending", "accepted", "rejected", "withdrawn", "auto_rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    itemCreatedIdx: index("inventory_bids_item_created_idx").on(
+      t.inventoryItemId,
+      t.createdAt.desc(),
+    ),
+    bidderCreatedIdx: index("inventory_bids_bidder_created_idx").on(
+      t.bidderOrgId,
+      t.createdAt.desc(),
+    ),
+    pendingByItemIdx: index("inventory_bids_pending_by_item_idx")
+      .on(t.inventoryItemId, t.status)
       .where(sql`${t.status} = 'pending'`),
   }),
 );
