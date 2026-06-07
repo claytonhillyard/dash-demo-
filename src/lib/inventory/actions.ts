@@ -252,3 +252,54 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
     });
   });
 }
+
+export async function rejectInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(rejectInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidStatus: inventoryBids.status,
+        itemOwnerOrgId: inventoryItems.orgId,
+      })
+      .from(inventoryBids)
+      .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBids.inventoryItemId))
+      .where(eq(inventoryBids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError("Forbidden");
+    if (row.itemOwnerOrgId !== orgId) throw new ForbiddenError("Forbidden");
+    if (row.bidStatus !== "pending") throw new ForbiddenError("Forbidden");
+    await d
+      .update(inventoryBids)
+      .set({ status: "rejected", decidedAt: new Date() })
+      .where(and(
+        eq(inventoryBids.id, input.bidId),
+        eq(inventoryBids.status, "pending"),
+      ));
+  });
+}
+
+export async function withdrawInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(withdrawInventoryBidInput, raw, async (input, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidderOrgId: inventoryBids.bidderOrgId,
+        status: inventoryBids.status,
+      })
+      .from(inventoryBids)
+      .where(eq(inventoryBids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError("Forbidden");
+    if (row.bidderOrgId !== orgId) throw new ForbiddenError("Forbidden");
+    if (row.status === "withdrawn") return; // idempotent
+    if (row.status !== "pending") throw new ForbiddenError("Forbidden");
+    await d
+      .update(inventoryBids)
+      .set({ status: "withdrawn", decidedAt: new Date() })
+      .where(and(
+        eq(inventoryBids.id, input.bidId),
+        eq(inventoryBids.bidderOrgId, orgId),
+        eq(inventoryBids.status, "pending"),
+      ));
+  });
+}
