@@ -6,14 +6,17 @@ import type { ActionResult } from "@/lib/inventory/actions";
 
 export function PostInventoryBidForm({
   inventoryItemId,
+  availableQuantity,
   postInventoryBid,
 }: {
   inventoryItemId: number;
+  availableQuantity: number;
   postInventoryBid: (input: PostInventoryBidInput) => Promise<ActionResult>;
 }) {
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState<"USD" | "EUR" | "INR" | "JPY">("USD");
   const [notes, setNotes] = useState("");
+  const [quantity, setQuantity] = useState("1");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -23,18 +26,29 @@ export function PostInventoryBidForm({
     return Math.round(n * 100);
   })();
 
+  const qty = (() => {
+    const n = Number(quantity);
+    if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) return 0;
+    return n;
+  })();
+
+  const overStock = qty > availableQuantity;
+
   function submit() {
     setError(null);
+    if (overStock) return;
     start(async () => {
       const res = await postInventoryBid({
         inventoryItemId,
         priceCents: cents,
         currency,
         notes: notes.trim() ? notes.trim() : undefined,
+        quantityRequested: qty,
       });
       if (res.ok) {
         setPrice("");
         setNotes("");
+        setQuantity("1");
       } else {
         setError(res.error);
       }
@@ -46,7 +60,21 @@ export function PostInventoryBidForm({
       onSubmit={(e) => { e.preventDefault(); submit(); }}
       className="space-y-2 border-t border-text/10 pt-3"
     >
+      <p className="text-[10px] text-text/40">
+        Available: {availableQuantity} unit{availableQuantity === 1 ? "" : "s"}
+      </p>
       <div className="flex gap-2">
+        <input
+          aria-label="quantity"
+          type="number"
+          min={1}
+          max={availableQuantity}
+          step={1}
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          placeholder="Qty"
+          className="w-16 bg-bg p-1 text-sm"
+        />
         <input
           aria-label="price"
           type="number"
@@ -78,9 +106,14 @@ export function PostInventoryBidForm({
         className="w-full bg-bg p-1 text-xs"
         rows={2}
       />
+      {overStock && (
+        <p role="alert" className="text-xs text-bad">
+          Cannot bid for more than {availableQuantity} units.
+        </p>
+      )}
       <button
         type="submit"
-        disabled={pending || cents === 0}
+        disabled={pending || cents === 0 || qty === 0 || overStock}
         className="rounded border border-gold/40 px-3 py-1 text-xs uppercase tracking-wider text-gold/80 disabled:opacity-40"
       >
         {pending ? "Submitting…" : "Place Bid"}
