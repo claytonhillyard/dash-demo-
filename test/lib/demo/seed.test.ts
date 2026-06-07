@@ -304,6 +304,7 @@ import {
   DEMO_ARGYLE_ORG_ID,
   getSeedPendingInvitesForOrg,
   getSeedOwnedCirclesForOrg,
+  DEMO_DEAL_ATTACHMENTS,
 } from "@/lib/demo/seed";
 
 describe("DEMO_ARGYLE_ORG_ID", () => {
@@ -386,5 +387,19 @@ describe("slice 15 shared inventory seed", () => {
     const rows = getSeedSharedInventoryForOrg(DEMO_PARTNER_ORG_IDS.MEHTA);
     // 601 is Mehta's own item — excluded by ne(orgId).
     expect(rows.map((r) => r.id).sort()).toEqual([602, 603]);
+  });
+});
+
+describe("DEMO_DEAL_ATTACHMENTS — slice-17 authored seed", () => {
+  it("exports 3 image attachments across deals 109 + 110", () => {
+    expect(DEMO_DEAL_ATTACHMENTS).toHaveLength(3);
+    const byDeal = new Map<number, number>();
+    for (const a of DEMO_DEAL_ATTACHMENTS) {
+      byDeal.set(a.dealId, (byDeal.get(a.dealId) ?? 0) + 1);
+    }
+    expect(byDeal.get(109)).toBe(2);
+    expect(byDeal.get(110)).toBe(1);
+    expect(DEMO_DEAL_ATTACHMENTS.every((a) => a.kind === "image")).toBe(true);
+    expect(DEMO_DEAL_ATTACHMENTS.every((a) => a.publicCdnUrl.startsWith("https://"))).toBe(true);
   });
 });

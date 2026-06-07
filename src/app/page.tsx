@@ -22,6 +22,11 @@ import {
   type BidView,
 } from "@/db/bids";
 import {
+  getAttachmentsForDeal,
+  resolveSignedUrl,
+  type DealAttachmentView,
+} from "@/db/dealAttachments";
+import {
   postDealMessage,
   setDealThreadMode,
   deleteDealMessage,
@@ -31,7 +36,10 @@ import {
   rejectBid,
   withdrawBid,
   setDealBidMode,
+  uploadDealAttachment,
+  deleteDealAttachment,
 } from "@/lib/deals/actions";
+import { DEMO_DEAL_ATTACHMENTS } from "@/lib/demo/seed";
 import { updatedAgo } from "@/lib/company/format";
 import { getProviderStatus } from "@/lib/market/health";
 import { isDemoMode } from "@/lib/demo/mode";
@@ -85,6 +93,50 @@ export default async function Home() {
     const m = bidModeResults[i];
     if (m) bidModeByDealId.set(id, m);
   });
+
+  // Slice 17: per-deal attachment metadata + per-attachment signed URLs.
+  // Demo mode short-circuits to the authored DEMO_DEAL_ATTACHMENTS constant
+  // (with publicCdnUrl used directly as the renderable URL). Production
+  // path parallelizes over deals; each deal parallelizes its signed-URL
+  // fetches across its attachments.
+  const attachmentsByDealId = new Map<number, DealAttachmentView[]>();
+  const signedUrlsByDealId = new Map<number, Map<number, string>>();
+  if (isDemoMode()) {
+    for (const id of dealIds) {
+      const demoForDeal: DealAttachmentView[] = DEMO_DEAL_ATTACHMENTS
+        .filter((a) => a.dealId === id)
+        .map((a) => ({
+          id: a.id,
+          dealId: a.dealId,
+          uploadedByOrgId: a.uploadedByOrgId,
+          kind: a.kind,
+          storageKey: a.publicCdnUrl, // unused in demo; URL lives on signedUrlsByDealId
+          mimeType: a.mimeType,
+          sizeBytes: 0,
+          altText: a.altText,
+          createdAt: new Date(Date.now() - a.createdAtOffsetMinutes * 60_000),
+        }));
+      attachmentsByDealId.set(id, demoForDeal);
+      const urls = new Map<number, string>();
+      for (const a of demoForDeal) urls.set(a.id, a.storageKey);
+      signedUrlsByDealId.set(id, urls);
+    }
+  } else {
+    await Promise.all(
+      dealIds.map(async (id) => {
+        const atts = await getAttachmentsForDeal(db, orgId, id);
+        attachmentsByDealId.set(id, atts);
+        const urls = new Map<number, string>();
+        await Promise.all(
+          atts.map(async (a) => {
+            urls.set(a.id, await resolveSignedUrl(db, orgId, id, a.id));
+          }),
+        );
+        signedUrlsByDealId.set(id, urls);
+      }),
+    );
+  }
+
   const viewerCircleIds: ReadonlySet<number> = new Set(viewerCircleIdList);
   const inventory = {
     counts: invSummary.counts,
@@ -122,6 +174,13 @@ export default async function Home() {
       rejectBid,
       withdrawBid,
       setBidMode: setDealBidMode,
+    },
+    // Slice 17: attachments
+    attachmentsByDealId,
+    signedUrlsByDealId,
+    attachmentActions: {
+      uploadAttachment: uploadDealAttachment,
+      deleteAttachment: deleteDealAttachment,
     },
   };
   const website = {

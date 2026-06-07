@@ -97,6 +97,27 @@ export const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // Slice 17: server-action multipart bodies for deal-photo uploads need
+  // to exceed Next's 1MB default. 10MB matches the per-file cap enforced
+  // by `uploadDealAttachment` (validateAttachmentSize). Lives under
+  // `experimental` per Next 15's stable surface.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
+  // Slice 17: allowlist remote image hosts so `next/image` can optimize the
+  // carousel thumbnails. Demo mode uses Unsplash; production uses Netlify
+  // Blobs signed URLs (served from a Netlify CDN host). Both wildcards
+  // (`*.netlify.app`, `*.netlify.com`) cover the observed signed-URL
+  // hostnames in dev + prod — the exact subdomain depends on the site.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**.netlify.app" },
+      { protocol: "https", hostname: "**.netlify.com" },
+      { protocol: "https", hostname: "images.unsplash.com" },
+    ],
+  },
   // pglite ships a WASM module + uses Node fs to load it. If Next bundles it for
   // the server runtime, its asset paths get rewritten to URLs and the WASM/file
   // load throws ("path must be a string ... received URL"), so the dev DB never
