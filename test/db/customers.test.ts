@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db";
 import { customers } from "@/db/schema";
-import { getCustomers } from "@/db/customers";
+import { getCustomers, getCustomerById } from "@/db/customers";
 
 let db: Db;
 beforeAll(async () => {
@@ -57,5 +57,23 @@ describe("getCustomers — cross-org isolation", () => {
     // Cap at 200 — request a huge limit, ensure no SQL error
     const big = await getCustomers(db, 1, { limit: 9999 });
     expect(big.length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe("getCustomerById", () => {
+  it("returns the customer for the owner", async () => {
+    const id = await seedRow(1, "Alice", { email: "a@x.com" });
+    const row = await getCustomerById(db, 1, id);
+    expect(row?.name).toBe("Alice");
+    expect(row?.email).toBe("a@x.com");
+  });
+
+  it("returns null when the customer is in a different org", async () => {
+    const id = await seedRow(999, "Hidden");
+    expect(await getCustomerById(db, 1, id)).toBeNull();
+  });
+
+  it("returns null for an unknown id", async () => {
+    expect(await getCustomerById(db, 1, 9_999_999)).toBeNull();
   });
 });

@@ -106,3 +106,60 @@ export async function getCustomers(
     updatedAt: r.updated_at instanceof Date ? r.updated_at : new Date(r.updated_at),
   }));
 }
+
+/**
+ * Returns one customer if it exists in the viewer's org. Returns null when
+ * the row doesn't exist OR exists in a different org — caller has no way to
+ * distinguish the two cases. By design.
+ */
+export async function getCustomerById(
+  db: Db,
+  viewerOrgId: number,
+  id: number,
+): Promise<CustomerView | null> {
+  if (isDemoMode()) {
+    // TODO(slice-22 Phase C C1): replace with `const { DEMO_CUSTOMERS } = await import("@/lib/demo/seed");`
+    throw new Error("DEMO_CUSTOMERS not yet exported (slice 22 Phase C C1)");
+  }
+
+  const res = await db.execute(sql`
+    SELECT id, name, business_name, email, phone, address, notes,
+           external_ref, first_seen_at, created_at, updated_at
+    FROM customers
+    WHERE id = ${id} AND org_id = ${viewerOrgId}
+    LIMIT 1
+  `);
+
+  const [r] = rowsOf<{
+    id: number;
+    name: string;
+    business_name: string | null;
+    email: string | null;
+    phone: string | null;
+    address: CustomerAddress | null;
+    notes: string | null;
+    external_ref: string | null;
+    first_seen_at: Date | string | null;
+    created_at: Date | string;
+    updated_at: Date | string;
+  }>(res);
+  if (!r) return null;
+  return {
+    id: r.id,
+    name: r.name,
+    businessName: r.business_name,
+    email: r.email,
+    phone: r.phone,
+    address: r.address,
+    notes: r.notes,
+    externalRef: r.external_ref,
+    firstSeenAt:
+      r.first_seen_at === null
+        ? null
+        : r.first_seen_at instanceof Date
+          ? r.first_seen_at
+          : new Date(r.first_seen_at),
+    createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
+    updatedAt: r.updated_at instanceof Date ? r.updated_at : new Date(r.updated_at),
+  };
+}
