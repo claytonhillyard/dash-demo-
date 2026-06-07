@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
@@ -231,6 +231,33 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
 
     const now = new Date();
     await d.transaction(async (tx) => {
+      // Serialize concurrent accepts on the SAME item by taking a row-lock on
+      // the parent inventory_item. Two acceptInventoryBid() calls in flight on
+      // different bids of the same item will queue at this SELECT FOR UPDATE
+      // — only one tx holds the lock at a time. Without this, each tx's
+      // snapshot sees the other's bid as still 'pending' and both UPDATEs
+      // succeed → double-accept. Caught by the spec §9.3 concurrent-accept
+      // test in bid-accept-atomicity.test.ts.
+      // TODO(slice-16 backport): src/lib/deals/actions.ts::acceptBid has the
+      // same race (no FOR UPDATE). Backport this pattern there as a separate
+      // fix-only commit; the slice-16 BidsTab is owner-only UI, so the
+      // exposure is lower than slice-18 (anyone who can see the item can
+      // bid), but the fix is the same shape.
+      await tx.execute(
+        sql`SELECT id FROM inventory_items WHERE id = ${row.inventoryItemId} FOR UPDATE`,
+      );
+
+      // Re-read bid status inside the locked tx — the previously-snapshotted
+      // pre-tx SELECT may have observed pending even if a sibling tx has
+      // since flipped this bid to auto_rejected.
+      const fresh = await tx.execute(
+        sql`SELECT status FROM inventory_bids WHERE id = ${input.bidId}`,
+      );
+      const freshRows = (fresh as unknown as { rows: { status: string }[] }).rows;
+      if (freshRows.length === 0 || freshRows[0].status !== "pending") {
+        throw new ForbiddenError("Forbidden");
+      }
+
       await tx
         .update(inventoryBids)
         .set({ status: "accepted", decidedAt: now })
