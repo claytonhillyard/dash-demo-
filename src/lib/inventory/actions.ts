@@ -237,12 +237,8 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
       // — only one tx holds the lock at a time. Without this, each tx's
       // snapshot sees the other's bid as still 'pending' and both UPDATEs
       // succeed → double-accept. Caught by the spec §9.3 concurrent-accept
-      // test in bid-accept-atomicity.test.ts.
-      // TODO(slice-16 backport): src/lib/deals/actions.ts::acceptBid has the
-      // same race (no FOR UPDATE). Backport this pattern there as a separate
-      // fix-only commit; the slice-16 BidsTab is owner-only UI, so the
-      // exposure is lower than slice-18 (anyone who can see the item can
-      // bid), but the fix is the same shape.
+      // test in bid-accept-atomicity.test.ts. Slice 16's acceptBid uses
+      // the identical pattern on deals (commit aed4591); keep them in sync.
       await tx.execute(
         sql`SELECT id FROM inventory_items WHERE id = ${row.inventoryItemId} FOR UPDATE`,
       );
