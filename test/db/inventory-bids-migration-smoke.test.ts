@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { createTestDb } from "@/db/client";
 import { sql } from "drizzle-orm";
 
-describe("migration 0012 — inventory bidding (slice 18)", () => {
+describe("migration 0013 — inventory bidding (slice 18)", () => {
   it("creates inventory_bids and inventory_items.bid_mode without error", async () => {
     const { db, close } = await createTestDb();
     try {

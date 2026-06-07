@@ -5,7 +5,7 @@ import { and, eq, ne, sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
-import { deals, dealMessages, circleMembers, bids } from "@/db/schema";
+import { deals, dealMessages, circleMembers, bids, dealAttachments } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
@@ -25,6 +25,14 @@ import {
   type PostBidInput, type AcceptBidInput, type RejectBidInput,
   type WithdrawBidInput, type SetDealBidModeInput,
 } from "./bidValidation";
+import {
+  uploadAttachmentMetaInput,
+  deleteAttachmentInput,
+  type DeleteAttachmentInput,
+} from "./attachmentValidation";
+import { detectKindFromBytes } from "./attachmentMime";
+import { getBlobStore } from "@/lib/storage/blobStore";
+import { countAttachmentsByKind } from "@/db/dealAttachments";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -414,5 +422,187 @@ export async function setDealBidMode(raw: unknown): Promise<ActionResult> {
       .update(deals)
       .set({ bidMode: input.mode })
       .where(and(eq(deals.id, input.dealId), eq(deals.orgId, orgId)));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Slice 17: Deal attachments (photos + certs)
+// ---------------------------------------------------------------------------
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_IMAGES_PER_DEAL = 8;
+const MAX_CERTS_PER_DEAL = 4;
+
+/** Server action: multipart upload of a single image or cert.
+ *  Cannot use runWithUser's Zod-on-JSON contract because the body is
+ *  FormData with a binary file. Inlines session + Zod-on-fields + the
+ *  same "demo guard, error mapping" contract from runWithUser. */
+export async function uploadDealAttachment(formData: FormData): Promise<ActionResult> {
+  if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
+
+  let orgId: number;
+  try {
+    const session = await requireSession();
+    orgId = session.orgId;
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  // Field parsing — FormData values are string | File. Coerce into the Zod shape.
+  const dealIdRaw = formData.get("dealId");
+  const kindRaw = formData.get("kind");
+  const fileRaw = formData.get("file");
+  const altTextRaw = formData.get("altText");
+
+  const meta = uploadAttachmentMetaInput.safeParse({
+    dealId: typeof dealIdRaw === "string" ? Number(dealIdRaw) : undefined,
+    kind: typeof kindRaw === "string" ? kindRaw : undefined,
+    altText: typeof altTextRaw === "string" && altTextRaw !== "" ? altTextRaw : undefined,
+  });
+  if (!meta.success) return { ok: false, error: firstZodError(meta.error) };
+
+  if (!(fileRaw instanceof Blob)) {
+    return { ok: false, error: "Missing file" };
+  }
+
+  // Owner-only authz — in-circle partners get READ-only access to attachments.
+  const d = db();
+  const [deal] = await d
+    .select({ ownerOrgId: deals.orgId })
+    .from(deals)
+    .where(eq(deals.id, meta.data.dealId))
+    .limit(1);
+  if (!deal || deal.ownerOrgId !== orgId) return { ok: false, error: "Forbidden" };
+
+  // Size cap
+  if (fileRaw.size > MAX_FILE_BYTES) return { ok: false, error: "Forbidden" };
+
+  // MIME magic-byte validation (never trust Content-Type header from request)
+  const head = new Uint8Array(await fileRaw.slice(0, 12).arrayBuffer());
+  const detected = detectKindFromBytes(head);
+  if (!detected || detected.kind !== meta.data.kind) {
+    return { ok: false, error: "Forbidden" };
+  }
+
+  // Per-deal kind cap
+  const counts = await countAttachmentsByKind(d, meta.data.dealId);
+  if (meta.data.kind === "image" && counts.image >= MAX_IMAGES_PER_DEAL) {
+    return { ok: false, error: "Forbidden" };
+  }
+  if (meta.data.kind === "cert" && counts.cert >= MAX_CERTS_PER_DEAL) {
+    return { ok: false, error: "Forbidden" };
+  }
+
+  // Compose storage key. UUID prevents same-name collisions across uploads;
+  // extension is derived from the detected MIME (not the filename).
+  const ext = detected.mime === "image/jpeg" ? "jpg"
+    : detected.mime === "image/png" ? "png"
+    : detected.mime === "image/webp" ? "webp"
+    : "pdf";
+  const storageKey = `org/${orgId}/deal/${meta.data.dealId}/${meta.data.kind}/${crypto.randomUUID()}.${ext}`;
+
+  // Read full bytes for the upload
+  const bytes = new Uint8Array(await fileRaw.arrayBuffer());
+
+  // Blob first, then DB. If DB throws, delete the blob — no orphans.
+  const store = getBlobStore();
+
+  // Storage write: a Netlify Blobs network failure / 5xx surfaces here.
+  // Without this catch the exception bypasses the action's {ok,error} contract
+  // and hits Next.js as an opaque 500 — and Sentry never tags it with
+  // layer="deals-action". Matches the slice-11 capture convention.
+  try {
+    await store.set(storageKey, bytes);
+  } catch (e) {
+    console.error("[deals action] blob set failed", { storageKey, error: e });
+    Sentry.captureException(e, {
+      tags: { layer: "deals-action", subsystem: "blob-store" },
+      extra: { storageKey },
+    });
+    return { ok: false, error: "Upload failed" };
+  }
+
+  try {
+    await d.insert(dealAttachments).values({
+      dealId: meta.data.dealId,
+      uploadedByOrgId: orgId,
+      kind: meta.data.kind,
+      storageKey,
+      mimeType: detected.mime,
+      sizeBytes: bytes.byteLength,
+      altText: meta.data.altText ?? null,
+    });
+  } catch (e) {
+    let rollbackOk = true;
+    try {
+      await store.delete(storageKey);
+    } catch (rollbackErr) {
+      rollbackOk = false;
+      // Orphan blob: log + Sentry-capture so a future GC sweep has the key.
+      console.warn("[deals action] orphan blob rollback failed", {
+        storageKey, error: rollbackErr,
+      });
+      Sentry.captureException(rollbackErr, {
+        tags: { layer: "deals-action", subsystem: "blob-store-rollback" },
+        extra: { storageKey },
+      });
+    }
+    console.error("[deals action] upload db insert failed", {
+      storageKey, rollbackOk, error: e,
+    });
+    Sentry.captureException(e, {
+      tags: { layer: "deals-action" },
+      extra: { storageKey, rollbackOk },
+    });
+    return { ok: false, error: "Database error" };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/deals");
+  return { ok: true };
+}
+
+/** Server action: owner-only delete of a single attachment.
+ *  Uses runWithUser (JSON input, ForbiddenError → "Forbidden"). Delete order
+ *  is reversed from upload: blob FIRST, then DB row. If the blob delete
+ *  fails, we leave the DB row in place so a future reconciliation sweep
+ *  can find it — better orphan-blob than orphan-DB-row pointing at a
+ *  nonexistent blob. */
+export async function deleteDealAttachment(raw: unknown): Promise<ActionResult> {
+  return runWithUser(deleteAttachmentInput, raw, async (input: DeleteAttachmentInput, _user, orgId) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        attachmentId: dealAttachments.id,
+        storageKey: dealAttachments.storageKey,
+        dealOwnerOrgId: deals.orgId,
+      })
+      .from(dealAttachments)
+      .innerJoin(deals, eq(deals.id, dealAttachments.dealId))
+      .where(eq(dealAttachments.id, input.attachmentId))
+      .limit(1);
+    if (!row) throw new ForbiddenError();
+    if (row.dealOwnerOrgId !== orgId) throw new ForbiddenError();
+
+    // Delete blob FIRST. If blob delete fails, the DB row stays and a future
+    // GC sweep can reconcile. Better orphan-blob than orphan-DB-row pointing
+    // at a nonexistent blob.
+    const store = getBlobStore();
+    try {
+      await store.delete(row.storageKey);
+    } catch (e) {
+      console.error("[deals action] blob delete failed for", row.storageKey, e);
+      throw e;
+    }
+    // Defense-in-depth: WHERE pins the row's uploaded_by_org_id so a race
+    // between SELECT and DELETE cannot remove a row that doesn't belong to
+    // the caller. The owner check above (dealOwnerOrgId === orgId) already
+    // gates this; the extra WHERE clause is belt-and-suspenders.
+    await d
+      .delete(dealAttachments)
+      .where(and(
+        eq(dealAttachments.id, input.attachmentId),
+        eq(dealAttachments.uploadedByOrgId, orgId),
+      ));
   });
 }

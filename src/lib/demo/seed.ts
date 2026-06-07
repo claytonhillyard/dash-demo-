@@ -350,6 +350,54 @@ export const DEMO_BIDS: SeedBid[] = [
   },
 ];
 
+// --- Slice 17 demo seed: authored-only attachment examples ---
+// Same pattern as DEMO_DEAL_MESSAGES / DEMO_BIDS — TS constants, not
+// inserted at runtime. The query layer short-circuits demo mode and the
+// RSC stitches these directly into the carousel via their publicCdnUrl.
+export type SeedDealAttachment = {
+  id: number;                    // synthetic id (not from a real serial)
+  dealId: number;
+  uploadedByOrgId: number;
+  kind: "image" | "cert";
+  publicCdnUrl: string;
+  mimeType: string;
+  altText: string | null;
+  createdAtOffsetMinutes: number;
+};
+
+export const DEMO_DEAL_ATTACHMENTS: SeedDealAttachment[] = [
+  {
+    id: 1701,
+    dealId: 109,
+    uploadedByOrgId: DEMO_AIYA_ORG_ID,
+    kind: "image",
+    publicCdnUrl: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400",
+    mimeType: "image/jpeg",
+    altText: "1.02ct G/VS1 round diamond, top view, daylight",
+    createdAtOffsetMinutes: 120,
+  },
+  {
+    id: 1702,
+    dealId: 109,
+    uploadedByOrgId: DEMO_AIYA_ORG_ID,
+    kind: "image",
+    publicCdnUrl: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400",
+    mimeType: "image/jpeg",
+    altText: "1.02ct G/VS1 round diamond, side view, studio light",
+    createdAtOffsetMinutes: 115,
+  },
+  {
+    id: 1703,
+    dealId: 110,
+    uploadedByOrgId: DEMO_AIYA_ORG_ID,
+    kind: "image",
+    publicCdnUrl: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=400",
+    mimeType: "image/jpeg",
+    altText: "18k gold chain lot, fanned display",
+    createdAtOffsetMinutes: 90,
+  },
+];
+
 /** Mirror of the real widened query for the demo runtime. Returns the union
  *  of {rows where orgId === viewer} and {rows whose visibilityCircleId is in
  *  one of the viewer's seeded circles}. */
@@ -528,13 +576,15 @@ export const DEMO_INVENTORY_BIDS: SeedInventoryBid[] = [
 ];
 
 /** Which seeded inventory items have bidding enabled, and in which mode.
- *  Item 601 has bidding ON in single mode so the demo /exchange row shows
- *  the Place Bid button. 602 + 603 stay null (bidding off) to demonstrate
- *  the opt-in-only default. */
+ *  Item 601: single-bid mode (Mehta Round 2.51ct — one outstanding bid).
+ *  Item 602: history mode (Saint-Cloud Padparadscha — owner sees a thread).
+ *  Item 603: null (bidding OFF — demonstrates the opt-in default).
+ *  Both 601 and 602 have a corresponding bid in DEMO_INVENTORY_BIDS so the
+ *  fixture is internally consistent. 603 has no bid (matches bidMode=null). */
 export function getSeedInventoryBidModes(): Map<number, "single" | "history" | null> {
   return new Map<number, "single" | "history" | null>([
     [601, "single"],
-    [602, null],
+    [602, "history"],
     [603, null],
   ]);
 }

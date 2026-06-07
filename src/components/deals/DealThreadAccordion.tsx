@@ -3,7 +3,9 @@
 import { useState, useTransition } from "react";
 import type { DealMessageView } from "@/db/dealMessages";
 import type { BidView } from "@/db/bids";
+import type { DealAttachmentView } from "@/db/dealAttachments";
 import { DealBidsTab } from "./DealBidsTab";
+import { DealAttachmentCarousel } from "./DealAttachmentCarousel";
 
 export type DealThreadAccordionProps = {
   dealId: number;
@@ -49,6 +51,16 @@ export type DealThreadAccordionProps = {
     withdrawBid: (input: { bidId: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
     setBidMode: (input: { dealId: number; mode: "single" | "history" }) =>
       Promise<{ ok: true } | { ok: false; error: string }>;
+  };
+  // --- Slice 17: optional attachment props (default to safe no-op when omitted) ---
+  /** Per-deal preloaded attachments for the carousel. Defaults to []. */
+  attachments?: DealAttachmentView[];
+  /** Per-attachment signed URLs (or public CDN URLs in demo). Defaults to empty Map. */
+  attachmentSignedUrls?: Map<number, string>;
+  /** Attachment action wiring. When omitted, owner upload/delete silently fails closed. */
+  attachmentActions?: {
+    uploadAttachment: (fd: FormData) => Promise<{ ok: true } | { ok: false; error: string }>;
+    deleteAttachment: (input: { attachmentId: number }) => Promise<{ ok: true } | { ok: false; error: string }>;
   };
 };
 
@@ -104,8 +116,20 @@ export function DealThreadAccordion(props: DealThreadAccordionProps) {
     setBidMode: async () => ({ ok: false as const, error: "Bid actions not configured" }),
   };
 
+  const defaultAttachmentActions = {
+    uploadAttachment: async () => ({ ok: false as const, error: "Upload not configured" }),
+    deleteAttachment: async () => ({ ok: false as const, error: "Delete not configured" }),
+  };
+
   return (
     <div aria-label="deal thread" className="rounded border border-zinc-700 bg-zinc-900/40 p-3">
+      <DealAttachmentCarousel
+        dealId={props.dealId}
+        isOwner={props.isOwner}
+        attachments={props.attachments ?? []}
+        signedUrls={props.attachmentSignedUrls ?? new Map()}
+        actions={props.attachmentActions ?? defaultAttachmentActions}
+      />
       <div role="tablist" className="flex gap-2 mb-2 text-xs border-b border-zinc-700 pb-1">
         <button
           role="tab"

@@ -99,4 +99,52 @@ describe("acceptInventoryBid — atomicity", () => {
     const res = await acceptInventoryBid({ bidId: bid.id });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
   });
+
+  // Spec §9.3: two acceptInventoryBid calls racing on different bids of the
+  // same item — exactly one wins; the other returns Forbidden. The protection
+  // is the `AND status='pending'` guard in BOTH UPDATE statements inside the
+  // transaction. The losing tx sees the sibling row already auto_rejected (or
+  // its own row already accepted by the winner) and the UPDATE matches 0 rows,
+  // re-asserting pending and re-emitting Forbidden via the post-tx re-read.
+  it("two concurrent accepts on the same item — exactly one wins", async () => {
+    const [item] = await db
+      .insert(inventoryItems)
+      .values({
+        orgId: 1, category: "Diamonds", name: "race-item", quantity: 5,
+        status: "in_stock", unitCostCents: 100, retailPriceCents: 200,
+        bidMode: "single",
+      })
+      .returning();
+    const [bidA, bidB] = await db.insert(inventoryBids).values([
+      { inventoryItemId: item.id, bidderOrgId: 999, bidderOrgLabel: "A", priceCents: 100 },
+      { inventoryItemId: item.id, bidderOrgId: 888, bidderOrgLabel: "B", priceCents: 200 },
+    ]).returning();
+
+    const [resA, resB] = await Promise.all([
+      acceptInventoryBid({ bidId: bidA.id }),
+      acceptInventoryBid({ bidId: bidB.id }),
+    ]);
+
+    // Exactly one ok + one Forbidden, in either order
+    const oks = [resA, resB].filter((r) => r.ok === true);
+    const fails = [resA, resB].filter((r) => r.ok === false);
+    expect(oks).toHaveLength(1);
+    expect(fails).toHaveLength(1);
+    expect(fails[0]).toEqual({ ok: false, error: "Forbidden" });
+
+    // DB state: one accepted, one auto_rejected — never both accepted
+    const after = await db.select().from(inventoryBids).where(eq(inventoryBids.inventoryItemId, item.id));
+    const accepted = after.filter((b) => b.status === "accepted");
+    const autoRejected = after.filter((b) => b.status === "auto_rejected");
+    expect(accepted).toHaveLength(1);
+    expect(autoRejected).toHaveLength(1);
+
+    // Inventory item still untouched
+    const [itemAfter] = await db
+      .select({ status: inventoryItems.status, quantity: inventoryItems.quantity })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, item.id));
+    expect(itemAfter.status).toBe("in_stock");
+    expect(itemAfter.quantity).toBe(5);
+  });
 });

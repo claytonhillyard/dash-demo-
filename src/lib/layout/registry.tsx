@@ -78,6 +78,9 @@ export const PANEL_REGISTRY: PanelEntry[] = [
             bidsByDealId={ctx.deals.bidsByDealId}
             bidModeByDealId={ctx.deals.bidModeByDealId}
             bidActions={ctx.deals.bidActions}
+            attachmentsByDealId={ctx.deals.attachmentsByDealId}
+            signedUrlsByDealId={ctx.deals.signedUrlsByDealId}
+            attachmentActions={ctx.deals.attachmentActions}
           />
         : <BusinessPlaceholder title="Deal Room" testid="panel-tradenet-exchange" />,
   },

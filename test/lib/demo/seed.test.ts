@@ -304,6 +304,7 @@ import {
   DEMO_ARGYLE_ORG_ID,
   getSeedPendingInvitesForOrg,
   getSeedOwnedCirclesForOrg,
+  DEMO_DEAL_ATTACHMENTS,
 } from "@/lib/demo/seed";
 
 describe("DEMO_ARGYLE_ORG_ID", () => {
@@ -389,6 +390,20 @@ describe("slice 15 shared inventory seed", () => {
   });
 });
 
+describe("DEMO_DEAL_ATTACHMENTS — slice-17 authored seed", () => {
+  it("exports 3 image attachments across deals 109 + 110", () => {
+    expect(DEMO_DEAL_ATTACHMENTS).toHaveLength(3);
+    const byDeal = new Map<number, number>();
+    for (const a of DEMO_DEAL_ATTACHMENTS) {
+      byDeal.set(a.dealId, (byDeal.get(a.dealId) ?? 0) + 1);
+    }
+    expect(byDeal.get(109)).toBe(2);
+    expect(byDeal.get(110)).toBe(1);
+    expect(DEMO_DEAL_ATTACHMENTS.every((a) => a.kind === "image")).toBe(true);
+    expect(DEMO_DEAL_ATTACHMENTS.every((a) => a.publicCdnUrl.startsWith("https://"))).toBe(true);
+  });
+});
+
 import { DEMO_INVENTORY_BIDS, getSeedInventoryBidModes } from "@/lib/demo/seed";
 
 describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
@@ -399,10 +414,10 @@ describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
     expect(DEMO_INVENTORY_BIDS.every((b) => b.status === "pending")).toBe(true);
   });
 
-  it("getSeedInventoryBidModes enables bidding only on item 601", () => {
+  it("getSeedInventoryBidModes: 601 single, 602 history, 603 null", () => {
     const modes = getSeedInventoryBidModes();
     expect(modes.get(601)).toBe("single");
-    expect(modes.get(602)).toBeNull();
+    expect(modes.get(602)).toBe("history");
     expect(modes.get(603)).toBeNull();
   });
 
@@ -411,7 +426,14 @@ describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
     expect(rows).toHaveLength(3);
     const byId = new Map(rows.map((r) => [r.id, r.bidMode]));
     expect(byId.get(601)).toBe("single");
-    expect(byId.get(602)).toBeNull();
+    expect(byId.get(602)).toBe("history");
     expect(byId.get(603)).toBeNull();
+  });
+
+  it("every DEMO_INVENTORY_BIDS item has a non-null bid mode (fixture consistency)", () => {
+    const modes = getSeedInventoryBidModes();
+    for (const bid of DEMO_INVENTORY_BIDS) {
+      expect(modes.get(bid.inventoryItemId)).not.toBeNull();
+    }
   });
 });
