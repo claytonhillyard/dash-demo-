@@ -64,22 +64,13 @@ export async function getInventorySummary(
   return { counts, total, updatedAt: latest[0]?.updatedAt ?? null };
 }
 
-/** Slice 15: build the OR clause for the widened read. When the viewer
- *  has zero circle memberships, callers should EARLY-RETURN before invoking
- *  this — the function is preserved here for parity with slice 4's
- *  visibilityClause but every consumer in slice 15 short-circuits before
- *  reaching it. Kept as a separate function so a future "include own items"
- *  variant of getSharedInventoryForOrg can reuse it. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function inventoryVisibilityClause(orgId: number, circleIds: number[]): SQL {
-  if (circleIds.length === 0) {
-    return eq(inventoryItems.orgId, orgId);
-  }
-  return or(
-    eq(inventoryItems.orgId, orgId),
-    inArray(inventoryItems.visibilityCircleId, circleIds),
-  )!;
-}
+// Slice 15 review finding: a previous draft kept an `inventoryVisibilityClause`
+// helper for "parity with slice 4" but its zero-circles fallback returned
+// `eq(orgId, currentOrg)` — semantically WRONG for `getSharedInventoryForOrg`
+// (which is "what partners are offering", explicitly EXCLUDING own items).
+// Removed to prevent future readers from accidentally re-wiring it back in
+// without noticing the inverted semantics. A future "include own items"
+// variant should build its own clause from first principles.
 
 /** Slice 15: returns inventory items shared into a circle the viewer is in,
  *  EXCLUDING the viewer's own items. /exchange is "what partners are
