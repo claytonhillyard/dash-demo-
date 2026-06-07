@@ -146,6 +146,16 @@ export async function getTodaysBidsForOwner(
 ): Promise<TodaysBidView[]> {
   if (isDemoMode()) return [];
 
+  // The "today UTC" cutoff is computed in three steps so both sides of the
+  // >= comparison are timestamptz (never a bare timestamp). The trailing
+  // `AT TIME ZONE 'UTC'` is LOAD-BEARING — don't remove it as "redundant":
+  //   1. `now()`                                     → timestamptz (current UTC instant)
+  //   2. `... AT TIME ZONE 'UTC'`                    → timestamp (UTC wall-clock, bare)
+  //   3. `date_trunc('day', ...)`                    → timestamp (midnight UTC, bare)
+  //   4. `... AT TIME ZONE 'UTC'`                    → timestamptz (midnight UTC instant)
+  // Without step 4, PG implicitly converts the bare timestamp using the
+  // SESSION timezone for the comparison — which can be ±12h off on a
+  // non-UTC machine, silently filtering or admitting bids by the wrong day.
   const res = await db.execute(sql`
     SELECT b.id AS bid_id, d.id AS deal_id, d.subject AS deal_subject,
            b.bidder_org_label, b.price_cents, b.currency, b.created_at
@@ -153,7 +163,7 @@ export async function getTodaysBidsForOwner(
     JOIN deals d ON d.id = b.deal_id
     WHERE d.org_id = ${viewerOrgId}
       AND b.status = 'pending'
-      AND b.created_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+      AND b.created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
     ORDER BY b.created_at DESC
     LIMIT 30
   `);
