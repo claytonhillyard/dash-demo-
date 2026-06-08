@@ -10,7 +10,7 @@ import { LogoutButton } from "./LogoutButton";
 const SECTIONS = [
   "Dashboard", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
   "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
-  "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
+  "Customers", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
   "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
   "Calendar & Tasks", "Documents", "Settings",
 ];
@@ -22,6 +22,11 @@ const ROUTES: Record<string, string> = {
   Circles: "/circles",
   "Orders & Deals": "/deals",
   "TradeNet Exchange": "/exchange",
+  // Slice 22 — Customers is core (no module gating); the entry sits next to
+  // Orders & Deals so all owner-entered ledgers cluster together. "Clients & CRM"
+  // remains as a separate placeholder for the future contact-record + pipeline
+  // surface that slice 22 explicitly does NOT cover.
+  Customers: "/customers",
 };
 
 export function Nav() {

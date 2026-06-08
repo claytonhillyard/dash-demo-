@@ -24,4 +24,9 @@ describe("Nav", () => {
     const link = screen.getByRole("link", { name: "Orders & Deals" });
     expect(link).toHaveAttribute("href", "/deals");
   });
+  it("links Customers to /customers (slice 22)", () => {
+    render(<Nav />);
+    const link = screen.getByRole("link", { name: "Customers" });
+    expect(link).toHaveAttribute("href", "/customers");
+  });
 });
