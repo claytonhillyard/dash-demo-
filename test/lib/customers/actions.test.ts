@@ -70,12 +70,15 @@ describe("createCustomer — happy path", () => {
   });
 
   it("ignores any wire-provided org_id and uses session.orgId", async () => {
-    // Caller tries to "create as org 999". Wire ignored; session wins.
-    await createCustomer({
+    // Caller tries to "create as org 999" by stuffing org_id on the wire.
+    // Schema doesn't carry it; Zod silently drops the unknown key and the
+    // insert uses session.orgId. raw: unknown lets us pass arbitrary shapes.
+    const raw: Record<string, unknown> = {
       name: "Spoof",
-      // @ts-expect-error — test that extra wire fields are dropped, not honored
       orgId: 999,
-    });
+      org_id: 999,
+    };
+    await createCustomer(raw);
     const rows = await db.select().from(customers);
     expect(rows).toHaveLength(1);
     expect(rows[0].orgId).toBe(1);
