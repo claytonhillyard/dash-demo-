@@ -278,7 +278,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 
 | # | Title | Layer | Status | Owner | Notes |
 |---|---|---|---|---|---|
-| C-1 | Move category enums from schema to per-tenant config (`tenant_categories` table) | core (enforces module boundary) | proposed | open | Unlocks future verticals |
+| C-1 | Module skeleton: `orgs.module_id` column + manifest type + empty registry + `getActiveModule()` | core (enforces module boundary) | shipped: ce197d7 | subagent-C-1 | Scope re-purposed from category-enum extraction (that work split to C-4/C-5) to MODULES.md §9 Phase M1 — see commits 79eee56 (schema+migration 0015), 2dbe63c (types+registry+active+getCurrentOrgModuleId), ce197d7 (tests) |
 | C-2 | Move `inventoryItems.category` + `deals.category` to FK references | core | proposed | open | Depends on C-1 |
 | C-3 | Add `orgs.module: enum` column | core | proposed | open | Lets UI conditionally load AIYA pieces |
 | C-4 | Module registry pattern in code (`src/modules/aiya-jewelry/`) | core | proposed | open | Mechanical refactor; see MODULES.md |
