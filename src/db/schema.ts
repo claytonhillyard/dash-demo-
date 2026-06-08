@@ -20,6 +20,13 @@ export const orgs = pgTable(
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Slice C-1 (module-skeleton): identifies which vertical module this tenant
+    // runs. NULL = "core only" tenant (bare command center, no jewelry-specific
+    // UI). Non-NULL value is the registry key in src/modules/registry.ts (e.g.
+    // "aiya-jewelry"). Validation happens at the app boundary (Zod) — the DB
+    // stores raw text so a tenant can switch modules without DDL. See
+    // docs/MODULES.md §6.1.
+    moduleId: text("module_id"),
   },
   (t) => ({
     slugUniq: unique("orgs_slug_uniq").on(t.slug),
