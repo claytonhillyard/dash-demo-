@@ -50,8 +50,8 @@ export async function getCustomers(
   opts: { search?: string; limit?: number } = {},
 ): Promise<CustomerView[]> {
   if (isDemoMode()) {
-    // TODO(slice-22 Phase C C1): replace with `const { DEMO_CUSTOMERS } = await import("@/lib/demo/seed");`
-    throw new Error("DEMO_CUSTOMERS not yet exported (slice 22 Phase C C1)");
+    const { getSeedCustomersForOrg } = await import("@/lib/demo/seed");
+    return getSeedCustomersForOrg(viewerOrgId, opts);
   }
 
   const limit = Math.min(opts.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
@@ -118,8 +118,8 @@ export async function getCustomerById(
   id: number,
 ): Promise<CustomerView | null> {
   if (isDemoMode()) {
-    // TODO(slice-22 Phase C C1): replace with `const { DEMO_CUSTOMERS } = await import("@/lib/demo/seed");`
-    throw new Error("DEMO_CUSTOMERS not yet exported (slice 22 Phase C C1)");
+    const { getSeedCustomerById } = await import("@/lib/demo/seed");
+    return getSeedCustomerById(viewerOrgId, id);
   }
 
   const res = await db.execute(sql`

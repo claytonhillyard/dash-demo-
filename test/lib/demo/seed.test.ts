@@ -449,3 +449,70 @@ describe("slice 18 demo seed: DEMO_INVENTORY_BIDS", () => {
     expect(b603?.quantityRequested).toBe(5);
   });
 });
+
+import {
+  DEMO_CUSTOMERS,
+  getSeedCustomersForOrg,
+  getSeedCustomerById,
+} from "@/lib/demo/seed";
+
+describe("DEMO_CUSTOMERS — slice-22 authored seed", () => {
+  it("ships between 8 and 12 customers, all on AIYA", () => {
+    expect(DEMO_CUSTOMERS.length).toBeGreaterThanOrEqual(8);
+    expect(DEMO_CUSTOMERS.length).toBeLessThanOrEqual(12);
+    expect(DEMO_CUSTOMERS.every((c) => c.orgId === DEMO_AIYA_ORG_ID)).toBe(true);
+  });
+
+  it("has a mix of business-owned, individual, name-only, and external_ref rows", () => {
+    expect(DEMO_CUSTOMERS.some((c) => c.businessName !== null)).toBe(true);
+    expect(DEMO_CUSTOMERS.some((c) => c.businessName === null)).toBe(true);
+    expect(
+      DEMO_CUSTOMERS.some((c) => c.email === null && c.address === null),
+    ).toBe(true);
+    expect(DEMO_CUSTOMERS.some((c) => c.externalRef !== null)).toBe(true);
+  });
+
+  it("includes the canonical Mehta + Saint-Cloud anchors from the slice-22 spec", () => {
+    const byName = new Map(DEMO_CUSTOMERS.map((c) => [c.name, c]));
+    expect(byName.get("Priya Mehta")?.businessName).toBe("Mehta Diamonds Pvt Ltd");
+    expect(byName.get("Jean-Marc Auclair")?.businessName).toBe("Saint-Cloud Atelier");
+  });
+});
+
+describe("getSeedCustomersForOrg — demo-mode short-circuit", () => {
+  it("filters by org (foreign orgs see []) and strips orgId from the view", () => {
+    const aiya = getSeedCustomersForOrg(DEMO_AIYA_ORG_ID);
+    expect(aiya.length).toBe(DEMO_CUSTOMERS.length);
+    // CustomerView has no orgId field
+    expect((aiya[0] as unknown as { orgId?: unknown }).orgId).toBeUndefined();
+    expect(getSeedCustomersForOrg(99999)).toEqual([]);
+  });
+
+  it("free-text search matches against name/business/email/phone (case-insensitive)", () => {
+    const hits = getSeedCustomersForOrg(DEMO_AIYA_ORG_ID, { search: "mehta" });
+    expect(hits.some((c) => c.name === "Priya Mehta")).toBe(true);
+    expect(getSeedCustomersForOrg(DEMO_AIYA_ORG_ID, { search: "+91" }).length).toBeGreaterThan(0);
+  });
+
+  it("sorts by name ASC", () => {
+    const rows = getSeedCustomersForOrg(DEMO_AIYA_ORG_ID);
+    const names = rows.map((r) => r.name);
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    expect(names).toEqual(sorted);
+  });
+});
+
+describe("getSeedCustomerById — demo-mode owner-only single fetch", () => {
+  it("returns the row when org + id match", () => {
+    const r = getSeedCustomerById(DEMO_AIYA_ORG_ID, 2201);
+    expect(r?.name).toBe("Priya Mehta");
+  });
+
+  it("returns null for a foreign-org viewer (cross-org isolation)", () => {
+    expect(getSeedCustomerById(99999, 2201)).toBeNull();
+  });
+
+  it("returns null for an id that doesn't exist", () => {
+    expect(getSeedCustomerById(DEMO_AIYA_ORG_ID, 999999)).toBeNull();
+  });
+});
