@@ -113,6 +113,13 @@
       "when": 1780939199246,
       "tag": "0015_naive_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1780944499502,
+      "tag": "0016_left_starbolt",
+      "breakpoints": true
     }
   ]
 }
