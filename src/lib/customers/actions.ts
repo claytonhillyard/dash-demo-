@@ -32,6 +32,54 @@ function db(): Db {
 }
 
 /**
+ * Build a PII-safe shape from an arbitrary error for logs + Sentry.extra.
+ * Critical: Postgres errors carry the failing SQL parameters in `detail` /
+ * `where` / `internalQuery` / `internalPosition` — those values frequently
+ * include customer email, phone, address, notes. We DROP those fields and
+ * keep only the symbolic identifiers (code, constraint name, error class).
+ * Mirrors PostgresError shape per drizzle's `postgres` driver.
+ */
+export function safeErrShape(e: unknown): Record<string, unknown> {
+  if (typeof e !== "object" || e === null) {
+    return { kind: "non-object", value: String(e).slice(0, 200) };
+  }
+  const x = e as Record<string, unknown>;
+  // Note: NOT including `message` raw — it sometimes inlines the parameter
+  // value (e.g. "duplicate key value violates unique constraint ... DETAIL: Key
+  // (org_id, external_ref)=(1, WJ-10421) already exists."). Truncate hard.
+  const message =
+    typeof x.message === "string" ? x.message.split("\n")[0]?.slice(0, 120) : undefined;
+  return {
+    name: typeof x.name === "string" ? x.name : undefined,
+    message,
+    code: typeof x.code === "string" ? x.code : undefined,
+    constraint: typeof x.constraint === "string" ? x.constraint : undefined,
+    // Deliberately omit: detail, hint, where, internalQuery, parameters, schema,
+    // table, column — any of these may include user-supplied PII.
+  };
+}
+
+/**
+ * Map a Postgres unique-constraint violation (SQLSTATE 23505) to a friendly
+ * user-facing error string. Returns null for everything else so the caller
+ * falls back to its generic "Server error" path. We only translate the
+ * `external_ref` partial unique today; the `customers` table has no other
+ * unique constraints, so additional cases would be a future migration.
+ */
+export function mapDbConstraintError(e: unknown): string | null {
+  if (typeof e !== "object" || e === null) return null;
+  const code = (e as { code?: string }).code;
+  if (code !== "23505") return null;
+  const constraint = (e as { constraint?: string }).constraint;
+  if (typeof constraint === "string" && constraint.includes("external_ref")) {
+    return "Another customer in your org already uses that external reference";
+  }
+  // Some other unique constraint we don't know about — surface a clear but
+  // generic message so the user knows it's their input, not a server bug.
+  return "That value is already in use by another customer";
+}
+
+/**
  * Shared wrapper: demo guard, session re-assert + orgId resolve, validate,
  * run the callback, revalidate /customers. Never throws to the UI — every
  * failure is mapped to { ok: false, error }. Mirrors src/lib/deals/actions.ts
@@ -45,7 +93,7 @@ async function run<T>(
   schema: z.ZodType<T>,
   raw: unknown,
   fn: (input: T, orgId: number) => Promise<void>,
-  opts: { extraRevalidate?: (input: T) => string[] } = {},
+  opts: { action: string; extraRevalidate?: (input: T) => string[] },
 ): Promise<ActionResult> {
   if (isDemoMode()) {
     return { ok: false, error: "Demo mode — changes are disabled" };
@@ -72,9 +120,17 @@ async function run<T>(
     if (e instanceof ForbiddenError) {
       return { ok: false, error: "Forbidden" };
     }
-    console.error("[customers action] error:", e);
-    Sentry.captureException(e, {
-      tags: { layer: "customers-action" },
+    const friendly = mapDbConstraintError(e);
+    if (friendly !== null) {
+      return { ok: false, error: friendly };
+    }
+    const safe = safeErrShape(e);
+    // Constant format string + structured extras — keeps the log format
+    // free of caller-controlled substitution patterns (CWE-134).
+    console.error("[customers action] error", { action: opts.action, ...safe });
+    Sentry.captureException(new Error("customers action failed"), {
+      tags: { layer: "customers-action", action: opts.action },
+      extra: safe,
     });
     return { ok: false, error: "Server error" };
   }
@@ -117,9 +173,9 @@ export async function createCustomer(
         phone: input.phone ?? null,
         address: input.address ?? null,
         notes: input.notes ?? null,
-        externalRef: input.externalRef ?? null,
-        // first_seen_at stays NULL on direct creates; slice 26 (WinJewel
-        // import) backfills it from the source system's historical date.
+        // externalRef + first_seen_at stay NULL on direct creates; slice 26
+        // (WinJewel import) is the only writer for those columns and uses
+        // (org_id, external_ref) as its UPSERT idempotency key.
       })
       .returning();
     revalidatePath("/customers");
@@ -128,9 +184,15 @@ export async function createCustomer(
     if (e instanceof ForbiddenError) {
       return { ok: false, error: "Forbidden" };
     }
-    console.error("[customers action] createCustomer error:", e);
-    Sentry.captureException(e, {
+    const friendly = mapDbConstraintError(e);
+    if (friendly !== null) {
+      return { ok: false, error: friendly };
+    }
+    const safe = safeErrShape(e);
+    console.error("[customers action] createCustomer error:", safe);
+    Sentry.captureException(new Error("createCustomer failed"), {
       tags: { layer: "customers-action", action: "createCustomer" },
+      extra: safe,
     });
     return { ok: false, error: "Server error" };
   }
@@ -157,7 +219,7 @@ export async function updateCustomer(raw: unknown): Promise<ActionResult> {
           phone: input.phone ?? null,
           address: input.address ?? null,
           notes: input.notes ?? null,
-          externalRef: input.externalRef ?? null,
+          // externalRef intentionally not in .set() — reserved for slice 26.
           updatedAt: new Date(),
         })
         .where(and(eq(customers.id, input.id), eq(customers.orgId, orgId)))
@@ -169,6 +231,7 @@ export async function updateCustomer(raw: unknown): Promise<ActionResult> {
       }
     },
     {
+      action: "updateCustomer",
       extraRevalidate: (input) => [`/customers/${input.id}`],
     },
   );
@@ -180,13 +243,18 @@ export async function updateCustomer(raw: unknown): Promise<ActionResult> {
  * 0-row delete to give the caller a clean 403 instead of a silent no-op.
  */
 export async function deleteCustomer(raw: unknown): Promise<ActionResult> {
-  return run(deleteCustomerInput, raw, async (input: DeleteCustomerInput, orgId) => {
-    const res = await db()
-      .delete(customers)
-      .where(and(eq(customers.id, input.id), eq(customers.orgId, orgId)))
-      .returning();
-    if (res.length === 0) {
-      throw new ForbiddenError();
-    }
-  });
+  return run(
+    deleteCustomerInput,
+    raw,
+    async (input: DeleteCustomerInput, orgId) => {
+      const res = await db()
+        .delete(customers)
+        .where(and(eq(customers.id, input.id), eq(customers.orgId, orgId)))
+        .returning();
+      if (res.length === 0) {
+        throw new ForbiddenError();
+      }
+    },
+    { action: "deleteCustomer" },
+  );
 }

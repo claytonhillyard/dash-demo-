@@ -30,6 +30,15 @@ export const addressInput = z
     return hasAny ? v : undefined;
   });
 
+/**
+ * Slice 22 design intentionally OMITS `externalRef` from the user-facing
+ * create/update schemas. The field is reserved for slice 26 (WinJewel CSV
+ * import) which uses `(org_id, external_ref)` as its UPSERT idempotency
+ * key — letting users type arbitrary values via this form would let two
+ * callers race for the same key and break the importer's contract.
+ * The DB column + partial-unique index stay in place; only this surface
+ * is closed.
+ */
 export const createCustomerInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
   businessName: z.string().trim().min(1).max(200).optional(),
@@ -37,7 +46,6 @@ export const createCustomerInput = z.object({
   phone: z.string().trim().min(1).max(50).optional(),
   address: addressInput,
   notes: z.string().trim().min(1).max(2000).optional(),
-  externalRef: z.string().trim().min(1).max(100).optional(),
 });
 export type CreateCustomerInput = z.infer<typeof createCustomerInput>;
 

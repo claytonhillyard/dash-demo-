@@ -74,7 +74,6 @@ export function CustomerForm(props: CustomerFormProps) {
   const [businessName, setBusinessName] = useState(initial?.businessName ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
-  const [externalRef, setExternalRef] = useState(initial?.externalRef ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [street1, setStreet1] = useState(initialAddress.street1 ?? "");
   const [street2, setStreet2] = useState(initialAddress.street2 ?? "");
@@ -106,7 +105,7 @@ export function CustomerForm(props: CustomerFormProps) {
         country: emptyToUndef(country),
       },
       notes: emptyToUndef(notes),
-      externalRef: emptyToUndef(externalRef),
+      // externalRef intentionally NOT sent — reserved for slice 26's import path.
     };
     if (props.mode === "edit") {
       payload.id = props.initial.id;
@@ -284,18 +283,6 @@ export function CustomerForm(props: CustomerFormProps) {
           maxLength={2000}
           rows={4}
           className="mt-1 bg-bg p-2 font-mono text-sm text-text normal-case tracking-normal"
-        />
-      </label>
-
-      <label className="flex flex-col text-xs uppercase tracking-wider text-text/60">
-        External ref
-        <input
-          aria-label="external ref"
-          value={externalRef}
-          onChange={(e) => setExternalRef(e.target.value)}
-          maxLength={100}
-          placeholder="e.g. WJ-10421 (legacy system id)"
-          className="mt-1 bg-bg p-2 text-sm text-text normal-case tracking-normal"
         />
       </label>
 

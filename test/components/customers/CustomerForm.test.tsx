@@ -120,7 +120,10 @@ describe("CustomerForm — edit mode", () => {
     expect((screen.getByLabelText("notes") as HTMLTextAreaElement).value).toBe(
       "Long-time wholesale partner.",
     );
-    expect((screen.getByLabelText("external ref") as HTMLInputElement).value).toBe("WJ-10421");
+    // externalRef is reserved for slice 26 (WinJewel CSV import) — the form
+    // intentionally renders no input for it. The CustomerView fixture carries
+    // it; the form must NOT surface it.
+    expect(screen.queryByLabelText(/external ref/i)).toBeNull();
   });
 
   it("submits with the existing id and calls router.refresh on success", async () => {

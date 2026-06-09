@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { AiyaLogo } from "./AiyaLogo";
 import { LogoutButton } from "./LogoutButton";
+import { NavItem } from "./NavItem";
 
 // Slice 5 §6.3 proposed mapping "Marketing Suite" → /website. The user (per
 // slice-5 decision #1) preferred a dedicated "Website" entry alongside the
@@ -16,6 +16,7 @@ const SECTIONS = [
 ];
 
 const ROUTES: Record<string, string> = {
+  Dashboard: "/",
   Inventory: "/inventory",
   Diamonds: "/diamonds",
   Website: "/website",
@@ -56,30 +57,9 @@ export function Nav() {
 
       {/* Sections */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3" aria-label="Primary">
-        {SECTIONS.map((s) => {
-          const active = s === "Dashboard";
-          const href = ROUTES[s];
-          const className = `flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
-            active
-              ? "border border-gold/30 bg-gold/10 text-gold"
-              : "border border-transparent text-text/65 hover:bg-surface-2 hover:text-gold"
-          }`;
-          const dot = <span className={`h-1 w-1 rounded-full ${active ? "bg-gold" : "bg-text/20"}`} />;
-          if (href) {
-            return (
-              <Link key={s} href={href} className={className}>
-                {dot}
-                {s}
-              </Link>
-            );
-          }
-          return (
-            <div key={s} aria-current={active ? "page" : undefined} className={`${className} cursor-default`}>
-              {dot}
-              {s}
-            </div>
-          );
-        })}
+        {SECTIONS.map((s) => (
+          <NavItem key={s} label={s} href={ROUTES[s]} />
+        ))}
       </nav>
 
       {/* Elite membership card */}

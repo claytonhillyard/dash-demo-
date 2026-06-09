@@ -17,15 +17,14 @@ describe("addressInput", () => {
     if (r.success) expect(r.data).toBeUndefined();
   });
 
-  it("normalizes all-empty-string fields to undefined", () => {
+  it("rejects all-empty-string sub-fields (each must be .min(1) when present)", () => {
+    // Pre-fix: this test branched on whether success/failure landed and
+    // vacuously passed. The actual behavior: empty strings fail .min(1) on
+    // each sub-field. Empty objects fall through to the all-undefined branch
+    // (next test). The client form normalizes "" → undefined before submit
+    // so this combination never reaches the server in practice.
     const r = addressInput.safeParse({ street1: "", city: "" });
-    // Empty string fails .min(1) on the sub-fields, so this is a parse failure
-    // — but the sub-fields are optional. Verify behavior is consistent.
-    if (r.success) {
-      expect(r.data).toBeUndefined();
-    }
-    // Either branch is fine; the important guarantee is that no {} ever lands
-    // in the DB. The transform handles the all-undefined case below.
+    expect(r.success).toBe(false);
   });
 
   it("normalizes all-undefined fields to undefined", () => {
@@ -188,12 +187,17 @@ describe("createCustomerInput", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejects externalRef longer than 100 chars", () => {
+  it("silently drops externalRef from the wire (reserved for slice 26 import)", () => {
+    // Slice 22 design intentionally omits externalRef from the user-facing
+    // schema; Zod's default object behavior strips unknown keys.
     const r = createCustomerInput.safeParse({
       name: "X",
-      externalRef: "z".repeat(101),
+      externalRef: "WJ-10421",
     });
-    expect(r.success).toBe(false);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect((r.data as Record<string, unknown>).externalRef).toBeUndefined();
+    }
   });
 
   it("trims surrounding whitespace on every text field", () => {
@@ -203,7 +207,6 @@ describe("createCustomerInput", () => {
       email: "  alice@example.com  ",
       phone: "  555-0100  ",
       notes: "  hello  ",
-      externalRef: "  wj-123  ",
     });
     expect(r.success).toBe(true);
     if (r.success) {
@@ -212,7 +215,6 @@ describe("createCustomerInput", () => {
       expect(r.data.email).toBe("alice@example.com");
       expect(r.data.phone).toBe("555-0100");
       expect(r.data.notes).toBe("hello");
-      expect(r.data.externalRef).toBe("wj-123");
     }
   });
 
@@ -233,7 +235,7 @@ describe("createCustomerInput", () => {
     expect(r.success).toBe(false);
   });
 
-  it("accepts a fully-populated payload", () => {
+  it("accepts a fully-populated payload (sans externalRef)", () => {
     const r = createCustomerInput.safeParse({
       name: "Priya Mehta",
       businessName: "Mehta Diamonds",
@@ -241,7 +243,6 @@ describe("createCustomerInput", () => {
       phone: "+91 22 5555 1100",
       address: { city: "Mumbai", country: "IN" },
       notes: "Wholesale partner.",
-      externalRef: "wj-2201",
     });
     expect(r.success).toBe(true);
   });
