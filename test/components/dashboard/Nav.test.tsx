@@ -1,5 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+
+// NavItem (slice 22 review fix) calls usePathname() to compute active state.
+// Default to "/" so the "Dashboard is active" assertion below continues to
+// pass — Dashboard's href is "/" which equals pathname.
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+}));
+
 import { Nav } from "@/components/dashboard/Nav";
 
 describe("Nav", () => {
