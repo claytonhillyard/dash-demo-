@@ -234,7 +234,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 
 | # | Title | Layer | Status | Owner | Notes |
 |---|---|---|---|---|---|
-| 22 | Customers + CRM panel | core | Phase A committed (worktree) | **this tab** | Foundation for slices 24/25/26-30 |
+| 22 | Customers + CRM panel | core | shipped: `3866e58` | this-tab | 4 phases. 14 commits + 1 null-safe nav fix. Two-stage review applied; MINORs tracked as #92. Next-tab-to-claim picks from queue. |
 
 ### Queued — claim before starting
 
