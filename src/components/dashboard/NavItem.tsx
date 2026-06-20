@@ -14,6 +14,8 @@ import { usePathname } from "next/navigation";
  *   - Any other href matches `pathname === href` OR `pathname` starts with
  *     `href + "/"` (so `/customers/123/edit` activates the Customers entry).
  *   - Items with no href (placeholders) are never active.
+ *   - `usePathname()` may return null (Next.js error boundaries / notFound /
+ *     pre-hydration) — treat that as "not active" rather than crashing.
  */
 export function NavItem({
   label,
@@ -23,7 +25,7 @@ export function NavItem({
   href?: string;
 }) {
   const pathname = usePathname();
-  const active = href
+  const active = href && pathname
     ? href === "/"
       ? pathname === "/"
       : pathname === href || pathname.startsWith(href + "/")
