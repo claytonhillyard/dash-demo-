@@ -206,6 +206,39 @@ export const inventoryItems = pgTable(
   }),
 );
 
+export const customers = pgTable(
+  "customers",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    name: text("name").notNull(),
+    businessName: text("business_name"),
+    email: text("email"),
+    phone: text("phone"),
+    address: jsonb("address"),
+    notes: text("notes"),
+    externalRef: text("external_ref"),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    orgCreatedIdx: index("customers_org_created_idx").on(t.orgId, t.createdAt.desc()),
+    // Partial unique on external_ref so WinJewel import (slice 26) is idempotent.
+    // Allows multiple NULL rows (direct-create customers); enforces uniqueness only
+    // when external_ref is set.
+    orgExternalRefUnique: uniqueIndex("customers_org_external_ref_unique")
+      .on(t.orgId, t.externalRef)
+      .where(sql`${t.externalRef} IS NOT NULL`),
+  }),
+);
+
 export const diamondMatrixPrices = pgTable(
   "diamond_matrix_prices",
   {

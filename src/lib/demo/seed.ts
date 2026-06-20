@@ -398,6 +398,245 @@ export const DEMO_DEAL_ATTACHMENTS: SeedDealAttachment[] = [
   },
 ];
 
+// --- Slice 22 demo seed: authored-only customer book ---
+// Same pattern as DEMO_DEAL_ATTACHMENTS — TS constants, not inserted at
+// runtime. The customers query layer short-circuits demo mode and reads
+// this constant filtered by orgId. Shape matches `CustomerView` from
+// src/db/customers.ts so the table renders identically in demo and live.
+//
+// Mix is deliberate: business buyers with full address (Mehta, Saint-Cloud),
+// individuals with partial address (Sharma), and name-only walk-ins (Patel,
+// Klein). A handful carry `externalRef` to preview the slice-26 WinJewel
+// import shape without yet exercising it.
+import type { CustomerView } from "@/db/customers";
+
+const DEMO_CUSTOMER_REF = new Date("2026-06-06T12:00:00Z").getTime();
+const cmAgo = (days: number) =>
+  new Date(DEMO_CUSTOMER_REF - days * 86_400_000);
+
+type DemoCustomer = CustomerView & { orgId: number };
+
+export const DEMO_CUSTOMERS: DemoCustomer[] = [
+  {
+    id: 2201,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Priya Mehta",
+    businessName: "Mehta Diamonds Pvt Ltd",
+    email: "priya@mehtadiamonds.in",
+    phone: "+91 22 5555 1100",
+    address: {
+      street1: "12 Opera House",
+      city: "Mumbai",
+      state: "MH",
+      zip: "400004",
+      country: "IN",
+    },
+    notes: "Long-time wholesale partner; prefers wire transfer.",
+    externalRef: "WJ-10421",
+    firstSeenAt: cmAgo(420),
+    createdAt: cmAgo(120),
+    updatedAt: cmAgo(2),
+  },
+  {
+    id: 2202,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Jean-Marc Auclair",
+    businessName: "Saint-Cloud Atelier",
+    email: "jm@saintcloud.fr",
+    phone: "+33 1 42 60 11 22",
+    address: {
+      street1: "8 Rue de Rivoli",
+      city: "Paris",
+      zip: "75001",
+      country: "FR",
+    },
+    notes: "Boutique buyer — small lots, high clarity grade.",
+    externalRef: "WJ-10488",
+    firstSeenAt: cmAgo(310),
+    createdAt: cmAgo(90),
+    updatedAt: cmAgo(5),
+  },
+  {
+    id: 2203,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Anita Sharma",
+    businessName: null,
+    email: "anita.sharma@example.com",
+    phone: "+1 415 555 0177",
+    address: {
+      street1: "1500 Fillmore St",
+      city: "San Francisco",
+      state: "CA",
+      zip: "94115",
+      country: "US",
+    },
+    notes: null,
+    externalRef: null,
+    firstSeenAt: cmAgo(180),
+    createdAt: cmAgo(45),
+    updatedAt: cmAgo(7),
+  },
+  {
+    id: 2204,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Yuki Tanaka",
+    businessName: "Ginza Pearl House",
+    email: "y.tanaka@ginzapearl.jp",
+    phone: "+81 3 3535 8800",
+    address: {
+      street1: "5-2-1 Ginza",
+      city: "Tokyo",
+      zip: "104-0061",
+      country: "JP",
+    },
+    notes: "Repeat buyer of fancy yellow rounds, 0.7-1.2ct.",
+    externalRef: "WJ-10502",
+    firstSeenAt: cmAgo(240),
+    createdAt: cmAgo(60),
+    updatedAt: cmAgo(11),
+  },
+  {
+    id: 2205,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Marcus Klein",
+    businessName: null,
+    email: null,
+    phone: "+1 212 555 0913",
+    address: null,
+    notes: "Walk-in — bring up engagement ring options on next visit.",
+    externalRef: null,
+    firstSeenAt: null,
+    createdAt: cmAgo(14),
+    updatedAt: cmAgo(14),
+  },
+  {
+    id: 2206,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Rohan Patel",
+    businessName: null,
+    email: "rohan.patel@example.com",
+    phone: null,
+    address: null,
+    notes: null,
+    externalRef: null,
+    firstSeenAt: null,
+    createdAt: cmAgo(9),
+    updatedAt: cmAgo(9),
+  },
+  {
+    id: 2207,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Sofia Russo",
+    businessName: "Russo Goldsmiths",
+    email: "sofia@russogoldsmiths.it",
+    phone: "+39 02 7611 2200",
+    address: {
+      street1: "Via Montenapoleone 14",
+      city: "Milan",
+      state: "MI",
+      zip: "20121",
+      country: "IT",
+    },
+    notes: "Specializes in 22k bridal. Net-30 terms.",
+    externalRef: "WJ-10560",
+    firstSeenAt: cmAgo(200),
+    createdAt: cmAgo(75),
+    updatedAt: cmAgo(3),
+  },
+  {
+    id: 2208,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Ahmed Al-Mansouri",
+    businessName: "Al-Mansouri Trading",
+    email: "ahmed@almansouri.ae",
+    phone: "+971 4 555 2200",
+    address: {
+      street1: "Sheikh Zayed Rd, Tower 3",
+      street2: "Suite 1810",
+      city: "Dubai",
+      country: "AE",
+    },
+    notes: "High-volume buyer; gold bars + investment grade.",
+    externalRef: "WJ-10612",
+    firstSeenAt: cmAgo(155),
+    createdAt: cmAgo(50),
+    updatedAt: cmAgo(1),
+  },
+  {
+    id: 2209,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "Elena Vargas",
+    businessName: null,
+    email: "elena.vargas@example.com",
+    phone: "+34 91 555 4477",
+    address: {
+      city: "Madrid",
+      country: "ES",
+    },
+    notes: "Custom commission — sapphire pendant due Q3.",
+    externalRef: null,
+    firstSeenAt: null,
+    createdAt: cmAgo(30),
+    updatedAt: cmAgo(4),
+  },
+  {
+    id: 2210,
+    orgId: DEMO_AIYA_ORG_ID,
+    name: "James Whitford",
+    businessName: "Whitford & Sons",
+    email: "james@whitfordandsons.co.uk",
+    phone: "+44 20 7946 0100",
+    address: {
+      street1: "12 Bond Street",
+      city: "London",
+      zip: "W1S 4RT",
+      country: "GB",
+    },
+    notes: "Estate-jewelry house. Buys vintage diamond lots.",
+    externalRef: "WJ-10677",
+    firstSeenAt: cmAgo(95),
+    createdAt: cmAgo(40),
+    updatedAt: cmAgo(8),
+  },
+];
+
+/** Demo-mode helper used by `getCustomers` — filters DEMO_CUSTOMERS by org
+ *  and (optionally) by free-text search across name/business/email/phone.
+ *  Mirrors the SQL's `ILIKE '%q%'` over the same four columns. */
+export function getSeedCustomersForOrg(
+  orgId: number,
+  opts: { search?: string; limit?: number } = {},
+): CustomerView[] {
+  const search = opts.search?.trim().toLowerCase() ?? null;
+  const limit = opts.limit ?? 50;
+  const rows = DEMO_CUSTOMERS.filter((c) => c.orgId === orgId).filter((c) => {
+    if (!search) return true;
+    const haystacks = [c.name, c.businessName, c.email, c.phone].filter(
+      (s): s is string => typeof s === "string",
+    );
+    return haystacks.some((s) => s.toLowerCase().includes(search));
+  });
+  rows.sort(
+    (a, b) =>
+      a.name.localeCompare(b.name) ||
+      b.createdAt.getTime() - a.createdAt.getTime(),
+  );
+  // strip the orgId before returning — CustomerView has no orgId field
+  return rows.slice(0, limit).map(({ orgId: _o, ...view }) => view);
+}
+
+/** Demo-mode helper used by `getCustomerById` — null when the row doesn't
+ *  exist OR exists in a different org (same contract as the SQL query). */
+export function getSeedCustomerById(
+  orgId: number,
+  id: number,
+): CustomerView | null {
+  const row = DEMO_CUSTOMERS.find((c) => c.id === id && c.orgId === orgId);
+  if (!row) return null;
+  const { orgId: _o, ...view } = row;
+  return view;
+}
+
 /** Mirror of the real widened query for the demo runtime. Returns the union
  *  of {rows where orgId === viewer} and {rows whose visibilityCircleId is in
  *  one of the viewer's seeded circles}. */
