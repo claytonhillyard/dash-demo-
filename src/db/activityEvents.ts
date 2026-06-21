@@ -1,0 +1,63 @@
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import type { Db } from "@/db/client";
+import { activityEvents } from "@/db/schema";
+import {
+  type ActivityEntityType,
+  type ActivityEvent,
+  type ActivityVerb,
+} from "@/lib/activity/types";
+
+export const ACTIVITY_DEFAULT_LIMIT = 50;
+export const ACTIVITY_MAX_LIMIT = 200;
+
+function clampLimit(requested?: number): number {
+  if (requested === undefined) return ACTIVITY_DEFAULT_LIMIT;
+  if (requested < 1) return 1;
+  if (requested > ACTIVITY_MAX_LIMIT) return ACTIVITY_MAX_LIMIT;
+  return Math.floor(requested);
+}
+
+function toActivityEvent(row: typeof activityEvents.$inferSelect): ActivityEvent {
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    actor: row.actor,
+    entityType: row.entityType as ActivityEntityType,
+    entityId: row.entityId,
+    verb: row.verb as ActivityVerb,
+    summary: row.summary,
+    payload: (row.payload as Record<string, unknown> | null) ?? null,
+    createdAt: row.createdAt,
+  };
+}
+
+/**
+ * Paginated org-wide audit feed. Most recent first. Slice-3 invariant:
+ * `org_id = $viewerOrgId` is SQL-enforced; no application-layer filter.
+ */
+export async function getOrgActivity(
+  db: Db,
+  viewerOrgId: number,
+  opts?: {
+    limit?: number;
+    beforeId?: number;
+    entityTypes?: readonly ActivityEntityType[];
+  },
+): Promise<ActivityEvent[]> {
+  const conds = [eq(activityEvents.orgId, viewerOrgId)];
+  if (opts?.beforeId !== undefined) {
+    conds.push(lt(activityEvents.id, opts.beforeId));
+  }
+  if (opts?.entityTypes && opts.entityTypes.length > 0) {
+    conds.push(inArray(activityEvents.entityType, [...opts.entityTypes]));
+  }
+  const rows = await db
+    .select()
+    .from(activityEvents)
+    .where(and(...conds))
+    .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
+    .limit(clampLimit(opts?.limit));
+  return rows.map(toActivityEvent);
+}
+
+// getEntityActivity comes in Task A5 (do not implement yet).
