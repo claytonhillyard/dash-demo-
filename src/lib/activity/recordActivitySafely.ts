@@ -18,6 +18,10 @@ export async function recordActivitySafely(
   input: RecordActivityInput,
   ctx: { action: string },
 ): Promise<void> {
+  // Demo guard: action sites that route through customers/actions.ts `run()`
+  // never reach this branch (run() early-returns in demo). Kept defensive for
+  // future direct callers (cron jobs, background importers) that may bypass
+  // the action wrapper but should still respect the "demo never writes" rule.
   if (isDemoMode()) return;
   try {
     await recordActivity(db, input);

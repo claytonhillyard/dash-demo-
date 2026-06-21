@@ -76,6 +76,7 @@ describe("createCustomer — happy path", () => {
       .orderBy(desc(activityEvents.id));
     expect(actRow).toMatchObject({
       orgId: 1,
+      actor: "boss",
       entityType: "customer",
       entityId: newCustomerId,
       verb: "created",
@@ -202,6 +203,7 @@ describe("updateCustomer — happy path", () => {
         ),
       );
     expect(actRows.length).toBe(1);
+    expect(actRows[0]!.actor).toBe("boss");
     expect(
       (actRows[0]!.payload as Record<string, unknown>).changedFields,
     ).toBeInstanceOf(Array);
@@ -327,6 +329,7 @@ describe("deleteCustomer — happy path", () => {
         ),
       );
     expect(actRow.summary).toMatch(/^Deleted /);
+    expect(actRow.actor).toBe("boss");
   });
 
   it("revalidates /customers on success", async () => {
