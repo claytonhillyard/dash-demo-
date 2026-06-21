@@ -60,4 +60,30 @@ export async function getOrgActivity(
   return rows.map(toActivityEvent);
 }
 
-// getEntityActivity comes in Task A5 (do not implement yet).
+/**
+ * Entity-scoped audit feed — "show me everything that ever happened to
+ * customer 17". Slice-3 invariant: SQL-enforced org filter.
+ */
+export async function getEntityActivity(
+  db: Db,
+  viewerOrgId: number,
+  entityType: ActivityEntityType,
+  entityId: number,
+  opts?: { limit?: number; beforeId?: number },
+): Promise<ActivityEvent[]> {
+  const conds = [
+    eq(activityEvents.orgId, viewerOrgId),
+    eq(activityEvents.entityType, entityType),
+    eq(activityEvents.entityId, entityId),
+  ];
+  if (opts?.beforeId !== undefined) {
+    conds.push(lt(activityEvents.id, opts.beforeId));
+  }
+  const rows = await db
+    .select()
+    .from(activityEvents)
+    .where(and(...conds))
+    .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
+    .limit(clampLimit(opts?.limit));
+  return rows.map(toActivityEvent);
+}

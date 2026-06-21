@@ -4,7 +4,7 @@ import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db"
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import * as schema from "@/db/schema";
-import { getOrgActivity } from "@/db/activityEvents";
+import { getOrgActivity, getEntityActivity } from "@/db/activityEvents";
 
 async function insertEvents(
   db: Db,
@@ -89,5 +89,64 @@ describe("getOrgActivity — org-wide reader", () => {
     expect(page2.length).toBe(2);
     const overlap = page1.map((r) => r.id).filter((id) => page2.some((r) => r.id === id));
     expect(overlap).toEqual([]);
+  });
+});
+
+describe("getEntityActivity — entity-scoped reader", () => {
+  let db: Db;
+  beforeAll(async () => { db = await getSharedDb(); });
+  beforeEach(async () => {
+    await resetSharedDb();
+    await db.execute(sql`INSERT INTO orgs (id, slug, name) VALUES (2, 'two', 'Two') ON CONFLICT (id) DO NOTHING`);
+  });
+  afterAll(async () => { await closeSharedDb(); });
+
+  it("returns only events for the given (entityType, entityId) pair", async () => {
+    await insertEvents(db, [
+      { orgId: 1, entityType: "customer", entityId: 7, summary: "c7-a" },
+      { orgId: 1, entityType: "customer", entityId: 8, summary: "c8-a" },
+      { orgId: 1, entityType: "deal", entityId: 7, summary: "d7" },
+      { orgId: 1, entityType: "customer", entityId: 7, summary: "c7-b" },
+    ]);
+    const rows = await getEntityActivity(db, 1, "customer", 7);
+    expect(rows.map((r) => r.summary).sort()).toEqual(["c7-a", "c7-b"]);
+  });
+
+  it("enforces cross-org isolation (org 2 events never returned to org 1 viewer)", async () => {
+    await insertEvents(db, [
+      { orgId: 1, entityType: "customer", entityId: 5, summary: "org1-c5" },
+      { orgId: 2, entityType: "customer", entityId: 5, summary: "org2-c5" },
+    ]);
+    const rows = await getEntityActivity(db, 1, "customer", 5);
+    expect(rows.map((r) => r.summary)).toEqual(["org1-c5"]);
+  });
+
+  it("paginates via beforeId on the entity-scoped path", async () => {
+    for (let i = 0; i < 4; i++) {
+      await db.insert(schema.activityEvents).values({
+        orgId: 1, entityType: "customer", entityId: 9, verb: "updated", summary: `u${i}`,
+      });
+    }
+    const page1 = await getEntityActivity(db, 1, "customer", 9, { limit: 2 });
+    expect(page1.length).toBe(2);
+    const page2 = await getEntityActivity(db, 1, "customer", 9, { limit: 2, beforeId: page1.at(-1)!.id });
+    expect(page2.length).toBe(2);
+    expect(page1.map((r) => r.id).filter((id) => page2.some((r) => r.id === id))).toEqual([]);
+  });
+
+  it("returns empty array when no matching events exist", async () => {
+    await insertEvents(db, [{ orgId: 1, entityType: "deal", entityId: 1, summary: "d1" }]);
+    const rows = await getEntityActivity(db, 1, "customer", 99);
+    expect(rows).toEqual([]);
+  });
+
+  it("clamps limit at 200", async () => {
+    for (let i = 0; i < 220; i++) {
+      await db.insert(schema.activityEvents).values({
+        orgId: 1, entityType: "customer", entityId: 1, verb: "updated", summary: `u${i}`,
+      });
+    }
+    const rows = await getEntityActivity(db, 1, "customer", 1, { limit: 999 });
+    expect(rows.length).toBe(200);
   });
 });
