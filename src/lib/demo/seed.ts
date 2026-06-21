@@ -409,6 +409,7 @@ export const DEMO_DEAL_ATTACHMENTS: SeedDealAttachment[] = [
 // Klein). A handful carry `externalRef` to preview the slice-26 WinJewel
 // import shape without yet exercising it.
 import type { CustomerView } from "@/db/customers";
+import type { ActivityEvent } from "@/lib/activity/types";
 
 const DEMO_CUSTOMER_REF = new Date("2026-06-06T12:00:00Z").getTime();
 const cmAgo = (days: number) =>
@@ -636,6 +637,37 @@ export function getSeedCustomerById(
   const { orgId: _o, ...view } = row;
   return view;
 }
+
+// --- Slice 24 demo seed: activity feed ---
+// Same pattern as DEMO_CUSTOMERS — TS constant, not inserted at runtime.
+// The activityEvents query layer short-circuits demo mode and returns these
+// events filtered/sorted in-memory. Drives the ActivityPanel in slice 24c.
+//
+// 10 events on DEMO_ORG_ID, all entityType: "customer", staggered 2 hours
+// apart over the past day. Mix of created/updated/deleted verbs.
+
+/**
+ * 10 authored activity events on DEMO_ORG_ID, all `entityType: "customer"`,
+ * mix of created/updated/deleted, staggered 2 hours apart over the past
+ * day. Drives the future ActivityPanel rendering in demo mode (slice 24c).
+ *
+ * Slice 24 ships the seed; slice 24c ships the panel.
+ */
+const NOW = new Date();
+const HOURS_AGO = (h: number) => new Date(NOW.getTime() - h * 60 * 60 * 1000);
+
+export const DEMO_ACTIVITY: ActivityEvent[] = [
+  { id: 9001, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2201, verb: "created", summary: "Added Priya Mehta",          payload: { name: "Priya Mehta", businessName: "Mehta Diamonds Pvt Ltd" },     createdAt: HOURS_AGO(22) },
+  { id: 9002, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2202, verb: "created", summary: "Added Jean-Marc Auclair",    payload: { name: "Jean-Marc Auclair", businessName: "Saint-Cloud Atelier" },  createdAt: HOURS_AGO(20) },
+  { id: 9003, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2203, verb: "created", summary: "Added Anita Sharma",         payload: { name: "Anita Sharma", businessName: null },                        createdAt: HOURS_AGO(18) },
+  { id: 9004, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2204, verb: "created", summary: "Added Yuki Tanaka",          payload: { name: "Yuki Tanaka", businessName: "Ginza Pearl House" },          createdAt: HOURS_AGO(16) },
+  { id: 9005, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2201, verb: "updated", summary: "Updated Priya Mehta",        payload: { changedFields: ["email"] },                                        createdAt: HOURS_AGO(14) },
+  { id: 9006, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2205, verb: "created", summary: "Added Marcus Klein",         payload: { name: "Marcus Klein", businessName: null },                        createdAt: HOURS_AGO(12) },
+  { id: 9007, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2206, verb: "created", summary: "Added Rohan Patel",          payload: { name: "Rohan Patel", businessName: null },                         createdAt: HOURS_AGO(10) },
+  { id: 9008, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2207, verb: "created", summary: "Added Sofia Russo",          payload: { name: "Sofia Russo", businessName: "Russo Goldsmiths" },           createdAt: HOURS_AGO(8) },
+  { id: 9009, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 2202, verb: "updated", summary: "Updated Jean-Marc Auclair",  payload: { changedFields: ["phone", "address"] },                             createdAt: HOURS_AGO(6) },
+  { id: 9010, orgId: 1, actor: "owner@aiya.demo", entityType: "customer", entityId: 9999, verb: "deleted", summary: "Deleted Test Account",       payload: { name: "Test Account" },                                            createdAt: HOURS_AGO(2) },
+];
 
 /** Mirror of the real widened query for the demo runtime. Returns the union
  *  of {rows where orgId === viewer} and {rows whose visibilityCircleId is in

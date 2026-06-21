@@ -20,7 +20,7 @@ import {
   resetSharedDb,
   closeSharedDb,
 } from "../../helpers/shared-db";
-import { customers } from "@/db/schema";
+import { customers, activityEvents } from "@/db/schema";
 import {
   createCustomer,
   updateCustomer,
@@ -29,7 +29,7 @@ import {
 } from "@/lib/customers/actions";
 import { requireSession } from "@/lib/auth/requireSession";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -67,6 +67,21 @@ describe("createCustomer — happy path", () => {
     // Future-proofing columns remain NULL on direct creates.
     expect(rows[0].externalRef).toBeNull();
     expect(rows[0].firstSeenAt).toBeNull();
+    // Activity event assertion
+    const newCustomerId = res.ok ? res.id : -1;
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.entityType, "customer"))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "customer",
+      entityId: newCustomerId,
+      verb: "created",
+    });
+    expect(actRow.summary).toMatch(/^Added /);
   });
 
   it("ignores any wire-provided org_id and uses session.orgId", async () => {
@@ -177,6 +192,21 @@ describe("updateCustomer — happy path", () => {
       .from(customers)
       .where(eq(customers.id, r.id));
     expect(after.name).toBe("New name");
+    // Activity event assertion
+    const actRows = await db
+      .select()
+      .from(activityEvents)
+      .where(
+        and(
+          eq(activityEvents.entityType, "customer"),
+          eq(activityEvents.verb, "updated"),
+        ),
+      );
+    expect(actRows.length).toBe(1);
+    expect(actRows[0]!.actor).toBe("boss");
+    expect(
+      (actRows[0]!.payload as Record<string, unknown>).changedFields,
+    ).toBeInstanceOf(Array);
   });
 
   it("revalidates /customers and /customers/:id on success", async () => {
@@ -288,6 +318,18 @@ describe("deleteCustomer — happy path", () => {
     expect(res).toEqual({ ok: true });
     const rows = await db.select().from(customers).where(eq(customers.id, r.id));
     expect(rows).toHaveLength(0);
+    // Activity event assertion
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(
+        and(
+          eq(activityEvents.entityType, "customer"),
+          eq(activityEvents.verb, "deleted"),
+        ),
+      );
+    expect(actRow.summary).toMatch(/^Deleted /);
+    expect(actRow.actor).toBe("boss");
   });
 
   it("revalidates /customers on success", async () => {
@@ -350,3 +392,7 @@ describe("deleteCustomer — validation", () => {
     expect(res.ok).toBe(false);
   });
 });
+
+// Activity emission best-effort guarantee is covered by
+// test/lib/activity/recordActivitySafely.test.ts — that wrapper
+// swallows all errors, so action handlers can `await` it safely.

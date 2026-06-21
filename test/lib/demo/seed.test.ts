@@ -454,7 +454,9 @@ import {
   DEMO_CUSTOMERS,
   getSeedCustomersForOrg,
   getSeedCustomerById,
+  DEMO_ACTIVITY,
 } from "@/lib/demo/seed";
+import { ACTIVITY_ENTITY_TYPES, ACTIVITY_VERBS } from "@/lib/activity/types";
 
 describe("DEMO_CUSTOMERS — slice-22 authored seed", () => {
   it("ships between 8 and 12 customers, all on AIYA", () => {
@@ -514,5 +516,41 @@ describe("getSeedCustomerById — demo-mode owner-only single fetch", () => {
 
   it("returns null for an id that doesn't exist", () => {
     expect(getSeedCustomerById(DEMO_AIYA_ORG_ID, 999999)).toBeNull();
+  });
+});
+
+describe("DEMO_ACTIVITY (slice 24)", () => {
+  it("has exactly 10 events", () => {
+    expect(DEMO_ACTIVITY.length).toBe(10);
+  });
+
+  it("all events are scoped to DEMO_ORG_ID = 1", () => {
+    for (const e of DEMO_ACTIVITY) {
+      expect(e.orgId).toBe(1);
+    }
+  });
+
+  it("all entityTypes are valid against the whitelist", () => {
+    for (const e of DEMO_ACTIVITY) {
+      expect(ACTIVITY_ENTITY_TYPES).toContain(e.entityType);
+    }
+  });
+
+  it("all verbs are valid against the whitelist", () => {
+    for (const e of DEMO_ACTIVITY) {
+      expect(ACTIVITY_VERBS).toContain(e.verb);
+    }
+  });
+
+  it("all summaries are within the 240-char cap", () => {
+    for (const e of DEMO_ACTIVITY) {
+      expect(e.summary.length).toBeGreaterThan(0);
+      expect(e.summary.length).toBeLessThanOrEqual(240);
+    }
+  });
+
+  it("ids are unique", () => {
+    const ids = DEMO_ACTIVITY.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

@@ -505,3 +505,39 @@ export const websiteSnapshots = pgTable(
     orgWeekIdx: index("website_snapshots_org_week_idx").on(t.orgId, t.weekStart.desc()),
   })
 );
+
+export const activityEvents = pgTable(
+  "activity_events",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    actor: text("actor"),                 // session.user label; NULL = system event
+    entityType: text("entity_type").notNull(),
+    entityId: integer("entity_id"),
+    verb: text("verb").notNull(),
+    summary: text("summary").notNull(),
+    payload: jsonb("payload"),
+    // mode:"date" is intentional — ActivityEvent.createdAt is typed as Date.
+    // Other tables use the drizzle default (mode:"string"); align them in a
+    // follow-up clean-up, not here.
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    orgCreatedIdx: index("activity_events_org_created_idx").on(
+      t.orgId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
+    orgEntityIdx: index("activity_events_org_entity_idx").on(
+      t.orgId,
+      t.entityType,
+      t.entityId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
+  }),
+);
