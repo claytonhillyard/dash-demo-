@@ -234,14 +234,14 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 
 | # | Title | Layer | Status | Owner | Notes |
 |---|---|---|---|---|---|
-| 22 | Customers + CRM panel | core | shipped: `3866e58` | this-tab | 4 phases. 14 commits + 1 null-safe nav fix. Two-stage review applied; MINORs tracked as #92. Next-tab-to-claim picks from queue. |
+| 22 | Customers + CRM panel | core | shipped: `3866e58` | this-tab | 4 phases. 14 commits + 1 null-safe nav fix. Two-stage review applied; MINORs tracked as #92. |
+| 24 | Activity feed panel (audit log) | core | claimed 2026-06-20 | **this tab** | Foundation for slice 36 (Customer Health Score) + 38 (Anomaly Sentinel). Builds on slice 22 (per-customer audit rows). |
 
 ### Queued — claim before starting
 
 | # | Title | Layer | Status | Owner | Notes |
 |---|---|---|---|---|---|
 | 23 | AI image-to-listing (Vercel AI Gateway) | core | queued | open | Stub: generic photo→listing prefill |
-| 24 | Activity feed panel (audit log) | core | queued | open | Per-customer audit rows possible after slice 22 |
 | 25 | Watchlists + email alerts (Resend) | core | queued | open | Establishes Resend infra; reused by 28/33/38/41 |
 | 26 | WinJewel CSV import wizard (W2) | aiya-jewelry | queued | open | Depends on slice 22 |
 | 27 | Invoice schema + create/edit form (W3) | core | queued | open | Mechanic + schema in core; templates in module |
