@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { Db } from "@/db/client";
 import { recordActivity } from "./recordActivity";
 import type { RecordActivityInput } from "./types";
+import { isDemoMode } from "@/lib/demo/mode";
 
 /**
  * Action-safe wrapper around `recordActivity`. Catches every failure,
@@ -17,6 +18,7 @@ export async function recordActivitySafely(
   input: RecordActivityInput,
   ctx: { action: string },
 ): Promise<void> {
+  if (isDemoMode()) return;
   try {
     await recordActivity(db, input);
   } catch (e) {

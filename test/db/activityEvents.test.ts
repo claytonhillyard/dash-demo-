@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db";
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
@@ -148,5 +148,33 @@ describe("getEntityActivity — entity-scoped reader", () => {
     }
     const rows = await getEntityActivity(db, 1, "customer", 1, { limit: 999 });
     expect(rows.length).toBe(200);
+  });
+});
+
+describe("getOrgActivity / getEntityActivity — demo mode", () => {
+  const ORIGINAL_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE;
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_DEMO_MODE = "true";
+    vi.resetModules();
+  });
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_DEMO_MODE = ORIGINAL_DEMO;
+    vi.resetModules();
+  });
+
+  it("getOrgActivity returns DEMO_ACTIVITY entries in DESC order", async () => {
+    const mod = await import("@/db/activityEvents");
+    const db = await getSharedDb();
+    const rows = await mod.getOrgActivity(db, 1, { limit: 50 });
+    expect(rows.length).toBe(10);
+    expect(rows[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(rows[1]!.createdAt.getTime());
+  });
+
+  it("getEntityActivity filters DEMO_ACTIVITY by entity (customer 2201 has 2 events)", async () => {
+    const mod = await import("@/db/activityEvents");
+    const db = await getSharedDb();
+    const rows = await mod.getEntityActivity(db, 1, "customer", 2201);
+    expect(rows.length).toBe(2);
+    expect(rows.every((r) => r.entityType === "customer" && r.entityId === 2201)).toBe(true);
   });
 });

@@ -6,6 +6,8 @@ import {
   type ActivityEvent,
   type ActivityVerb,
 } from "@/lib/activity/types";
+import { isDemoMode } from "@/lib/demo/mode";
+import { DEMO_ACTIVITY } from "@/lib/demo/seed";
 
 export const ACTIVITY_DEFAULT_LIMIT = 50;
 export const ACTIVITY_MAX_LIMIT = 200;
@@ -44,6 +46,24 @@ export async function getOrgActivity(
     entityTypes?: readonly ActivityEntityType[];
   },
 ): Promise<ActivityEvent[]> {
+  const limit = clampLimit(opts?.limit);
+
+  if (isDemoMode()) {
+    let pool = DEMO_ACTIVITY.filter((e) => e.orgId === viewerOrgId);
+    if (opts?.entityTypes && opts.entityTypes.length > 0) {
+      const allow = new Set(opts.entityTypes);
+      pool = pool.filter((e) => allow.has(e.entityType));
+    }
+    if (opts?.beforeId !== undefined) {
+      pool = pool.filter((e) => e.id < opts.beforeId!);
+    }
+    pool = [...pool].sort(
+      (a, b) =>
+        b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id,
+    );
+    return pool.slice(0, limit);
+  }
+
   const conds = [eq(activityEvents.orgId, viewerOrgId)];
   if (opts?.beforeId !== undefined) {
     conds.push(lt(activityEvents.id, opts.beforeId));
@@ -56,7 +76,7 @@ export async function getOrgActivity(
     .from(activityEvents)
     .where(and(...conds))
     .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
-    .limit(clampLimit(opts?.limit));
+    .limit(limit);
   return rows.map(toActivityEvent);
 }
 
@@ -71,6 +91,25 @@ export async function getEntityActivity(
   entityId: number,
   opts?: { limit?: number; beforeId?: number },
 ): Promise<ActivityEvent[]> {
+  const limit = clampLimit(opts?.limit);
+
+  if (isDemoMode()) {
+    let pool = DEMO_ACTIVITY.filter(
+      (e) =>
+        e.orgId === viewerOrgId &&
+        e.entityType === entityType &&
+        e.entityId === entityId,
+    );
+    if (opts?.beforeId !== undefined) {
+      pool = pool.filter((e) => e.id < opts.beforeId!);
+    }
+    pool = [...pool].sort(
+      (a, b) =>
+        b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id,
+    );
+    return pool.slice(0, limit);
+  }
+
   const conds = [
     eq(activityEvents.orgId, viewerOrgId),
     eq(activityEvents.entityType, entityType),
@@ -84,6 +123,6 @@ export async function getEntityActivity(
     .from(activityEvents)
     .where(and(...conds))
     .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
-    .limit(clampLimit(opts?.limit));
+    .limit(limit);
   return rows.map(toActivityEvent);
 }
