@@ -52,7 +52,7 @@ export const recordActivityInputSchema = z.object({
   entityId: z.number().int().positive().nullable(),
   verb: z.enum(ACTIVITY_VERBS),
   summary: z.string().min(1).max(ACTIVITY_SUMMARY_MAX_LEN),
-  payload: z.record(z.unknown()).nullable().optional(),
+  payload: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export type RecordActivityInput = z.infer<typeof recordActivityInputSchema>;
