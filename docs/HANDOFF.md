@@ -17,6 +17,11 @@
 |---|---|---|
 | `cb6ed95` | ROADMAP + MODULES + CODE_AUDIT docs (strategic foundation, 965 lines) | docs |
 | `743a766` | Merge slice C-1: `orgs.module_id` column (migration `0015_naive_chamber`) + `ModuleManifest` type + empty registry + `getActiveModule()` helper + `getCurrentOrgModuleId()` session helper + 9 tests | core/shell |
+| `3866e58` | Merge slice 22: Customers + CRM panel (migration `0016_left_starbolt`, 15 commits, 1071 tests green) | core |
+| `ac28fe6` | ROADMAP §9 row 22 marked shipped | docs |
+
+### 1.2a Netlify deploy state (2026-06-20)
+**Live deploy is stuck on the pre-slice-22 build.** Verified: `/` returns 200 but rendered HTML does NOT contain "Customers" (the sidebar nav entry added in slice 22); `/customers` returns HTTP 404 with `cache-status: "Next.js"; hit` and `age: 997932` — a stale 404 from the prior build's prerender. Root cause confirmed with the user: **the Netlify account is out of credits**, so the webhook fires but the build never runs. Plan: user switches to a paid Netlify account, then re-push (or push an empty `chore(deploy): retrigger`) to trigger a fresh build. After that, verify against Step 7 of the Phase D plan.
 
 ### 1.3 What is on a branch but NOT yet merged
 **Branch:** `feature/slice-22-customers` (pushed to origin, tip `4b141d4`)
