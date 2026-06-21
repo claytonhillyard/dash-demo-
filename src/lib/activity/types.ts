@@ -16,18 +16,22 @@ export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 
 /** Whitelist of verbs. Extend as new event kinds are introduced. */
 export const ACTIVITY_VERBS = [
+  // lifecycle
   "created",
   "updated",
   "deleted",
   "archived",
   "restored",
+  // membership / social
   "invited",
   "joined",
   "left",
+  // bid domain
   "bid_placed",
   "bid_accepted",
   "bid_rejected",
   "bid_withdrawn",
+  // auxiliary
   "commented",
   "comment_deleted",
   "viewed",
@@ -42,12 +46,13 @@ export const ACTIVITY_SUMMARY_MAX_LEN = 240;
 
 export const recordActivityInputSchema = z.object({
   orgId: z.number().int().positive(),
+  // NULL = system event (seed, cron, import); empty string is rejected.
   actor: z.string().min(1).max(200).nullable(),
   entityType: z.enum(ACTIVITY_ENTITY_TYPES),
   entityId: z.number().int().positive().nullable(),
   verb: z.enum(ACTIVITY_VERBS),
   summary: z.string().min(1).max(ACTIVITY_SUMMARY_MAX_LEN),
-  payload: z.record(z.unknown()).optional(),
+  payload: z.record(z.unknown()).nullable().optional(),
 });
 
 export type RecordActivityInput = z.infer<typeof recordActivityInputSchema>;

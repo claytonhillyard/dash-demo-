@@ -519,9 +519,12 @@ export const activityEvents = pgTable(
     verb: text("verb").notNull(),
     summary: text("summary").notNull(),
     payload: jsonb("payload"),
+    // mode:"date" is intentional — ActivityEvent.createdAt is typed as Date.
+    // Other tables use the drizzle default (mode:"string"); align them in a
+    // follow-up clean-up, not here.
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
+      .defaultNow()
+      .notNull(),
   },
   (t) => ({
     orgCreatedIdx: index("activity_events_org_created_idx").on(
