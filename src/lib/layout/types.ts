@@ -12,6 +12,7 @@ import type {
   DealRoomPanelAttachmentActions,
 } from "@/components/dashboard/DealRoomPanel";
 import type { SharedInventoryRow } from "@/db/inventory";
+import type { ActivityEvent } from "@/lib/activity/types";
 
 export type PanelSize = 1 | 2 | 4;
 
@@ -103,6 +104,10 @@ export interface TradeNetInventoryView {
   items: SharedInventoryRow[];
 }
 
+export interface ActivityView {
+  events: ActivityEvent[];
+}
+
 /** Server-read context the page passes into each panel's render. */
 export interface PanelCtx {
   inventory?: InventoryView;
@@ -112,6 +117,7 @@ export interface PanelCtx {
   providerStatus?: ProviderStatusView; // slice 11
   todaysBids?: TodaysBidsView; // slice 16
   tradenetInventory?: TradeNetInventoryView; // slice 15
+  activity?: ActivityView; // slice 24c
 }
 
 export interface PanelEntry {

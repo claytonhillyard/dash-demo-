@@ -10,7 +10,7 @@ import { NavItem } from "./NavItem";
 const SECTIONS = [
   "Dashboard", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
   "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
-  "Customers", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
+  "Customers", "Activity", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
   "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
   "Calendar & Tasks", "Documents", "Settings",
 ];
@@ -28,6 +28,9 @@ const ROUTES: Record<string, string> = {
   // remains as a separate placeholder for the future contact-record + pipeline
   // surface that slice 22 explicitly does NOT cover.
   Customers: "/customers",
+  // Slice 24c — org-wide audit feed. Sits right after Customers since it's
+  // the first surface most owners will check after adding/editing a record.
+  Activity: "/activity",
 };
 
 export function Nav() {

@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { getCustomerById } from "@/db/customers";
+import { getEntityActivity } from "@/db/activityEvents";
 import { CustomerForm } from "@/components/customers/CustomerForm";
+import { ActivityList } from "@/components/activity/ActivityList";
 import { updateCustomer, deleteCustomer } from "@/lib/customers/actions";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,7 @@ export default async function EditCustomerPage({
   const orgId = await getCurrentOrgId();
   const customer = await getCustomerById(db, orgId, id);
   if (!customer) notFound();
+  const activity = await getEntityActivity(db, orgId, "customer", id, { limit: 20 });
 
   return (
     <main className="mx-auto max-w-3xl p-4">
@@ -43,6 +46,10 @@ export default async function EditCustomerPage({
         action={updateCustomer}
         deleteAction={deleteCustomer}
       />
+      <section className="mt-8">
+        <h2 className="mb-2 text-sm font-semibold text-zinc-200">Activity</h2>
+        <ActivityList compact events={activity} />
+      </section>
     </main>
   );
 }

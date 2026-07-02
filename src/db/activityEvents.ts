@@ -29,7 +29,11 @@ function toActivityEvent(row: typeof activityEvents.$inferSelect): ActivityEvent
     verb: row.verb as ActivityVerb,
     summary: row.summary,
     payload: (row.payload as Record<string, unknown> | null) ?? null,
-    createdAt: row.createdAt,
+    // Defensive coercion at the reader boundary — same convention as every
+    // other Date-surfacing reader (bids.ts, customers.ts, dealMessages.ts).
+    // relativeTime() downstream trusts a real Date unconditionally.
+    createdAt:
+      row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
   };
 }
 
@@ -66,6 +70,11 @@ export async function getOrgActivity(
 
   const conds = [eq(activityEvents.orgId, viewerOrgId)];
   if (opts?.beforeId !== undefined) {
+    // id-only cursor against a (created_at, id) DESC ordering is safe ONLY
+    // because both are assigned atomically at INSERT (serial + defaultNow())
+    // and nothing overrides created_at — so they are co-monotonic. If a
+    // backfill/import path ever writes explicit created_at values, this
+    // cursor must become a composite (created_at, id) keyset.
     conds.push(lt(activityEvents.id, opts.beforeId));
   }
   if (opts?.entityTypes && opts.entityTypes.length > 0) {
