@@ -237,7 +237,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 22 | Customers + CRM panel | core | shipped: `3866e58` | this-tab | 4 phases. 14 commits + 1 null-safe nav fix. Two-stage review applied; MINORs tracked as #92. |
 | 24 | Activity feed panel (audit log) | core | shipped: `09986bf` (Phase A+B) | this-tab | Schema + helpers + tests + customers actions instrumented. 11 commits, +35 tests (1106/1106). Phase C (UI + remaining action files) becomes slice 24b. |
 | 24b | Activity feed — remaining action instrumentation (deals/circles/inventory) | core | shipped: `2464acc` | this-tab | 3 tasks. 18 handlers instrumented (5 deals + 6 circles + 7 inventory) + 18 test assertions. `client.test.ts` timeout bump. 1106/1106 green. |
-| 24c | Activity feed — UI (ActivityPanel + /activity route + per-customer tab) | core | claimed 2026-06-21 | **this tab** | Consumes `getOrgActivity` + `getEntityActivity`. Wires panel into dashboard layout. Depends on slice 24b for full-populated demo. |
+| 24c | Activity feed — UI (ActivityPanel + /activity route + per-customer section) | core | shipped: `ed432b0` | this-tab | 5 commits. Shared ActivityList; panel auto-appears for existing layouts (getEffectiveLayout merge); link-cursor pagination precedent set. +15 tests (1121/1121). Activity feed arc (24/24b/24c) complete. |
 
 ### Queued — claim before starting
 

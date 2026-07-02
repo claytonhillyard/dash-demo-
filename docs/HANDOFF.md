@@ -22,17 +22,13 @@
 | `09986bf` | Merge slice 24: Activity Feed Phase A+B (migration `0017_crazy_nitro`, 13 commits, 1106 tests green) | core |
 | `15d5fee` | ROADMAP §9 row 24 marked shipped + 24b queued | docs |
 | `2464acc` | Merge slice 24b: remaining action instrumentation (18 handlers across deals/circles/inventory + timeout bump on client.test.ts, 5 commits, 1106 tests green) | core |
+| `ed432b0` | Merge slice 24c: Activity Feed UI (ActivityList + ActivityPanel + /activity route + per-customer section, 5 commits, 1121 tests green) — Activity feed arc complete | core |
 
 ### 1.2a Netlify deploy state (2026-06-21)
 **Live deploy is still stuck on the pre-slice-22 build.** Same symptoms as before — `/` returns 200 without the sidebar `Customers` entry; `/customers` 404s from cached prior-build prerender. Root cause: the Netlify account is out of credits; the webhook fires but the build never runs. Plan unchanged: user switches to a paid Netlify account, then push an empty `chore(deploy): retrigger` commit or just re-push (`git commit --allow-empty -m "chore(deploy): retrigger Netlify build for slices 22 + 24"`). After that, verify against the Step 7 checklist in `docs/superpowers/plans/2026-06-08-slice-22-phase-D-completion.md`, then add a slice-24 verify (visit `/customers/2201/edit` — once 24c lands the Activity tab will show events; for now confirm `/customers` still renders the demo seed AND no 500s in the dashboard from slice 24's instrumentation).
 
-### 1.2b Slice 24 follow-up scope (slice 24b)
-Phase C of the Activity Feed work is queued in §9 as **slice 24b**:
-- Instrument `src/lib/deals/actions.ts`, `src/lib/circles/actions.ts`, `src/lib/inventory/actions.ts`, and the inventory-bid actions to emit events (same `recordActivitySafely` pattern as slice 24 B1).
-- Build `<ActivityPanel>` right-rail panel (last-10 events for the org with link to full feed).
-- Add `/activity` route showing the paginated org-wide feed with entity-type filter.
-- Add per-customer Activity tab on `/customers/[id]/edit` using `getEntityActivity`.
-- Wire `<ActivityPanel>` into the dashboard layout.
+### 1.2b Activity feed arc — COMPLETE (24 → 24b → 24c)
+All three phases shipped: 24 (`09986bf` primitive + customers instrumentation), 24b (`2464acc` deals/circles/inventory instrumentation — 18 handlers), 24c (`ed432b0` UI: shared `ActivityList`, dashboard `ActivityPanel`, `/activity` route with filter chips + link-cursor pagination, per-customer Activity section on the edit page). Slices 36 (Customer Health Score) and 38 (Anomaly Sentinel) can now consume the log. Deferred by design: live push (slice 52), payload/diff rendering (polish), retention policy (slice 38).
 
 ### 1.3 What is on a branch but NOT yet merged
 **Branch:** `feature/slice-22-customers` (pushed to origin, tip `4b141d4`)
