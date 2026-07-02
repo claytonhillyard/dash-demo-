@@ -236,7 +236,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 |---|---|---|---|---|---|
 | 22 | Customers + CRM panel | core | shipped: `3866e58` | this-tab | 4 phases. 14 commits + 1 null-safe nav fix. Two-stage review applied; MINORs tracked as #92. |
 | 24 | Activity feed panel (audit log) | core | shipped: `09986bf` (Phase A+B) | this-tab | Schema + helpers + tests + customers actions instrumented. 11 commits, +35 tests (1106/1106). Phase C (UI + remaining action files) becomes slice 24b. |
-| 24b | Activity feed Phase C (UI + remaining instrumentation) | core | queued | open | Wires `<ActivityPanel>` right-rail + `/activity` route + per-customer Activity tab; instruments deals/circles/inventory/bids actions. Depends on slice 24. |
+| 24b | Activity feed Phase C (UI + remaining instrumentation) | core | claimed 2026-06-21 | **this tab** | Wires `<ActivityPanel>` right-rail + `/activity` route + per-customer Activity tab; instruments deals/circles/inventory/bids actions. Depends on slice 24. |
 
 ### Queued — claim before starting
 
