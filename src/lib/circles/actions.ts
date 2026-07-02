@@ -16,6 +16,7 @@ import {
   type RemoveOrgFromCircleInput, type LeaveCircleInput,
 } from "./validation";
 import { firstZodError } from "@/lib/company/validation";
+import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -57,7 +58,8 @@ async function runWithUser<T>(
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function createCircle(raw: unknown): Promise<ActionResult> {
-  return runWithUser(createCircleInput, raw, async (input: CreateCircleInput, _user, orgId) => {
+  return runWithUser(createCircleInput, raw, async (input: CreateCircleInput, user, orgId) => {
+    let circleId!: number;
     await db().transaction(async (tx) => {
       // TODO(slice-4c review): plan used `.returning({ id: circles.id })`, but
       // Drizzle's TS overload only resolves with no-arg .returning() in this
@@ -69,7 +71,21 @@ export async function createCircle(raw: unknown): Promise<ActionResult> {
       await tx
         .insert(circleMembers)
         .values({ circleId: c.id, orgId });
+      circleId = c.id;
     });
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor: user,
+        entityType: "circle",
+        entityId: circleId,
+        verb: "created",
+        summary: `Created circle "${input.name}"`,
+        payload: { name: input.name, slug: input.slug },
+      },
+      { action: "circles.create" },
+    );
   });
 }
 
@@ -87,10 +103,10 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 export async function inviteOrgToCircle(raw: unknown): Promise<ActionResult> {
-  return runWithUser(inviteOrgToCircleInput, raw, async (input: InviteOrgToCircleInput, _user, orgId) => {
+  return runWithUser(inviteOrgToCircleInput, raw, async (input: InviteOrgToCircleInput, user, orgId) => {
     const d = db();
     // Owner-only gate.
-    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId }).from(circles)
+    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId, name: circles.name }).from(circles)
       .where(eq(circles.id, input.circleId)).limit(1);
     if (!c || c.ownerOrgId !== orgId) throw new ForbiddenError();
     // Self-invite: no-op if the target slug is the caller's own.
@@ -113,15 +129,31 @@ export async function inviteOrgToCircle(raw: unknown): Promise<ActionResult> {
       if (isUniqueViolation(e)) throw new ForbiddenError();
       throw e;
     }
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor: user,
+        entityType: "circle",
+        entityId: input.circleId,
+        verb: "invited",
+        summary: `Invited ${input.toOrgSlug} to "${c.name}"`,
+        payload: { circleId: input.circleId, toSlug: input.toOrgSlug },
+      },
+      { action: "circles.invite" },
+    );
   });
 }
 
 export async function acceptInvitation(raw: unknown): Promise<ActionResult> {
-  return runWithUser(tokenInput, raw, async (input: TokenInput, _user, orgId) => {
+  return runWithUser(tokenInput, raw, async (input: TokenInput, user, orgId) => {
+    let circleId!: number;
+    let circleName = "";
+    let fromOrgSlug = "";
     await db().transaction(async (tx) => {
       // 1) Lock the invitation row (FOR UPDATE closes the check-then-write race).
       const rows = await tx.execute(drizzleSql`
-        SELECT id, circle_id, to_org_slug, status, expires_at
+        SELECT id, circle_id, from_org_id, to_org_slug, status, expires_at
         FROM circle_invitations
         WHERE token = ${input.token}
         LIMIT 1
@@ -152,15 +184,40 @@ export async function acceptInvitation(raw: unknown): Promise<ActionResult> {
         .update(circleInvitations)
         .set({ status: "accepted", respondedAt: new Date() })
         .where(eq(circleInvitations.id, inv.id as number));
+      circleId = inv.circle_id as number;
+      // Audit-only lookups (display name + inviter slug); not authz-relevant,
+      // done last inside the tx so they read the same snapshot.
+      const [circleRow] = await tx.select({ name: circles.name }).from(circles)
+        .where(eq(circles.id, circleId)).limit(1);
+      circleName = circleRow?.name ?? `circle #${circleId}`;
+      const [fromOrg] = await tx.select({ slug: orgs.slug }).from(orgs)
+        .where(eq(orgs.id, inv.from_org_id as number)).limit(1);
+      fromOrgSlug = fromOrg?.slug ?? "unknown";
     });
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor: user,
+        entityType: "circle",
+        entityId: circleId,
+        verb: "joined",
+        summary: `Accepted invite to "${circleName}"`,
+        payload: { circleId, fromOrgSlug },
+      },
+      { action: "circles.acceptInvite" },
+    );
   });
 }
 
 export async function declineInvitation(raw: unknown): Promise<ActionResult> {
-  return runWithUser(tokenInput, raw, async (input: TokenInput, _user, orgId) => {
+  return runWithUser(tokenInput, raw, async (input: TokenInput, user, orgId) => {
+    let circleId!: number;
+    let circleName = "";
+    let fromOrgSlug = "";
     await db().transaction(async (tx) => {
       const rows = await tx.execute(drizzleSql`
-        SELECT id, to_org_slug, status, expires_at
+        SELECT id, circle_id, from_org_id, to_org_slug, status, expires_at
         FROM circle_invitations
         WHERE token = ${input.token}
         LIMIT 1
@@ -181,7 +238,30 @@ export async function declineInvitation(raw: unknown): Promise<ActionResult> {
         .update(circleInvitations)
         .set({ status: "declined", respondedAt: new Date() })
         .where(eq(circleInvitations.id, inv.id as number));
+      circleId = inv.circle_id as number;
+      // Audit-only lookups; see acceptInvitation for rationale.
+      const [circleRow] = await tx.select({ name: circles.name }).from(circles)
+        .where(eq(circles.id, circleId)).limit(1);
+      circleName = circleRow?.name ?? `circle #${circleId}`;
+      const [fromOrg] = await tx.select({ slug: orgs.slug }).from(orgs)
+        .where(eq(orgs.id, inv.from_org_id as number)).limit(1);
+      fromOrgSlug = fromOrg?.slug ?? "unknown";
     });
+    // "deleted" is the closest ACTIVITY_VERBS match for a soft-deleted
+    // (declined) invite row — see slice-24b-2 spec, whitelist stays stable.
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor: user,
+        entityType: "circle",
+        entityId: circleId,
+        verb: "deleted",
+        summary: `Declined invite to "${circleName}"`,
+        payload: { circleId, fromOrgSlug },
+      },
+      { action: "circles.declineInvite" },
+    );
   });
 }
 
@@ -199,27 +279,64 @@ export async function declineInvitation(raw: unknown): Promise<ActionResult> {
 //     race-mitigation patterns are present; both invariants still hold.
 // (Slice-4c review finding #7.)
 export async function removeOrgFromCircle(raw: unknown): Promise<ActionResult> {
-  return runWithUser(removeOrgFromCircleInput, raw, async (input: RemoveOrgFromCircleInput, _user, orgId) => {
+  return runWithUser(removeOrgFromCircleInput, raw, async (input: RemoveOrgFromCircleInput, user, orgId) => {
     const d = db();
-    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId }).from(circles)
+    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId, name: circles.name }).from(circles)
       .where(eq(circles.id, input.circleId)).limit(1);
     if (!c || c.ownerOrgId !== orgId) throw new ForbiddenError();
     if (input.orgId === c.ownerOrgId) throw new ForbiddenError(); // cannot remove the owner
-    await d
+    const removed = await d
       .delete(circleMembers)
-      .where(and(eq(circleMembers.circleId, input.circleId), eq(circleMembers.orgId, input.orgId)));
+      .where(and(eq(circleMembers.circleId, input.circleId), eq(circleMembers.orgId, input.orgId)))
+      .returning();
+    // Idempotent no-op (removing an already-removed / non-member org): zero
+    // rows changed, so nothing real happened — skip the audit call.
+    if (removed.length === 0) return;
+    const [removedOrg] = await d.select({ slug: orgs.slug }).from(orgs)
+      .where(eq(orgs.id, input.orgId)).limit(1);
+    const removedOrgSlug = removedOrg?.slug ?? "unknown";
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor: user,
+        entityType: "circle",
+        entityId: input.circleId,
+        verb: "left",
+        summary: `Removed ${removedOrgSlug} from "${c.name}"`,
+        payload: { circleId: input.circleId, removedOrgSlug },
+      },
+      { action: "circles.remove" },
+    );
   });
 }
 
 export async function leaveCircle(raw: unknown): Promise<ActionResult> {
-  return runWithUser(leaveCircleInput, raw, async (input: LeaveCircleInput, _user, orgId) => {
+  return runWithUser(leaveCircleInput, raw, async (input: LeaveCircleInput, user, orgId) => {
     const d = db();
-    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId }).from(circles)
+    const [c] = await d.select({ ownerOrgId: circles.ownerOrgId, name: circles.name }).from(circles)
       .where(eq(circles.id, input.circleId)).limit(1);
     if (!c) throw new ForbiddenError();
     if (c.ownerOrgId === orgId) throw new ForbiddenError(); // owner cannot leave
-    await d
+    const removed = await d
       .delete(circleMembers)
-      .where(and(eq(circleMembers.circleId, input.circleId), eq(circleMembers.orgId, orgId)));
+      .where(and(eq(circleMembers.circleId, input.circleId), eq(circleMembers.orgId, orgId)))
+      .returning();
+    // Idempotent no-op (leaving a circle the caller isn't a member of): zero
+    // rows changed, so nothing real happened — skip the audit call.
+    if (removed.length === 0) return;
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor: user,
+        entityType: "circle",
+        entityId: input.circleId,
+        verb: "left",
+        summary: `Left circle "${c.name}"`,
+        payload: { circleId: input.circleId },
+      },
+      { action: "circles.leave" },
+    );
   });
 }
