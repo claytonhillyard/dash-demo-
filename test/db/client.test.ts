@@ -4,6 +4,10 @@ import { createTestDb, ensureDbReady } from "@/db/client";
 import { revenueMonths, inventoryItems } from "@/db/schema";
 
 describe("db client", () => {
+  // 120s timeout: this test creates TWO fresh pglite instances and migrates
+  // both — each migration takes ~50s on this project (17 migrations as of
+  // slice 24b). Vitest's 30s default is too tight; bump per-test rather than
+  // globally so other tests still fail fast on genuine hangs.
   it("createTestDb gives an isolated, migrated pglite db", async () => {
     const a = await createTestDb();
     const b = await createTestDb();
@@ -19,7 +23,7 @@ describe("db client", () => {
 
     await a.close();
     await b.close();
-  });
+  }, 120_000);
 
   it("ensureDbReady returns a fully-migrated db (no first-query race)", async () => {
     // Awaiting readiness must guarantee the schema exists — querying a table
