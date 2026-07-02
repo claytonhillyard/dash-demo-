@@ -21,6 +21,7 @@
 | `ac28fe6` | ROADMAP §9 row 22 marked shipped | docs |
 | `09986bf` | Merge slice 24: Activity Feed Phase A+B (migration `0017_crazy_nitro`, 13 commits, 1106 tests green) | core |
 | `15d5fee` | ROADMAP §9 row 24 marked shipped + 24b queued | docs |
+| `2464acc` | Merge slice 24b: remaining action instrumentation (18 handlers across deals/circles/inventory + timeout bump on client.test.ts, 5 commits, 1106 tests green) | core |
 
 ### 1.2a Netlify deploy state (2026-06-21)
 **Live deploy is still stuck on the pre-slice-22 build.** Same symptoms as before — `/` returns 200 without the sidebar `Customers` entry; `/customers` 404s from cached prior-build prerender. Root cause: the Netlify account is out of credits; the webhook fires but the build never runs. Plan unchanged: user switches to a paid Netlify account, then push an empty `chore(deploy): retrigger` commit or just re-push (`git commit --allow-empty -m "chore(deploy): retrigger Netlify build for slices 22 + 24"`). After that, verify against the Step 7 checklist in `docs/superpowers/plans/2026-06-08-slice-22-phase-D-completion.md`, then add a slice-24 verify (visit `/customers/2201/edit` — once 24c lands the Activity tab will show events; for now confirm `/customers` still renders the demo seed AND no 500s in the dashboard from slice 24's instrumentation).
