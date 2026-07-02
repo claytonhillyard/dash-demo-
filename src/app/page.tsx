@@ -6,6 +6,7 @@ import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { getInventorySummary, getSharedInventoryForOrg } from "@/db/inventory";
 import { getDiamondSummary } from "@/db/diamonds";
+import { getOrgActivity } from "@/db/activityEvents";
 import { getActiveDeals } from "@/lib/deals/queries";
 import { getCircleNamesForOrg, getCircleIdsForOrg } from "@/lib/circles/queries";
 import { getWebsiteSnapshotTrend } from "@/db/website";
@@ -49,7 +50,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
-  const [invSummary, dia, activeDeals, circleNamesById, viewerCircleIdList, websiteTrend, sharedInventory] =
+  const [invSummary, dia, activeDeals, circleNamesById, viewerCircleIdList, websiteTrend, sharedInventory, activityEvents] =
     await Promise.all([
       getInventorySummary(db, orgId),
       getDiamondSummary(db, orgId),
@@ -58,6 +59,7 @@ export default async function Home() {
       getCircleIdsForOrg(db, orgId),
       getWebsiteSnapshotTrend(db, orgId, 8),
       getSharedInventoryForOrg(db, orgId, 5),
+      getOrgActivity(db, orgId, { limit: 10 }),
     ]);
 
   // Slice 10 + 16: per-deal fetches. Parallelized via Promise.all so the 4
@@ -198,10 +200,11 @@ export default async function Home() {
     actions: { acceptBid, rejectBid },
   };
   const tradenetInventory = { items: sharedInventory };
+  const activity = { events: activityEvents };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>
-        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} tradenetInventory={tradenetInventory} />
+        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} tradenetInventory={tradenetInventory} activity={activity} />
       </Shell>
     </QuotesProvider>
   );

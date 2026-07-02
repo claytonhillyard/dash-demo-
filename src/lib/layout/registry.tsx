@@ -9,6 +9,7 @@ import { WebsiteOverviewPanel } from "@/components/dashboard/WebsiteOverviewPane
 import { ProviderStatusPanel } from "@/components/dashboard/ProviderStatusPanel";
 import { TodaysBidsPanel } from "@/components/dashboard/TodaysBidsPanel";
 import { TradeNetInventoryPanel } from "@/components/dashboard/TradeNetInventoryPanel";
+import { ActivityPanel } from "@/components/dashboard/ActivityPanel";
 import type { LayoutItem, PanelEntry, PanelSize } from "./types";
 
 export const PANEL_REGISTRY: PanelEntry[] = [
@@ -135,6 +136,17 @@ export const PANEL_REGISTRY: PanelEntry[] = [
         />
       ) : (
         <BusinessPlaceholder title="Today's Bids" testid="panel-todays-bids" />
+      ),
+  },
+  {
+    id: "activity",
+    title: "Recent Activity",
+    defaultSize: 1,
+    render: (ctx) =>
+      ctx.activity ? (
+        <ActivityPanel events={ctx.activity.events} />
+      ) : (
+        <BusinessPlaceholder title="Recent Activity" testid="panel-activity" />
       ),
   },
   {
