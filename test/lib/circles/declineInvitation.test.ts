@@ -8,9 +8,9 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { circles, circleMembers, circleInvitations } from "@/db/schema";
+import { circles, circleMembers, circleInvitations, activityEvents } from "@/db/schema";
 import { declineInvitation, __setTestDb } from "@/lib/circles/actions";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); await __setTestDb(db); });
@@ -38,6 +38,17 @@ describe("declineInvitation", () => {
     expect(inv.status).toBe("declined");
     expect(inv.respondedAt).not.toBeNull();
     expect(await db.select().from(circleMembers)).toHaveLength(0);
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "circle"), eq(activityEvents.verb, "deleted")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 999,
+      actor: "alice",
+      entityType: "circle",
+      verb: "deleted",
+    });
   });
 
   it("wrong-slug session: Forbidden, status stays pending", async () => {

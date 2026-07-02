@@ -8,9 +8,10 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { deals, circles, circleMembers, dealMessages } from "@/db/schema";
+import { deals, circles, circleMembers, dealMessages, activityEvents } from "@/db/schema";
 import { postDealMessage, __setTestDb } from "@/lib/deals/actions";
 import { requireSession } from "@/lib/auth/requireSession";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -63,6 +64,17 @@ describe("postDealMessage — cross-circle visibility", () => {
     const dealId = await seedCircleDeal({ ownerOrgId: 1, threadMode: "private", circleId: null });
     const res = await postDealMessage({ dealId, body: "owner post" });
     expect(res).toEqual({ ok: true });
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "deal"), eq(activityEvents.verb, "commented")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "deal",
+      verb: "commented",
+    });
   });
 
   it("allows an in-circle partner to post on a circle-scoped deal", async () => {

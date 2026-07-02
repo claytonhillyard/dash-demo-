@@ -8,10 +8,10 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { circles, circleMembers, circleInvitations } from "@/db/schema";
+import { circles, circleMembers, circleInvitations, activityEvents } from "@/db/schema";
 import { acceptInvitation, __setTestDb } from "@/lib/circles/actions";
 import { requireSession } from "@/lib/auth/requireSession";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); await __setTestDb(db); });
@@ -49,6 +49,17 @@ describe("acceptInvitation — happy path", () => {
     const [inv] = await db.select().from(circleInvitations).where(eq(circleInvitations.token, token));
     expect(inv.status).toBe("accepted");
     expect(inv.respondedAt).not.toBeNull();
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "circle"), eq(activityEvents.verb, "joined")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 999,
+      actor: "alice",
+      entityType: "circle",
+      verb: "joined",
+    });
   });
 });
 

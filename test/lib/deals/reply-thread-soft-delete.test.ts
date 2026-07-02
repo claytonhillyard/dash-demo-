@@ -8,10 +8,10 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { deals, dealMessages } from "@/db/schema";
+import { deals, dealMessages, activityEvents } from "@/db/schema";
 import { deleteDealMessage, __setTestDb } from "@/lib/deals/actions";
 import { requireSession } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -61,6 +61,17 @@ describe("deleteDealMessage — author + window", () => {
       .from(dealMessages)
       .where(eq(dealMessages.id, messageId));
     expect(row.deletedAt).not.toBeNull();
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "deal"), eq(activityEvents.verb, "comment_deleted")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "deal",
+      verb: "comment_deleted",
+    });
   });
 
   it("forbids deletion after 16 min", async () => {

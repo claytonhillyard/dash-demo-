@@ -8,9 +8,9 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { circles, circleMembers } from "@/db/schema";
+import { circles, circleMembers, activityEvents } from "@/db/schema";
 import { createCircle, __setTestDb } from "@/lib/circles/actions";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); await __setTestDb(db); });
@@ -27,6 +27,17 @@ describe("createCircle", () => {
     const members = await db.select().from(circleMembers).where(eq(circleMembers.circleId, cs[0].id));
     expect(members).toHaveLength(1);
     expect(members[0].orgId).toBe(1);
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "circle"), eq(activityEvents.verb, "created")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "circle",
+      verb: "created",
+    });
   });
 
   it("rejects an invalid slug at Zod", async () => {

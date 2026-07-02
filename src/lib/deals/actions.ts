@@ -33,6 +33,7 @@ import {
 import { detectKindFromBytes } from "./attachmentMime";
 import { getBlobStore } from "@/lib/storage/blobStore";
 import { countAttachmentsByKind } from "@/db/dealAttachments";
+import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -40,24 +41,29 @@ let testDb: Db | null = null;
 export async function __setTestDb(db: Db | null): Promise<void> { testDb = db; }
 function db(): Db { return testDb ?? getDb(); }
 
-/** Demo-guard, session re-assert + orgId resolve, validate, run, revalidate; never throw to UI. */
+/** Demo-guard, session re-assert + orgId resolve, validate, run, revalidate; never throw to UI.
+ *  Widened in slice 24b-1 to also thread `actor: string` (session.user) to the
+ *  callback, so mutation sites can call recordActivitySafely without a second
+ *  requireSession() round-trip. Mirrors src/lib/customers/actions.ts `run<T>()`. */
 async function run<T>(
   schema: z.ZodType<T>,
   raw: unknown,
-  fn: (input: T, orgId: number) => Promise<void>
+  fn: (input: T, orgId: number, actor: string) => Promise<void>
 ): Promise<ActionResult> {
   if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
   let orgId: number;
+  let actor: string;
   try {
     const session = await requireSession();
     orgId = session.orgId;
+    actor = session.user;
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstZodError(parsed.error) };
   try {
-    await fn(parsed.data, orgId);
+    await fn(parsed.data, orgId, actor);
     revalidatePath("/");
     revalidatePath("/deals");
     return { ok: true };
@@ -119,7 +125,7 @@ export async function postDeal(raw: unknown): Promise<ActionResult> {
         throw new ForbiddenError("Forbidden");
       }
     }
-    await db().insert(deals).values({
+    const [row] = await db().insert(deals).values({
       orgId,
       kind: input.kind,
       category: input.category,
@@ -130,10 +136,23 @@ export async function postDeal(raw: unknown): Promise<ActionResult> {
       visibilityCircleId: input.visibilityCircleId ?? null,
       threadMode: input.threadMode,
       postedByLabel: user,
-    });
+    }).returning();
     console.log(
       `[deals] posted deal kind=${input.kind} category=${input.category} ` +
       `by=${user} org=${orgId} visibility=${input.visibilityCircleId ?? "private"}`
+    );
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor: user,
+        entityType: "deal",
+        entityId: row.id,
+        verb: "created",
+        summary: `Posted ${input.kind} ${input.category}`,
+        payload: { side: input.kind, category: input.category, title: input.subject },
+      },
+      { action: "deals.post" },
     );
   });
 }
@@ -147,13 +166,41 @@ async function updateStatus(input: UpdateDealStatusInput, orgId: number): Promis
 }
 
 export async function markDealFilled(id: number): Promise<ActionResult> {
-  return run(updateDealStatusInput, { id, status: "Filled" }, updateStatus);
+  return run(updateDealStatusInput, { id, status: "Filled" }, async (input, orgId, actor) => {
+    await updateStatus(input, orgId);
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor,
+        entityType: "deal",
+        entityId: input.id,
+        verb: "updated",
+        summary: `Marked deal #${input.id} filled`,
+        payload: { status: "filled" },
+      },
+      { action: "deals.markFilled" },
+    );
+  });
 }
 
 export async function withdrawDeal(id: number): Promise<ActionResult> {
-  return run(updateDealStatusInput, { id, status: "Withdrawn" }, async (input, orgId) => {
+  return run(updateDealStatusInput, { id, status: "Withdrawn" }, async (input, orgId, actor) => {
     await updateStatus(input, orgId);
     console.log(`[deals] deal id=${input.id} withdrawn (org=${orgId})`);
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor,
+        entityType: "deal",
+        entityId: input.id,
+        verb: "archived",
+        summary: `Withdrew deal #${input.id}`,
+        payload: { status: "withdrawn" },
+      },
+      { action: "deals.withdraw" },
+    );
   });
 }
 
@@ -200,7 +247,7 @@ async function canSeeDeal(d: Db, orgId: number, dealId: number): Promise<
 }
 
 export async function postDealMessage(raw: unknown): Promise<ActionResult> {
-  return runWithUser(postDealMessageInput, raw, async (input: PostDealMessageInput, _user, orgId) => {
+  return runWithUser(postDealMessageInput, raw, async (input: PostDealMessageInput, user, orgId) => {
     const d = db();
     const access = await canSeeDeal(d, orgId, input.dealId);
     if (!access.ok) throw new ForbiddenError();
@@ -218,9 +265,25 @@ export async function postDealMessage(raw: unknown): Promise<ActionResult> {
       body: input.body,
       threadMode: access.threadMode,  // snapshot at send time — IMMUTABLE for the life of this row
     });
+    // Privacy: the message body itself is NOT audited — only the fact of the
+    // reply + its length. See slice-24 spec payload rules.
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor: user,
+        entityType: "deal",
+        entityId: input.dealId,
+        verb: "commented",
+        summary: `Replied on deal #${input.dealId}`,
+        payload: { dealId: input.dealId, messageLen: input.body.length },
+      },
+      { action: "deals.postMessage" },
+    );
   });
 }
 
+// intentionally not audited — UI state only, see slice-24 spec §5.
 export async function setDealThreadMode(raw: unknown): Promise<ActionResult> {
   return runWithUser(setDealThreadModeInput, raw, async (input: SetDealThreadModeInput, _user, orgId) => {
     const d = db();
@@ -244,10 +307,11 @@ export async function setDealThreadMode(raw: unknown): Promise<ActionResult> {
 const SOFT_DELETE_WINDOW_MS = 15 * 60 * 1000;
 
 export async function deleteDealMessage(raw: unknown): Promise<ActionResult> {
-  return runWithUser(deleteDealMessageInput, raw, async (input: DeleteDealMessageInput, _user, orgId) => {
+  return runWithUser(deleteDealMessageInput, raw, async (input: DeleteDealMessageInput, user, orgId) => {
     const d = db();
     const [msg] = await d
       .select({
+        dealId: dealMessages.dealId,
         fromOrgId: dealMessages.fromOrgId,
         createdAt: dealMessages.createdAt,
         deletedAt: dealMessages.deletedAt,
@@ -273,9 +337,23 @@ export async function deleteDealMessage(raw: unknown): Promise<ActionResult> {
       .update(dealMessages)
       .set({ deletedAt: new Date() })
       .where(eq(dealMessages.id, input.messageId));
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor: user,
+        entityType: "deal",
+        entityId: msg.dealId,
+        verb: "comment_deleted",
+        summary: `Deleted a reply on deal #${msg.dealId}`,
+        payload: { dealId: msg.dealId, messageId: input.messageId },
+      },
+      { action: "deals.deleteMessage" },
+    );
   });
 }
 
+// intentionally not audited — UI state only, see slice-24 spec §5.
 export async function markDealThreadRead(raw: unknown): Promise<ActionResult> {
   return runWithUser(markDealThreadReadInput, raw, async (input: MarkDealThreadReadInput, _user, orgId) => {
     const d = db();

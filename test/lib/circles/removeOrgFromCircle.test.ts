@@ -8,9 +8,9 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { circles, circleMembers } from "@/db/schema";
+import { circles, circleMembers, activityEvents } from "@/db/schema";
 import { removeOrgFromCircle, __setTestDb } from "@/lib/circles/actions";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); await __setTestDb(db); });
@@ -25,6 +25,17 @@ describe("removeOrgFromCircle action", () => {
     expect(res).toEqual({ ok: true });
     const rows = await db.select().from(circleMembers).where(eq(circleMembers.circleId, c.id));
     expect(rows.map((r) => r.orgId).sort()).toEqual([1]);
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "circle"), eq(activityEvents.verb, "left")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "circle",
+      verb: "left",
+    });
   });
 
   it("non-owner attempts: Forbidden", async () => {

@@ -8,10 +8,10 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { circles, circleInvitations } from "@/db/schema";
+import { circles, circleInvitations, activityEvents } from "@/db/schema";
 import { inviteOrgToCircle, __setTestDb } from "@/lib/circles/actions";
 import { requireSession } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); await __setTestDb(db); });
@@ -39,6 +39,17 @@ describe("inviteOrgToCircle", () => {
     expect(inv.token.length).toBeGreaterThanOrEqual(16);
     expect(inv.expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect(inv.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 7 * 24 * 60 * 60 * 1000 + 1000);
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "circle"), eq(activityEvents.verb, "invited")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "circle",
+      verb: "invited",
+    });
   });
 
   it("non-owner: Forbidden (zero rows written)", async () => {

@@ -8,10 +8,10 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { inventoryItems, inventoryBids } from "@/db/schema";
+import { inventoryItems, inventoryBids, activityEvents } from "@/db/schema";
 import { withdrawInventoryBid, rejectInventoryBid, __setTestDb } from "@/lib/inventory/actions";
 import { requireSession } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => { db = await getSharedDb(); await __setTestDb(db); });
@@ -47,6 +47,17 @@ describe("withdrawInventoryBid", () => {
     const [after] = await db.select().from(inventoryBids).where(eq(inventoryBids.id, bid.id));
     expect(after.status).toBe("withdrawn");
     expect(after.decidedAt).not.toBeNull();
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "bid"), eq(activityEvents.verb, "bid_withdrawn")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 999,
+      actor: "p",
+      entityType: "bid",
+      verb: "bid_withdrawn",
+    });
   });
 
   it("forbids withdraw by non-bidder", async () => {
@@ -89,6 +100,17 @@ describe("rejectInventoryBid", () => {
     const [after] = await db.select().from(inventoryBids).where(eq(inventoryBids.id, bid.id));
     expect(after.status).toBe("rejected");
     expect(after.decidedAt).not.toBeNull();
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "bid"), eq(activityEvents.verb, "bid_rejected")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "bid",
+      verb: "bid_rejected",
+    });
   });
 
   it("non-owner cannot reject", async () => {
