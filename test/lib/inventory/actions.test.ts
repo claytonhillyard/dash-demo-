@@ -8,13 +8,13 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { inventoryItems, circles, circleMembers } from "@/db/schema";
+import { inventoryItems, circles, circleMembers, activityEvents } from "@/db/schema";
 import { getInventorySummary } from "@/db/inventory";
 import {
   createInventoryItem, updateInventoryItem, deleteInventoryItem, __setTestDb,
 } from "@/lib/inventory/actions";
 import { requireSession } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -39,6 +39,17 @@ describe("inventory server actions", () => {
     expect(res).toEqual({ ok: true });
     const s = await getInventorySummary(db, 1);
     expect(s.counts.Rings).toBe(4);
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "inventory_item"), eq(activityEvents.verb, "created")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "inventory_item",
+      verb: "created",
+    });
   });
 
   it("rejects invalid input with a typed error, no throw", async () => {
@@ -61,8 +72,30 @@ describe("inventory server actions", () => {
       unitCostCents: 0, retailPriceCents: 0,
     })).toEqual({ ok: true });
     expect((await getInventorySummary(db, 1)).counts.Diamonds).toBe(7);
+    const [updatedActRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "inventory_item"), eq(activityEvents.verb, "updated")))
+      .orderBy(desc(activityEvents.id));
+    expect(updatedActRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "inventory_item",
+      verb: "updated",
+    });
     expect(await deleteInventoryItem(row.id)).toEqual({ ok: true });
     expect((await getInventorySummary(db, 1)).total).toBe(0);
+    const [deletedActRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "inventory_item"), eq(activityEvents.verb, "deleted")))
+      .orderBy(desc(activityEvents.id));
+    expect(deletedActRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "inventory_item",
+      verb: "deleted",
+    });
   });
 
   it("surfaces unauthorized as a typed error", async () => {

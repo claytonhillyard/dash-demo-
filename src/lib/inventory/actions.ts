@@ -5,7 +5,7 @@ import { and, eq, gt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
-import { inventoryItems, inventoryBids } from "@/db/schema";
+import { inventoryItems, inventoryBids, orgs } from "@/db/schema";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { isOrgMemberOfCircle } from "@/lib/circles/membership";
@@ -24,6 +24,7 @@ import {
   withdrawInventoryBidInput,
   setInventoryItemBidModeInput,
 } from "./bidValidation";
+import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -36,24 +37,30 @@ function db(): Db {
   return testDb ?? getDb();
 }
 
-/** Re-assert session, resolve orgId, validate, run, revalidate; never throw to the UI. */
+/** Re-assert session, resolve orgId, validate, run, revalidate; never throw to the UI.
+ *  Widened in slice 24b-3 to also thread `actor: string` (session.user) to the
+ *  callback, so mutation sites can call recordActivitySafely without a second
+ *  requireSession() round-trip. Mirrors src/lib/deals/actions.ts `run<T>()`
+ *  (post-24b-1) and src/lib/customers/actions.ts `run<T>()`. */
 async function run<T>(
   schema: z.ZodType<T>,
   raw: unknown,
-  fn: (input: T, orgId: number) => Promise<void>
+  fn: (input: T, orgId: number, actor: string) => Promise<void>
 ): Promise<ActionResult> {
   if (isDemoMode()) return { ok: false, error: "Demo mode — changes are disabled" };
   let orgId: number;
+  let actor: string;
   try {
     const session = await requireSession();
     orgId = session.orgId;
+    actor = session.user;
   } catch {
     return { ok: false, error: "Unauthorized" };
   }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstZodError(parsed.error) };
   try {
-    await fn(parsed.data, orgId);
+    await fn(parsed.data, orgId, actor);
     revalidatePath("/");
     revalidatePath("/inventory");
     revalidatePath("/exchange");
@@ -121,27 +128,84 @@ async function ensureCanShare(
 }
 
 export async function createInventoryItem(raw: unknown): Promise<ActionResult> {
-  return run(inventoryItemInput, raw, async (input, orgId) => {
+  return run(inventoryItemInput, raw, async (input, orgId, actor) => {
     await ensureCanShare(orgId, input.visibilityCircleId);
-    await db().insert(inventoryItems).values(insertValues(input, orgId));
+    const [row] = await db()
+      .insert(inventoryItems)
+      .values(insertValues(input, orgId))
+      .returning();
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor,
+        entityType: "inventory_item",
+        entityId: row.id,
+        verb: "created",
+        summary: `Added "${row.name}"`,
+        payload: { name: row.name, category: row.category, quantity: row.quantity },
+      },
+      { action: "inventory.create" },
+    );
   });
 }
 
 export async function updateInventoryItem(raw: unknown): Promise<ActionResult> {
-  return run(inventoryItemUpdateInput, raw, async (input, orgId) => {
+  return run(inventoryItemUpdateInput, raw, async (input, orgId, actor) => {
     await ensureCanShare(orgId, input.visibilityCircleId);
-    await db()
+    const res = await db()
       .update(inventoryItems)
       .set({ ...updateValues(input, orgId), updatedAt: new Date() })
-      .where(and(eq(inventoryItems.id, input.id), eq(inventoryItems.orgId, orgId)));
+      .where(and(eq(inventoryItems.id, input.id), eq(inventoryItems.orgId, orgId)))
+      .returning();
+    // Cross-org id (defense-in-depth WHERE) → zero rows touched. Slice-3
+    // convention: silent no-op, action still returns { ok: true }. Nothing
+    // real happened, so skip the audit — mirrors circles/actions.ts's
+    // `removed.length === 0` gate post-24b-2.
+    if (res.length === 0) return;
+    const updated = res[0]!;
+    const changedFields = Object.keys(input).filter((k) => k !== "id");
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor,
+        entityType: "inventory_item",
+        entityId: input.id,
+        verb: "updated",
+        summary:
+          changedFields.length === 1
+            ? `Updated "${updated.name}": ${changedFields[0]}`
+            : `Updated "${updated.name}"`,
+        payload: { changedFields },
+      },
+      { action: "inventory.update" },
+    );
   });
 }
 
 export async function deleteInventoryItem(id: number): Promise<ActionResult> {
-  return run(z.number().int(), id, async (rid, orgId) => {
-    await db()
+  return run(z.number().int(), id, async (rid, orgId, actor) => {
+    const res = await db()
       .delete(inventoryItems)
-      .where(and(eq(inventoryItems.id, rid), eq(inventoryItems.orgId, orgId)));
+      .where(and(eq(inventoryItems.id, rid), eq(inventoryItems.orgId, orgId)))
+      .returning();
+    // Cross-org id → zero rows deleted; silent no-op, skip the audit.
+    if (res.length === 0) return;
+    const deleted = res[0]!;
+    await recordActivitySafely(
+      db(),
+      {
+        orgId,
+        actor,
+        entityType: "inventory_item",
+        entityId: rid,
+        verb: "deleted",
+        summary: `Deleted "${deleted.name}"`,
+        payload: { name: deleted.name, category: deleted.category },
+      },
+      { action: "inventory.delete" },
+    );
   });
 }
 
@@ -175,6 +239,9 @@ async function canBidOnItem(
       ownerOrgId: number;
       bidMode: "single" | "history";
       visibilityCircleId: number;
+      // Slice 24b-3: item name for the bid-placed audit summary. Added to
+      // this existing authz SELECT rather than a second round-trip.
+      itemName: string;
     }
   | { ok: false }
 > {
@@ -184,6 +251,7 @@ async function canBidOnItem(
       bidMode: inventoryItems.bidMode,
       visibilityCircleId: inventoryItems.visibilityCircleId,
       quantity: inventoryItems.quantity,
+      name: inventoryItems.name,
     })
     .from(inventoryItems)
     .where(eq(inventoryItems.id, inventoryItemId))
@@ -198,31 +266,52 @@ async function canBidOnItem(
   return {
     ok: true,
     ownerOrgId: row.ownerOrgId,
+    itemName: row.name,
     bidMode: row.bidMode,
     visibilityCircleId: row.visibilityCircleId,
   };
 }
 
 export async function postInventoryBid(raw: unknown): Promise<ActionResult> {
-  return run(postInventoryBidInput, raw, async (input, orgId) => {
+  return run(postInventoryBidInput, raw, async (input, orgId, actor) => {
     const d = db();
     const access = await canBidOnItem(d, orgId, input.inventoryItemId, input.quantityRequested);
     if (!access.ok) throw new ForbiddenError("Forbidden");
     const label = await resolveOrgLabel(d, orgId);
-    await d.insert(inventoryBids).values({
-      inventoryItemId: input.inventoryItemId,
-      bidderOrgId: orgId,
-      bidderOrgLabel: label,
-      priceCents: input.priceCents,
-      currency: input.currency,
-      notes: input.notes ?? null,
-      quantityRequested: input.quantityRequested,
-    });
+    const [row] = await d
+      .insert(inventoryBids)
+      .values({
+        inventoryItemId: input.inventoryItemId,
+        bidderOrgId: orgId,
+        bidderOrgLabel: label,
+        priceCents: input.priceCents,
+        currency: input.currency,
+        notes: input.notes ?? null,
+        quantityRequested: input.quantityRequested,
+      })
+      .returning();
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor,
+        entityType: "bid",
+        entityId: row.id,
+        verb: "bid_placed",
+        summary: `Placed bid on "${access.itemName}"`,
+        payload: {
+          inventoryItemId: input.inventoryItemId,
+          pricePerUnit: input.priceCents,
+          quantityRequested: input.quantityRequested,
+        },
+      },
+      { action: "inventory.bid.place" },
+    );
   });
 }
 
 export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
-  return run(acceptInventoryBidInput, raw, async (input, orgId) => {
+  return run(acceptInventoryBidInput, raw, async (input, orgId, actor) => {
     const d = db();
     const [row] = await d
       .select({
@@ -230,9 +319,15 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
         bidStatus: inventoryBids.status,
         inventoryItemId: inventoryBids.inventoryItemId,
         itemOwnerOrgId: inventoryItems.orgId,
+        // Slice 24b-3: item name + bidder org slug for the bid-accepted audit
+        // summary. Both riding on this existing authz SELECT's join — bidder
+        // org is reached via a second join, no extra round-trip.
+        itemName: inventoryItems.name,
+        bidderOrgSlug: orgs.slug,
       })
       .from(inventoryBids)
       .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBids.inventoryItemId))
+      .innerJoin(orgs, eq(orgs.id, inventoryBids.bidderOrgId))
       .where(eq(inventoryBids.id, input.bidId))
       .limit(1);
     if (!row) throw new ForbiddenError("Forbidden");
@@ -240,6 +335,10 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
     if (row.bidStatus !== "pending") throw new ForbiddenError("Forbidden");
 
     const now = new Date();
+    // Slice 24b-3: quantity actually accepted, captured from inside the
+    // locked tx (the re-read's `bid_qty`) so the audit payload reflects the
+    // value that was actually committed, not a possibly-stale pre-tx read.
+    let quantityAccepted = 0;
     await d.transaction(async (tx) => {
       // Serialize concurrent accepts on the SAME item by taking a row-lock on
       // the parent inventory_item. Two acceptInventoryBid() calls in flight on
@@ -272,6 +371,7 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
       if (freshRows.length === 0) throw new ForbiddenError("Forbidden");
       const f = freshRows[0];
       if (f.bid_status !== "pending") throw new ForbiddenError("Forbidden");
+      quantityAccepted = f.bid_qty;
 
       // Slice 18b: bid asks for more than's currently available — throw
       // Forbidden. Postgres tx semantics: the throw rolls back the entire tx;
@@ -338,48 +438,97 @@ export async function acceptInventoryBid(raw: unknown): Promise<ActionResult> {
       // lock above. See spec §4.1 for the full transaction body and §4.4 for
       // the Postgres rollback semantics on the over-subscribed failure path.
     });
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor,
+        entityType: "bid",
+        entityId: input.bidId,
+        verb: "bid_accepted",
+        summary: `Accepted ${row.bidderOrgSlug}'s bid on "${row.itemName}"`,
+        payload: {
+          inventoryItemId: row.inventoryItemId,
+          bidId: input.bidId,
+          quantityAccepted,
+        },
+      },
+      { action: "inventory.bid.accept" },
+    );
   });
 }
 
 export async function rejectInventoryBid(raw: unknown): Promise<ActionResult> {
-  return run(rejectInventoryBidInput, raw, async (input, orgId) => {
+  return run(rejectInventoryBidInput, raw, async (input, orgId, actor) => {
     const d = db();
     const [row] = await d
       .select({
         bidStatus: inventoryBids.status,
         itemOwnerOrgId: inventoryItems.orgId,
+        inventoryItemId: inventoryBids.inventoryItemId,
+        // Slice 24b-3: item name + bidder org slug for the bid-rejected
+        // audit summary — riding this existing authz SELECT's join.
+        itemName: inventoryItems.name,
+        bidderOrgSlug: orgs.slug,
+      })
+      .from(inventoryBids)
+      .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBids.inventoryItemId))
+      .innerJoin(orgs, eq(orgs.id, inventoryBids.bidderOrgId))
+      .where(eq(inventoryBids.id, input.bidId))
+      .limit(1);
+    if (!row) throw new ForbiddenError("Forbidden");
+    if (row.itemOwnerOrgId !== orgId) throw new ForbiddenError("Forbidden");
+    if (row.bidStatus !== "pending") throw new ForbiddenError("Forbidden");
+    const res = await d
+      .update(inventoryBids)
+      .set({ status: "rejected", decidedAt: new Date() })
+      .where(and(
+        eq(inventoryBids.id, input.bidId),
+        eq(inventoryBids.status, "pending"),
+      ))
+      .returning();
+    // The pre-check above already guarantees status === "pending" at read
+    // time, so this UPDATE should always touch exactly 1 row absent a race.
+    // Gate defensively anyway — mirrors the idempotent-no-op convention used
+    // across circles/actions.ts (slice 24b-2) and this file's other handlers.
+    if (res.length === 0) return;
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor,
+        entityType: "bid",
+        entityId: input.bidId,
+        verb: "bid_rejected",
+        summary: `Rejected ${row.bidderOrgSlug}'s bid on "${row.itemName}"`,
+        payload: { inventoryItemId: row.inventoryItemId, bidId: input.bidId },
+      },
+      { action: "inventory.bid.reject" },
+    );
+  });
+}
+
+export async function withdrawInventoryBid(raw: unknown): Promise<ActionResult> {
+  return run(withdrawInventoryBidInput, raw, async (input, orgId, actor) => {
+    const d = db();
+    const [row] = await d
+      .select({
+        bidderOrgId: inventoryBids.bidderOrgId,
+        status: inventoryBids.status,
+        inventoryItemId: inventoryBids.inventoryItemId,
+        // Slice 24b-3: item name for the bid-withdrawn audit summary. No
+        // existing join on inventory_items in this handler — add one.
+        itemName: inventoryItems.name,
       })
       .from(inventoryBids)
       .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBids.inventoryItemId))
       .where(eq(inventoryBids.id, input.bidId))
       .limit(1);
     if (!row) throw new ForbiddenError("Forbidden");
-    if (row.itemOwnerOrgId !== orgId) throw new ForbiddenError("Forbidden");
-    if (row.bidStatus !== "pending") throw new ForbiddenError("Forbidden");
-    await d
-      .update(inventoryBids)
-      .set({ status: "rejected", decidedAt: new Date() })
-      .where(and(
-        eq(inventoryBids.id, input.bidId),
-        eq(inventoryBids.status, "pending"),
-      ));
-  });
-}
-
-export async function withdrawInventoryBid(raw: unknown): Promise<ActionResult> {
-  return run(withdrawInventoryBidInput, raw, async (input, orgId) => {
-    const d = db();
-    const [row] = await d
-      .select({
-        bidderOrgId: inventoryBids.bidderOrgId,
-        status: inventoryBids.status,
-      })
-      .from(inventoryBids)
-      .where(eq(inventoryBids.id, input.bidId))
-      .limit(1);
-    if (!row) throw new ForbiddenError("Forbidden");
     if (row.bidderOrgId !== orgId) throw new ForbiddenError("Forbidden");
-    if (row.status === "withdrawn") return; // idempotent
+    // Idempotent no-op (already withdrawn): nothing real happened — skip
+    // the audit. Mirrors circles/actions.ts's `removed.length === 0` gate.
+    if (row.status === "withdrawn") return;
     if (row.status !== "pending") throw new ForbiddenError("Forbidden");
     await d
       .update(inventoryBids)
@@ -389,6 +538,19 @@ export async function withdrawInventoryBid(raw: unknown): Promise<ActionResult> 
         eq(inventoryBids.bidderOrgId, orgId),
         eq(inventoryBids.status, "pending"),
       ));
+    await recordActivitySafely(
+      d,
+      {
+        orgId,
+        actor,
+        entityType: "bid",
+        entityId: input.bidId,
+        verb: "bid_withdrawn",
+        summary: `Withdrew bid on "${row.itemName}"`,
+        payload: { inventoryItemId: row.inventoryItemId, bidId: input.bidId },
+      },
+      { action: "inventory.bid.withdraw" },
+    );
   });
 }
 

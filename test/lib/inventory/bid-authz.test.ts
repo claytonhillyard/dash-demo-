@@ -8,10 +8,10 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { inventoryItems, inventoryBids, circles, circleMembers, orgs } from "@/db/schema";
+import { inventoryItems, inventoryBids, circles, circleMembers, orgs, activityEvents } from "@/db/schema";
 import { postInventoryBid, __setTestDb } from "@/lib/inventory/actions";
 import { requireSession } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -72,6 +72,17 @@ describe("postInventoryBid — authz", () => {
     expect(rows[0].bidderOrgId).toBe(999);
     expect(rows[0].priceCents).toBe(12_300_00);
     expect(rows[0].status).toBe("pending");
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "bid"), eq(activityEvents.verb, "bid_placed")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 999,
+      actor: "p",
+      entityType: "bid",
+      verb: "bid_placed",
+    });
   });
 
   it("forbids the item owner from bidding on their own item (self-bid block)", async () => {

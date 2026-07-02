@@ -8,9 +8,9 @@ vi.mock("@/lib/auth/requireSession", () => ({
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
-import { inventoryItems, inventoryBids, orgs } from "@/db/schema";
+import { inventoryItems, inventoryBids, orgs, activityEvents } from "@/db/schema";
 import { acceptInventoryBid, __setTestDb } from "@/lib/inventory/actions";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 let db: Db;
 beforeAll(async () => {
@@ -70,6 +70,18 @@ describe("acceptInventoryBid — atomicity", () => {
       .where(eq(inventoryItems.id, item.id));
     expect(itemAfter.status).toBe("in_stock");
     expect(itemAfter.quantity).toBe(9);
+
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "bid"), eq(activityEvents.verb, "bid_accepted")))
+      .orderBy(desc(activityEvents.id));
+    expect(actRow).toMatchObject({
+      orgId: 1,
+      actor: "boss",
+      entityType: "bid",
+      verb: "bid_accepted",
+    });
   });
 
   it("non-owner cannot accept", async () => {
