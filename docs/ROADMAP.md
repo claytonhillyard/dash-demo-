@@ -255,7 +255,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 33 | Predictive cash runway panel | core | proposed | open | Depends on 27/29 (invoices, payments) |
 | 34 | Pinecone vector store integration | core | proposed | open | Foundation for 44/46/50 |
 | 35 | AI Command Layer (NL → action) | core | proposed | open | Depends on 32 |
-| 36 | Customer health score | core | proposed | open | Depends on 22/24 |
+| 36 | Customer health score | core | claimed 2026-06-21 | **this tab** | Deps met: 22 (customers) + 24/24b (activity log) + 32 (AI gateway for the explanation layer) all shipped. |
 | 37 | AI email drafting + personality memory | core | proposed | open | Depends on 32/22 |
 | 38 | Anomaly Sentinel | core | proposed | open | Depends on 24 |
 | 39 | Predictive reorder via market triggers | core | proposed | open | Depends on inventory + market |
