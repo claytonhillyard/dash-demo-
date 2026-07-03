@@ -4,7 +4,7 @@ import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db"
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import * as schema from "@/db/schema";
-import { getOrgActivity, getEntityActivity } from "@/db/activityEvents";
+import { getOrgActivity, getEntityActivity, getCustomerActivityStats } from "@/db/activityEvents";
 
 async function insertEvents(
   db: Db,
@@ -176,5 +176,102 @@ describe("getOrgActivity / getEntityActivity — demo mode", () => {
     const rows = await mod.getEntityActivity(db, 1, "customer", 2201);
     expect(rows.length).toBe(2);
     expect(rows.every((r) => r.entityType === "customer" && r.entityId === 2201)).toBe(true);
+  });
+
+  it("getCustomerActivityStats: customer 2201 has eventsLast30d 2, distinctVerbs30d 2 (created 9001 + updated 9005, both within 24h of demo NOW)", async () => {
+    const mod = await import("@/db/activityEvents");
+    const db = await getSharedDb();
+    const stats = await mod.getCustomerActivityStats(db, 1);
+    const s = stats.get(2201);
+    expect(s).toBeDefined();
+    expect(s!.entityId).toBe(2201);
+    expect(s!.eventsLast30d).toBe(2);
+    expect(s!.distinctVerbs30d).toBe(2);
+    expect(s!.lastActivityAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("getCustomerActivityStats — aggregate reader", () => {
+  let db: Db;
+  beforeAll(async () => { db = await getSharedDb(); });
+  beforeEach(async () => {
+    await resetSharedDb();
+    await db.execute(sql`INSERT INTO orgs (id, slug, name) VALUES (2, 'two', 'Two') ON CONFLICT (id) DO NOTHING`);
+  });
+  afterAll(async () => { await closeSharedDb(); });
+
+  it("groups per customer id with correct eventsLast30d counts", async () => {
+    await insertEvents(db, [
+      { orgId: 1, entityType: "customer", entityId: 1, verb: "created", summary: "c1-a" },
+      { orgId: 1, entityType: "customer", entityId: 1, verb: "updated", summary: "c1-b" },
+      { orgId: 1, entityType: "customer", entityId: 2, verb: "created", summary: "c2-a" },
+    ]);
+    const stats = await getCustomerActivityStats(db, 1);
+    expect(stats.size).toBe(2);
+    expect(stats.get(1)!.eventsLast30d).toBe(2);
+    expect(stats.get(2)!.eventsLast30d).toBe(1);
+  });
+
+  it("lastActivityAt reflects an OLD event (unwindowed) even though it's excluded from the 30d window count", async () => {
+    await insertEvents(db, [
+      { orgId: 1, entityType: "customer", entityId: 3, verb: "created", summary: "aged" },
+    ]);
+    await db.execute(
+      sql`UPDATE activity_events SET created_at = now() - interval '45 days' WHERE entity_id = 3 AND org_id = 1`,
+    );
+    const stats = await getCustomerActivityStats(db, 1);
+    const s = stats.get(3);
+    expect(s).toBeDefined();
+    // Excluded from the 30d window — the only event for this customer is 45d old.
+    expect(s!.eventsLast30d).toBe(0);
+    expect(s!.distinctVerbs30d).toBe(0);
+    // But lastActivityAt is unwindowed — it still reflects the 45-day-old event,
+    // NOT null. Assert it's roughly 45 days ago, not "now".
+    const daysSince = (Date.now() - s!.lastActivityAt.getTime()) / 86_400_000;
+    expect(daysSince).toBeGreaterThan(44);
+    expect(daysSince).toBeLessThan(46);
+  });
+
+  it("counts distinct verbs within the 30d window (3 events, 2 distinct verbs -> 2)", async () => {
+    await insertEvents(db, [
+      { orgId: 1, entityType: "customer", entityId: 4, verb: "created", summary: "v1" },
+      { orgId: 1, entityType: "customer", entityId: 4, verb: "updated", summary: "v2" },
+      { orgId: 1, entityType: "customer", entityId: 4, verb: "updated", summary: "v3" },
+    ]);
+    const stats = await getCustomerActivityStats(db, 1);
+    const s = stats.get(4);
+    expect(s!.eventsLast30d).toBe(3);
+    expect(s!.distinctVerbs30d).toBe(2);
+  });
+
+  it("enforces cross-org isolation (org 2 events invisible to org 1 viewer)", async () => {
+    await insertEvents(db, [
+      { orgId: 1, entityType: "customer", entityId: 5, verb: "created", summary: "org1-c5" },
+      { orgId: 2, entityType: "customer", entityId: 5, verb: "created", summary: "org2-c5" },
+    ]);
+    const stats = await getCustomerActivityStats(db, 1);
+    expect(stats.has(5)).toBe(true);
+    expect(stats.get(5)!.eventsLast30d).toBe(1);
+
+    const statsOrg2 = await getCustomerActivityStats(db, 2);
+    expect(statsOrg2.has(5)).toBe(true);
+    expect(statsOrg2.get(5)!.eventsLast30d).toBe(1);
+  });
+
+  it("returns an empty Map when there are no customer activity events", async () => {
+    const stats = await getCustomerActivityStats(db, 1);
+    expect(stats.size).toBe(0);
+    expect(stats instanceof Map).toBe(true);
+  });
+
+  it("excludes non-customer entity_types from the grouping", async () => {
+    await insertEvents(db, [
+      { orgId: 1, entityType: "customer", entityId: 6, verb: "created", summary: "cust" },
+      { orgId: 1, entityType: "deal", entityId: 6, verb: "created", summary: "deal-same-id" },
+      { orgId: 1, entityType: "inventory_item", entityId: 6, verb: "created", summary: "inv-same-id" },
+    ]);
+    const stats = await getCustomerActivityStats(db, 1);
+    expect(stats.size).toBe(1);
+    expect(stats.get(6)!.eventsLast30d).toBe(1);
   });
 });
