@@ -251,7 +251,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 29 | Payments + balance tracking (W5) | core | queued | open | Audit-logged via 24 |
 | 30 | WinJewel invoice history import (W6) | aiya-jewelry | queued | open | Depends on 26/27/29 |
 | 31 | Document vault (contracts, NDAs) | core | proposed | open | Reuses slice-17 Blob seam |
-| 32 | AI Gateway provider integration | core | claimed 2026-06-21 | **this tab** | Foundation for 23/35/36/37/41/42 |
+| 32 | AI Gateway provider integration | core | shipped: `ec65e76` | this-tab | `src/lib/ai/` seam: tier catalog + simulated fallback + generateAiText (tags, durationMs, PII-free Sentry). ai@6.0.219. +15 tests (1136/1136). Live calls gate on AI_GATEWAY_API_KEY in Netlify env. Unblocks 23/35/36/37/41/42/46/50. |
 | 33 | Predictive cash runway panel | core | proposed | open | Depends on 27/29 (invoices, payments) |
 | 34 | Pinecone vector store integration | core | proposed | open | Foundation for 44/46/50 |
 | 35 | AI Command Layer (NL → action) | core | proposed | open | Depends on 32 |
