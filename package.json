@@ -20,6 +20,7 @@
     "@neondatabase/serverless": "1.1.0",
     "@netlify/blobs": "^10.7.9",
     "@sentry/nextjs": "^8.55.2",
+    "ai": "^6.0.219",
     "drizzle-orm": "0.45.2",
     "jose": "5.9.6",
     "lightweight-charts": "4.2.1",
