@@ -1,9 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { CustomersTable } from "@/components/customers/CustomersTable";
-import type { CustomerView } from "@/db/customers";
+import { CustomersTable, type CustomerRowView } from "@/components/customers/CustomersTable";
 
-function cust(overrides: Partial<CustomerView> = {}): CustomerView {
+function cust(overrides: Partial<CustomerRowView> = {}): CustomerRowView {
   return {
     id: 1,
     name: "Alice",
@@ -16,6 +15,7 @@ function cust(overrides: Partial<CustomerView> = {}): CustomerView {
     firstSeenAt: null,
     createdAt: new Date("2026-06-01T00:00:00Z"),
     updatedAt: new Date("2026-06-01T00:00:00Z"),
+    health: { score: 82, band: "healthy" },
     ...overrides,
   };
 }
@@ -30,7 +30,7 @@ describe("CustomersTable", () => {
   });
 
   it("renders one row per customer with the name as a link to /customers/[id]/edit", () => {
-    render(
+    const { container } = render(
       <CustomersTable
         customers={[
           cust({ id: 11, name: "Priya Mehta", businessName: "Mehta Diamonds" }),
@@ -49,6 +49,9 @@ describe("CustomersTable", () => {
 
     expect(within(rows[0]).getByText("Mehta Diamonds")).toBeInTheDocument();
     expect(within(rows[1]).getByText("anita@example.com")).toBeInTheDocument();
+
+    // One HealthBadge per row
+    expect(container.querySelectorAll("[data-health-band]")).toHaveLength(2);
   });
 
   it("renders an em-dash for empty optional fields (matches DealList convention)", () => {

@@ -40,3 +40,29 @@ describe("customer edit page — Activity section", () => {
     expect(html).toContain("Priya Mehta");
   });
 });
+
+// Slice 36-4: Health card. Demo mode routes getCustomerActivityStats through
+// its in-memory DEMO_ACTIVITY branch and generateAiText through its demo
+// short-circuit (isDemoMode() is checked before any gateway/env-key logic —
+// see src/lib/ai/generateAiText.ts — so no AI mocking is needed here).
+describe("customer edit page — Health card", () => {
+  it("renders the Health heading and a numeric score for customer 2201", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderPage("2201"));
+    expect(html).toContain("Health");
+    // Extract the Health section (anchored on its own <h2>, through the next
+    // closing </section>) and assert a 1-3 digit score renders inside it,
+    // rather than asserting an exact value — the demo seed's activity
+    // timestamps are relative to render time (HOURS_AGO helpers), so the
+    // exact score can drift slightly with clock skew across test runs.
+    const healthSectionMatch = html.match(/<h2[^>]*>Health<\/h2>[\s\S]*?<\/section>/);
+    expect(healthSectionMatch).not.toBeNull();
+    expect(healthSectionMatch![0]).toMatch(/\b\d{1,3}\b/);
+  });
+
+  it("renders a simulated AI insight paragraph in demo mode", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderPage("2201"));
+    expect(html).toContain("[simulated]");
+  });
+});
