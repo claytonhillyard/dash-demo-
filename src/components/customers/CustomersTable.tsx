@@ -1,6 +1,17 @@
 import Link from "next/link";
 import type { CustomerView } from "@/db/customers";
+import type { HealthBand } from "@/lib/customers/healthScore";
+import { HealthBadge } from "@/components/customers/HealthBadge";
 import { timeAgo } from "@/lib/company/format";
+
+/** Row shape the table renders — `CustomerView` plus the health score computed
+ *  server-side by the page (slice 36). Health is page-level enrichment, not a
+ *  raw customer field, so it's not on the base `CustomerView` (which also
+ *  backs `CustomerForm` and the demo seed, neither of which have a concept of
+ *  activity-derived health). */
+export type CustomerRowView = CustomerView & {
+  health: { score: number; band: HealthBand };
+};
 
 /**
  * Server component — no client state. The search box is a `GET /customers?q=...`
@@ -15,7 +26,7 @@ export function CustomersTable({
   customers,
   searchQuery,
 }: {
-  customers: CustomerView[];
+  customers: CustomerRowView[];
   searchQuery?: string;
 }) {
   return (
@@ -74,6 +85,7 @@ export function CustomersTable({
                 <th role="columnheader">Business</th>
                 <th role="columnheader">Email</th>
                 <th role="columnheader">Phone</th>
+                <th role="columnheader">Health</th>
                 <th role="columnheader" className="text-right">
                   Last Updated
                 </th>
@@ -104,6 +116,9 @@ export function CustomersTable({
                   </td>
                   <td role="cell" className="font-mono text-text/60">
                     {c.phone ?? <span className="text-text/30">—</span>}
+                  </td>
+                  <td role="cell">
+                    <HealthBadge {...c.health} />
                   </td>
                   <td role="cell" className="text-right text-text/40">
                     {timeAgo(c.updatedAt)}

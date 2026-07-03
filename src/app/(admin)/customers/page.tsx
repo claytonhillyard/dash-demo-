@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
 import { getCustomers } from "@/db/customers";
+import { getCustomerActivityStats } from "@/db/activityEvents";
+import { computeHealthScore } from "@/lib/customers/healthScore";
 import { CustomersTable } from "@/components/customers/CustomersTable";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +24,27 @@ export default async function CustomersPage({
 
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
-  const customers = await getCustomers(db, orgId, { search: q });
+
+  // Single `now` for the whole render — the health score's recency decay and
+  // the aggregate reader's 30-day window must agree on "now" (slice 36).
+  const now = new Date();
+  const [customers, stats] = await Promise.all([
+    getCustomers(db, orgId, { search: q }),
+    getCustomerActivityStats(db, orgId, now),
+  ]);
+  const rows = customers.map((c) => {
+    const s = stats.get(c.id);
+    const health = computeHealthScore(
+      {
+        lastActivityAt: s?.lastActivityAt ?? null,
+        eventsLast30d: s?.eventsLast30d ?? 0,
+        distinctVerbs30d: s?.distinctVerbs30d ?? 0,
+        customerCreatedAt: c.createdAt,
+      },
+      now,
+    );
+    return { ...c, health: { score: health.score, band: health.band } };
+  });
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -46,7 +68,7 @@ export default async function CustomersPage({
         </div>
       </header>
 
-      <CustomersTable customers={customers} searchQuery={q} />
+      <CustomersTable customers={rows} searchQuery={q} />
     </main>
   );
 }
