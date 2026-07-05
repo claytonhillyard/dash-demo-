@@ -244,7 +244,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | # | Title | Layer | Status | Owner | Notes |
 |---|---|---|---|---|---|
 | 23 | AI image-to-listing (Vercel AI Gateway) | core | queued | open | Stub: generic photo→listing prefill |
-| 25 | Watchlists + email alerts (Resend) | core | queued | open | Establishes Resend infra; reused by 28/33/38/41 |
+| 25 | Watchlists + email alerts (Resend) | core | claimed 2026-07-03 | **this tab** | Establishes Resend infra; reused by 28/33/38/41. Rides the slice-24 activity chokepoint for alert dispatch. |
 | 26 | WinJewel CSV import wizard (W2) | aiya-jewelry | queued | open | Depends on slice 22 |
 | 27 | Invoice schema + create/edit form (W3) | core | queued | open | Mechanic + schema in core; templates in module |
 | 28 | Invoice PDF + email send (W4) | core | queued | open | Reuses Resend from 25 |
