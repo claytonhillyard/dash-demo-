@@ -66,3 +66,21 @@ describe("customer edit page — Health card", () => {
     expect(html).toContain("[simulated]");
   });
 });
+
+// Slice 25-5: WatchToggle, fed by getWatchForEntity. Customer 2201 is watched
+// in DEMO_WATCHLISTS (by "owner@aiya.demo") — the page must resolve that same
+// actor string in demo mode so the toggle's initial state matches the seed.
+describe("customer edit page — WatchToggle", () => {
+  it("renders the Watching state for customer 2201 (seeded watch)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderPage("2201"));
+    expect(html).toContain("Watching");
+  });
+
+  it("renders the unwatched state (email input + Watch button) for customer 2202 (no seeded watch)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderPage("2202"));
+    expect(html).toContain("you@example.com");
+    expect(html).not.toContain(">Watching<");
+  });
+});
