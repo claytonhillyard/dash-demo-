@@ -109,6 +109,7 @@ describe("watchEntity — re-watch (upsert)", () => {
       notifyEmail: "first@aiya.demo",
     });
     expect(first).toEqual({ ok: true });
+    const [firstRow] = await db.select().from(watchlists);
 
     const second = await watchEntity({
       entityType: "customer",
@@ -120,6 +121,9 @@ describe("watchEntity — re-watch (upsert)", () => {
     const rows = await db.select().from(watchlists);
     expect(rows).toHaveLength(1);
     expect(rows[0].notifyEmail).toBe("second@aiya.demo");
+    // ON CONFLICT DO UPDATE mutates the conflicting row in place — the id
+    // must be stable across re-watches (watch audit events reference it).
+    expect(rows[0].id).toBe(firstRow.id);
 
     // Both watches should have emitted a "watched" audit event (2 total).
     const actRows = await db

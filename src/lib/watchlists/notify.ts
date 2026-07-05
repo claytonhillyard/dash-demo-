@@ -50,6 +50,10 @@ export async function notifyWatchersSafely(
     if (event.entityId === null || isDemoMode()) return;
 
     const cutoff = new Date(now.getTime() - WATCH_COOLDOWN_MS);
+    // SELECT-then-UPDATE is not atomic: two events on the same entity in
+    // the same instant could both read a watch as "due" and double-send.
+    // Single-user-per-org reality makes that vanishingly rare; slice 38
+    // (Sentinel) owns notification hardening if concurrency ever grows.
     const dueWatches = await db
       .select()
       .from(watchlists)
@@ -66,17 +70,28 @@ export async function notifyWatchersSafely(
     const { subject, text } = buildAlertEmail(event, now);
 
     for (const watch of dueWatches) {
-      const res = await sendEmail({
-        to: watch.notifyEmail,
-        subject,
-        text,
-        feature: "watchlist-alert",
-      });
-      if (res.ok && !res.simulated) {
-        await db
-          .update(watchlists)
-          .set({ lastNotifiedAt: now })
-          .where(eq(watchlists.id, watch.id));
+      // Per-watch guard: sendEmail contractually never rejects, but if a
+      // future refactor breaks that contract, one watcher's failure must
+      // not abort the rest of the batch.
+      try {
+        const res = await sendEmail({
+          to: watch.notifyEmail,
+          subject,
+          text,
+          feature: "watchlist-alert",
+        });
+        if (res.ok && !res.simulated) {
+          await db
+            .update(watchlists)
+            .set({ lastNotifiedAt: now })
+            .where(eq(watchlists.id, watch.id));
+        }
+      } catch (e) {
+        Sentry.withScope((scope) => {
+          scope.setTag("feature", "watchlist-alert");
+          scope.setTag("subStep", "notifyWatchers.perWatch");
+          Sentry.captureException(e);
+        });
       }
     }
   } catch (e) {
