@@ -20,7 +20,15 @@ vi.mock("@/lib/activity/recordActivity", () => ({
   recordActivity: vi.fn(),
 }));
 
+// Mock the watcher-dispatch hook so these tests stay focused on the audit
+// contract; notify.ts's own semantics are covered by
+// test/lib/watchlists/notify.test.ts.
+vi.mock("@/lib/watchlists/notify", () => ({
+  notifyWatchersSafely: vi.fn(),
+}));
+
 import { recordActivity } from "@/lib/activity/recordActivity";
+import { notifyWatchersSafely } from "@/lib/watchlists/notify";
 import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
 
 describe("recordActivitySafely", () => {
@@ -29,6 +37,7 @@ describe("recordActivitySafely", () => {
   beforeEach(async () => {
     await resetSharedDb();
     vi.mocked(recordActivity).mockReset();
+    vi.mocked(notifyWatchersSafely).mockReset();
     (globalThis as Record<string, unknown>).__lastSentryError = undefined;
     (globalThis as Record<string, unknown>).__lastSentryTags = undefined;
   });
@@ -36,6 +45,7 @@ describe("recordActivitySafely", () => {
 
   it("calls recordActivity on the happy path and returns void", async () => {
     vi.mocked(recordActivity).mockResolvedValueOnce(undefined);
+    vi.mocked(notifyWatchersSafely).mockResolvedValueOnce(undefined);
     const result = await recordActivitySafely(
       db,
       { orgId: 1, actor: "u", entityType: "customer", entityId: 1, verb: "created", summary: "x" },
@@ -44,6 +54,34 @@ describe("recordActivitySafely", () => {
     expect(result).toBeUndefined();
     expect(recordActivity).toHaveBeenCalledOnce();
     expect((globalThis as Record<string, unknown>).__lastSentryError).toBeUndefined();
+  });
+
+  it("calls notifyWatchersSafely once with the input after a successful recordActivity", async () => {
+    vi.mocked(recordActivity).mockResolvedValueOnce(undefined);
+    vi.mocked(notifyWatchersSafely).mockResolvedValueOnce(undefined);
+    const input = {
+      orgId: 1,
+      actor: "u",
+      entityType: "customer" as const,
+      entityId: 1,
+      verb: "created" as const,
+      summary: "x",
+    };
+    await recordActivitySafely(db, input, { action: "customers.create" });
+    expect(notifyWatchersSafely).toHaveBeenCalledOnce();
+    expect(notifyWatchersSafely).toHaveBeenCalledWith(db, input);
+  });
+
+  it("still resolves void when notifyWatchersSafely rejects (existing swallow covers it)", async () => {
+    vi.mocked(recordActivity).mockResolvedValueOnce(undefined);
+    vi.mocked(notifyWatchersSafely).mockRejectedValueOnce(new Error("notify boom"));
+    await expect(
+      recordActivitySafely(
+        db,
+        { orgId: 1, actor: "u", entityType: "customer", entityId: 1, verb: "created", summary: "x" },
+        { action: "customers.create" },
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it("swallows errors from recordActivity (returns void, does not throw)", async () => {

@@ -956,3 +956,39 @@ export function getSeedWebsiteSnapshotTrend(
 ): WebsiteSnapshotRow[] {
   return getSeedWebsiteSnapshots(orgId).slice(0, n);
 }
+
+// --- Slice 25 demo seed: watchlists ---
+// Same pattern as DEMO_ACTIVITY (TS constant, not inserted at runtime) —
+// the watchlists query layer short-circuits demo mode and returns these
+// rows filtered/sorted in-memory. 2 entries on DEMO_ORG_ID, both owned by
+// the demo owner actor, watching customers 2201 and 2204 (both of which
+// already have DEMO_ACTIVITY rows, so the demo story reads coherently:
+// "the owner watches Priya Mehta and Yuki Tanaka"). Neither has been
+// notified yet (lastNotifiedAt: null) — live alerts only fire once
+// RESEND_API_KEY + EMAIL_FROM land (slice 25-4).
+import type { WatchlistView } from "@/lib/watchlists/queries";
+
+export type DemoWatchlist = WatchlistView & { orgId: number; actor: string };
+
+export const DEMO_WATCHLISTS: DemoWatchlist[] = [
+  {
+    id: 9101,
+    orgId: 1,
+    actor: "owner@aiya.demo",
+    entityType: "customer",
+    entityId: 2201,
+    notifyEmail: "owner@aiya.demo",
+    lastNotifiedAt: null,
+    createdAt: HOURS_AGO(4),
+  },
+  {
+    id: 9102,
+    orgId: 1,
+    actor: "owner@aiya.demo",
+    entityType: "customer",
+    entityId: 2204,
+    notifyEmail: "owner@aiya.demo",
+    lastNotifiedAt: null,
+    createdAt: HOURS_AGO(1),
+  },
+];

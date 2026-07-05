@@ -541,3 +541,37 @@ export const activityEvents = pgTable(
     ),
   }),
 );
+
+export const watchlists = pgTable(
+  "watchlists",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    actor: text("actor").notNull(), // session.user who created the watch
+    entityType: text("entity_type").notNull(), // whitelisted via ACTIVITY_ENTITY_TYPES
+    entityId: integer("entity_id").notNull(),
+    notifyEmail: text("notify_email").notNull(), // explicit recipient (v1 recipient model)
+    lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true, mode: "date" }),
+    // mode:"date" is intentional — ActivityEvent.createdAt is typed as Date.
+    // Other tables use the drizzle default (mode:"string"); align them in a
+    // follow-up clean-up, not here.
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    orgActorEntityUnique: uniqueIndex("watchlists_org_actor_entity_unique").on(
+      t.orgId,
+      t.actor,
+      t.entityType,
+      t.entityId,
+    ),
+    orgEntityIdx: index("watchlists_org_entity_idx").on(
+      t.orgId,
+      t.entityType,
+      t.entityId,
+    ),
+  }),
+);

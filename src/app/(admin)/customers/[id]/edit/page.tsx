@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
+import { requireSession } from "@/lib/auth/requireSession";
+import { isDemoMode } from "@/lib/demo/mode";
 import { getCustomerById } from "@/db/customers";
 import { getEntityActivity, getCustomerActivityStats } from "@/db/activityEvents";
 import { computeHealthScore, type HealthBand } from "@/lib/customers/healthScore";
@@ -10,7 +12,16 @@ import { generateAiText } from "@/lib/ai/generateAiText";
 import { CustomerForm } from "@/components/customers/CustomerForm";
 import { ActivityList } from "@/components/activity/ActivityList";
 import { HealthBadge } from "@/components/customers/HealthBadge";
+import { WatchToggle } from "@/components/watchlists/WatchToggle";
 import { updateCustomer, deleteCustomer } from "@/lib/customers/actions";
+import { getWatchForEntity } from "@/lib/watchlists/queries";
+
+// DEMO_WATCHLISTS (src/lib/demo/seed.ts) seeds its two watches under the
+// actor "owner@aiya.demo" — the same literal used by every other demo actor
+// field (activity events, etc). getWatchForEntity's demo branch filters on
+// this exact string, so demo mode must pass it verbatim rather than a
+// session-derived value (there's no session to read in demo mode anyway).
+const DEMO_ACTOR = "owner@aiya.demo";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +54,13 @@ export default async function EditCustomerPage({
   const orgId = await getCurrentOrgId();
   const customer = await getCustomerById(db, orgId, id);
   if (!customer) notFound();
+
+  // Same demo short-circuit shape as getCurrentOrgId: demo mode never reads
+  // cookies (there's no session to read), so it skips straight to the seed's
+  // fixed actor. Live mode re-derives the actor from the session the same
+  // way every server action does.
+  const actor = isDemoMode() ? DEMO_ACTOR : (await requireSession()).user;
+  const watch = await getWatchForEntity(db, orgId, actor, "customer", id);
 
   const now = new Date();
   const activity = await getEntityActivity(db, orgId, "customer", id, { limit: 20 });
@@ -103,6 +121,17 @@ export default async function EditCustomerPage({
         action={updateCustomer}
         deleteAction={deleteCustomer}
       />
+      <section className="mt-8">
+        <h2 className="mb-2 text-sm font-semibold text-zinc-200">Watch</h2>
+        <WatchToggle
+          entityType="customer"
+          entityId={id}
+          initial={{
+            watching: watch !== null,
+            notifyEmail: watch?.notifyEmail ?? null,
+          }}
+        />
+      </section>
       <section className="mt-8">
         <h2 className="mb-2 text-sm font-semibold text-zinc-200">Health</h2>
         <div className="rounded border border-zinc-700 bg-zinc-900/40 p-3">

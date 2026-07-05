@@ -10,7 +10,7 @@ import { NavItem } from "./NavItem";
 const SECTIONS = [
   "Dashboard", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
   "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
-  "Customers", "Activity", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
+  "Customers", "Activity", "Watchlists", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
   "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
   "Calendar & Tasks", "Documents", "Settings",
 ];
@@ -31,6 +31,9 @@ const ROUTES: Record<string, string> = {
   // Slice 24c — org-wide audit feed. Sits right after Customers since it's
   // the first surface most owners will check after adding/editing a record.
   Activity: "/activity",
+  // Slice 25 — watch an entity, get emailed on activity. Sits right after
+  // Activity since a watch is "activity I care about enough to be notified".
+  Watchlists: "/watchlists",
 };
 
 export function Nav() {

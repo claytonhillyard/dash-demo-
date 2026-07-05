@@ -42,4 +42,9 @@ describe("Nav", () => {
     const link = screen.getByRole("link", { name: "Activity" });
     expect(link).toHaveAttribute("href", "/activity");
   });
+  it("links Watchlists to /watchlists (slice 25)", () => {
+    render(<Nav />);
+    const link = screen.getByRole("link", { name: "Watchlists" });
+    expect(link).toHaveAttribute("href", "/watchlists");
+  });
 });
