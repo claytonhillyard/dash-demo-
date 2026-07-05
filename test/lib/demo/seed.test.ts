@@ -455,6 +455,7 @@ import {
   getSeedCustomersForOrg,
   getSeedCustomerById,
   DEMO_ACTIVITY,
+  DEMO_WATCHLISTS,
 } from "@/lib/demo/seed";
 import { ACTIVITY_ENTITY_TYPES, ACTIVITY_VERBS } from "@/lib/activity/types";
 
@@ -551,6 +552,35 @@ describe("DEMO_ACTIVITY (slice 24)", () => {
 
   it("ids are unique", () => {
     const ids = DEMO_ACTIVITY.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("DEMO_WATCHLISTS (slice 25)", () => {
+  it("has exactly 2 entries", () => {
+    expect(DEMO_WATCHLISTS.length).toBe(2);
+  });
+
+  it("all entries are scoped to DEMO_ORG_ID = 1", () => {
+    for (const w of DEMO_WATCHLISTS) {
+      expect(w.orgId).toBe(1);
+    }
+  });
+
+  it("all entityTypes are valid against the whitelist", () => {
+    for (const w of DEMO_WATCHLISTS) {
+      expect(ACTIVITY_ENTITY_TYPES).toContain(w.entityType);
+    }
+  });
+
+  it("notify emails look like emails", () => {
+    for (const w of DEMO_WATCHLISTS) {
+      expect(w.notifyEmail).toContain("@");
+    }
+  });
+
+  it("ids are unique", () => {
+    const ids = DEMO_WATCHLISTS.map((w) => w.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
