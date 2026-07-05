@@ -11,6 +11,7 @@ export const ACTIVITY_ENTITY_TYPES = [
   "circle",
   "bid",
   "org",
+  "watchlist",
 ] as const;
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 
@@ -26,6 +27,8 @@ export const ACTIVITY_VERBS = [
   "invited",
   "joined",
   "left",
+  "watched",
+  "unwatched",
   // bid domain
   "bid_placed",
   "bid_accepted",
