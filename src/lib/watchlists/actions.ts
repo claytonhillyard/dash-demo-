@@ -12,7 +12,7 @@ import { ForbiddenError } from "@/lib/auth/errors";
 import { firstZodError } from "@/lib/company/validation";
 import { ACTIVITY_ENTITY_TYPES } from "@/lib/activity/types";
 import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
-import { safeErrShape, mapDbConstraintError } from "@/lib/customers/actions";
+import { safeErrShape, mapDbConstraintError } from "@/lib/actionErrors";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
