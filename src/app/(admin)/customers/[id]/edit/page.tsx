@@ -8,6 +8,8 @@ import { getCustomerById } from "@/db/customers";
 import { getEntityActivity, getCustomerActivityStats } from "@/db/activityEvents";
 import { computeHealthScore, type HealthBand } from "@/lib/customers/healthScore";
 import { buildHealthInsightPrompt } from "@/lib/customers/healthInsight";
+import { toUtcDay } from "@/lib/sentinel/capture";
+import { getSnapshotTrend, TREND_WINDOW_DAYS, type SnapshotTrend } from "@/lib/sentinel/trend";
 import { generateAiText } from "@/lib/ai/generateAiText";
 import { CustomerForm } from "@/components/customers/CustomerForm";
 import { ActivityList } from "@/components/activity/ActivityList";
@@ -80,6 +82,11 @@ export default async function EditCustomerPage({
     now,
   );
 
+  // Read-only trend reader (slice 38-3): never writes, so unlike
+  // captureHealthSnapshots (called from the customers LIST page only) this
+  // is safe and cheap to call on every edit-page render too.
+  const trend = await getSnapshotTrend(db, orgId, id, now);
+
   // AI insight is garnish: a failed call renders nothing, never an error
   // state. PII discipline: buildHealthInsightPrompt's input type has no
   // email/phone/address/notes fields — see src/lib/customers/healthInsight.ts.
@@ -141,6 +148,7 @@ export default async function EditCustomerPage({
               {BAND_LABEL[health.band]}
             </span>
           </div>
+          <HealthTrend trend={trend} now={now} />
           <div className="space-y-1.5">
             <HealthBar
               label="Recency"
@@ -198,4 +206,33 @@ function HealthBar({
       </span>
     </div>
   );
+}
+
+/** Snapshot-history trend line (slice 38-3), rendered under the badge/band
+ *  row. `trend` is whatever `getSnapshotTrend` returned for this customer;
+ *  `now` is the SAME render-wide `now` used for `computeHealthScore` above,
+ *  so the "is prior >= 7 days old" check below can't disagree with the
+ *  boundary `getSnapshotTrend` itself used to pick `prior`. */
+function HealthTrend({ trend, now }: { trend: SnapshotTrend | null; now: Date }) {
+  if (trend === null || trend.prior === null) {
+    return <p className="mt-1 text-xs text-zinc-500">— no history yet</p>;
+  }
+
+  const delta = trend.current.score - trend.prior.score;
+  const boundary = toUtcDay(new Date(now.getTime() - TREND_WINDOW_DAYS * 86_400_000));
+  const label = trend.prior.capturedOn <= boundary ? "vs last week" : "vs first snapshot";
+
+  // Each branch renders a SINGLE template-literal child (rather than mixing
+  // literal JSX text with `{expressions}` as siblings) so the rendered HTML
+  // is one contiguous text node — React's server renderer otherwise splits
+  // adjacent text/expression children with `<!-- -->` hydration-boundary
+  // comments, which would fragment substring assertions like `toContain("▲
+  // +6")` in tests.
+  if (delta > 0) {
+    return <p className="mt-1 text-xs text-emerald-400">{`▲ +${delta} ${label}`}</p>;
+  }
+  if (delta < 0) {
+    return <p className="mt-1 text-xs text-rose-400">{`▼ ${delta}`}</p>;
+  }
+  return <p className="mt-1 text-xs text-zinc-500">— unchanged</p>;
 }

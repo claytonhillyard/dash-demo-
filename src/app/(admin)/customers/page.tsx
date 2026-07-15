@@ -5,6 +5,7 @@ import { getCustomers } from "@/db/customers";
 import { getCustomerActivityStats } from "@/db/activityEvents";
 import { computeHealthScore } from "@/lib/customers/healthScore";
 import { CustomersTable } from "@/components/customers/CustomersTable";
+import { captureHealthSnapshots, type ScoredCustomerHealth } from "@/lib/sentinel/capture";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,13 @@ export default async function CustomersPage({
     getCustomers(db, orgId, { search: q }),
     getCustomerActivityStats(db, orgId, now),
   ]);
-  const rows = customers.map((c) => {
+  // Keep the FULL computeHealthScore result (components included) per
+  // customer — the table only needs {score, band}, but the Sentinel capture
+  // call below (slice 38) needs `components` too, and capture never
+  // recomputes a score itself (spec §4/§8). Scoring this once and reusing it
+  // for both the table rows and the capture input keeps the two from ever
+  // silently disagreeing.
+  const scored = customers.map((c) => {
     const s = stats.get(c.id);
     const health = computeHealthScore(
       {
@@ -43,8 +50,25 @@ export default async function CustomersPage({
       },
       now,
     );
-    return { ...c, health: { score: health.score, band: health.band } };
+    return { customer: c, health };
   });
+
+  const rows = scored.map(({ customer, health }) => ({
+    ...customer,
+    health: { score: health.score, band: health.band },
+  }));
+
+  // Piggybacks on this render (spec §4): self-guards demo/build/empty
+  // internally and never throws, so it's safe to call unconditionally on
+  // every render, including in demo mode and during the Next.js build phase.
+  const scoredForCapture: ScoredCustomerHealth[] = scored.map(({ customer, health }) => ({
+    customerId: customer.id,
+    name: customer.name,
+    score: health.score,
+    band: health.band,
+    components: health.components,
+  }));
+  await captureHealthSnapshots(db, orgId, scoredForCapture, now);
 
   return (
     <main className="mx-auto max-w-5xl p-4">
