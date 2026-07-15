@@ -257,7 +257,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 35 | AI Command Layer (NL → action) | core | proposed | open | Depends on 32 |
 | 36 | Customer health score | core | shipped: `815fee0` | this-tab | 4 commits. Deterministic heuristic + AI insight garnish. HEALTH_WEIGHTS exported for slice 38. 1175 tests green. |
 | 37 | AI email drafting + personality memory | core | proposed | open | Depends on 32/22 |
-| 38 | Anomaly Sentinel | core | claimed 2026-07-03 | **this tab** | Deps met: 24 (activity), 36 (HEALTH_WEIGHTS + scores), 25 (alert channel). Band-drop detection composes all three. |
+| 38 | Anomaly Sentinel | core | shipped: `cb68fb6` | this-tab | Band-drop detection + snapshots (migration 0019). Review caught + fixed a real score-feedback loop (actor IS NOT NULL on scoring aggregate). 38b (more anomaly rules) queueable on this substrate. |
 | 39 | Predictive reorder via market triggers | core | proposed | open | Depends on inventory + market |
 | 40 | Replayable Decisions (snapshot + branch) | core | proposed | open | Big lift; possibly split |
 | 41 | Investor update auto-generator | core | proposed | open | Depends on 28 PDF + 32 AI |
