@@ -67,6 +67,21 @@ describe("customer edit page — Health card", () => {
   });
 });
 
+// Slice 38-3: snapshot trend line, fed by getSnapshotTrend's demo branch
+// (DEMO_HEALTH_SNAPSHOTS, src/lib/demo/seed.ts). Customer 2201's seed is 3
+// rows ending ~today (55 -> 58 -> 61), all under 7 days old, so the trend
+// reducer falls back to the OLDEST row as `prior`: current=61, prior=55,
+// delta=+6, and since prior is under 7 days old the label is "vs first
+// snapshot" rather than "vs last week".
+describe("customer edit page — Health trend line", () => {
+  it("renders an UP arrow with the +6 delta and the \"vs first snapshot\" label for customer 2201", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderPage("2201"));
+    expect(html).toContain("▲ +6");
+    expect(html).toContain("vs first snapshot");
+  });
+});
+
 // Slice 25-5: WatchToggle, fed by getWatchForEntity. Customer 2201 is watched
 // in DEMO_WATCHLISTS (by "owner@aiya.demo") — the page must resolve that same
 // actor string in demo mode so the toggle's initial state matches the seed.

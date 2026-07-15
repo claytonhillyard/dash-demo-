@@ -12,7 +12,14 @@ async function insertEvents(
 ) {
   for (const r of rows) {
     await db.insert(schema.activityEvents).values({
-      orgId: 1, entityType: "customer", entityId: 1, verb: "created", summary: "x",
+      // actor defaults to a real user string — a NULL actor is the
+      // system-event convention (e.g. Sentinel's health_dropped alerts) and
+      // getCustomerActivityStats now excludes those from every count
+      // (slice 38 final review, score-feedback-loop fix). Real user-triggered
+      // events always carry an actor, so that's the correct default here;
+      // tests that specifically need a system (actor: null) event pass it
+      // explicitly via `r`.
+      orgId: 1, entityType: "customer", entityId: 1, verb: "created", summary: "x", actor: "test-user",
       ...r,
     });
     // Force monotonic created_at when iterating fast — pglite resolves to
@@ -273,5 +280,27 @@ describe("getCustomerActivityStats — aggregate reader", () => {
     const stats = await getCustomerActivityStats(db, 1);
     expect(stats.size).toBe(1);
     expect(stats.get(6)!.eventsLast30d).toBe(1);
+  });
+
+  // Invariant lock: the actor IS NOT NULL exclusion belongs to the SCORING
+  // aggregate ONLY. System events (e.g. Sentinel's health_dropped alerts)
+  // must still surface in the activity FEEDS — a future refactor copying
+  // the scoring predicate into the feed readers would silently hide alerts
+  // and break slice 38's core composition. This test fails if that happens.
+  it("system events (actor null) are excluded from scoring stats but still visible in feeds", async () => {
+    await insertEvents(db, [
+      {
+        orgId: 1, entityType: "customer", entityId: 7, verb: "health_dropped",
+        summary: "Health dropped: Test healthy → watch", actor: null,
+      },
+    ]);
+    const stats = await getCustomerActivityStats(db, 1);
+    expect(stats.has(7)).toBe(false); // scoring: excluded
+
+    const feed = await getOrgActivity(db, 1);
+    expect(feed.some((e) => e.verb === "health_dropped" && e.entityId === 7)).toBe(true); // org feed: visible
+
+    const entityFeed = await getEntityActivity(db, 1, "customer", 7);
+    expect(entityFeed.some((e) => e.verb === "health_dropped")).toBe(true); // entity feed: visible
   });
 });

@@ -32,13 +32,15 @@ describe("ActivityList", () => {
         ev({ id: 1, verb: "created" }),
         ev({ id: 2, verb: "deleted", summary: "Deleted X" }),
         ev({ id: 3, verb: "bid_placed", summary: "Placed bid on Y" }),
+        ev({ id: 4, verb: "health_dropped", summary: "Health dropped: Priya Mehta healthy → watch" }),
       ]} />,
     );
     const dots = container.querySelectorAll("[data-verb-dot]");
-    expect(dots).toHaveLength(3);
+    expect(dots).toHaveLength(4);
     expect(dots[0].className).toContain("bg-emerald");
     expect(dots[1].className).toContain("bg-rose");
     expect(dots[2].className).toContain("bg-sky");
+    expect(dots[3].className).toContain("bg-rose");
   });
 
   it("renders the empty state when there are no events", () => {

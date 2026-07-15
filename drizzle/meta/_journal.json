@@ -134,6 +134,13 @@
       "when": 1783242473050,
       "tag": "0018_heavy_the_anarchist",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784143640091,
+      "tag": "0019_fast_kitty_pryde",
+      "breakpoints": true
     }
   ]
 }

@@ -992,3 +992,70 @@ export const DEMO_WATCHLISTS: DemoWatchlist[] = [
     createdAt: HOURS_AGO(1),
   },
 ];
+
+// --- Slice 38 demo seed: customer health snapshots (Anomaly Sentinel) ---
+// Same pattern as DEMO_WATCHLISTS/DEMO_ACTIVITY — a TS constant, not
+// inserted at runtime; captureHealthSnapshots() never runs in demo mode
+// (spec §1), so this is the only source of snapshot history the demo trend
+// line (slice 38-3) reads. 3 daily rows each for customers 2201 and 2204,
+// built on HOURS_AGO (the same real-time helper DEMO_ACTIVITY uses) so the
+// trend always reads as "recent" regardless of when the demo is viewed:
+//   2201 (Priya Mehta) — trending UP, watch band throughout (55 -> 58 -> 61).
+//   2204 (Yuki Tanaka) — embeds the anomaly this slice detects: healthy ->
+//   healthy -> watch (72 -> 74 -> 63), the drop the trend line + sentinel
+//   activity event narrate.
+import type { HealthBand } from "@/lib/customers/healthScore";
+
+type DemoHealthSnapshot = {
+  id: number;
+  orgId: number;
+  customerId: number;
+  score: number;
+  band: HealthBand;
+  components: { recency: number; frequency: number; breadth: number };
+  capturedOn: string; // UTC "YYYY-MM-DD", derived from capturedAt
+  capturedAt: Date;
+};
+
+/** `daysBack` days before demo "now" (built on HOURS_AGO — same real-time
+ *  helper DEMO_ACTIVITY uses), as both the Date and its derived UTC day
+ *  string, computed once so the two always agree. */
+function snapshotDay(daysBack: number): { capturedAt: Date; capturedOn: string } {
+  const capturedAt = HOURS_AGO(daysBack * 24);
+  return { capturedAt, capturedOn: capturedAt.toISOString().slice(0, 10) };
+}
+
+export const DEMO_HEALTH_SNAPSHOTS: DemoHealthSnapshot[] = [
+  // Priya Mehta (2201) — steady upward trend, watch band throughout.
+  {
+    id: 9201, orgId: 1, customerId: 2201, score: 55, band: "watch",
+    components: { recency: 22, frequency: 20, breadth: 13 },
+    ...snapshotDay(2),
+  },
+  {
+    id: 9202, orgId: 1, customerId: 2201, score: 58, band: "watch",
+    components: { recency: 24, frequency: 21, breadth: 13 },
+    ...snapshotDay(1),
+  },
+  {
+    id: 9203, orgId: 1, customerId: 2201, score: 61, band: "watch",
+    components: { recency: 26, frequency: 22, breadth: 13 },
+    ...snapshotDay(0),
+  },
+  // Yuki Tanaka (2204) — healthy -> healthy -> watch (embedded band drop).
+  {
+    id: 9204, orgId: 1, customerId: 2204, score: 72, band: "healthy",
+    components: { recency: 34, frequency: 25, breadth: 13 },
+    ...snapshotDay(2),
+  },
+  {
+    id: 9205, orgId: 1, customerId: 2204, score: 74, band: "healthy",
+    components: { recency: 35, frequency: 26, breadth: 13 },
+    ...snapshotDay(1),
+  },
+  {
+    id: 9206, orgId: 1, customerId: 2204, score: 63, band: "watch",
+    components: { recency: 15, frequency: 28, breadth: 20 },
+    ...snapshotDay(0),
+  },
+];

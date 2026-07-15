@@ -575,3 +575,42 @@ export const watchlists = pgTable(
     ),
   }),
 );
+
+export const customerHealthSnapshots = pgTable(
+  "customer_health_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    // No FK: snapshots survive customer deletion (audit-adjacent history,
+    // same rationale as activity_events.entity_id — entities can be deleted
+    // while their historical rows must survive; defended-in-depth via the
+    // org_id FK alone).
+    customerId: integer("customer_id").notNull(),
+    score: integer("score").notNull(),
+    band: text("band").notNull(), // HealthBand union — src/lib/customers/healthScore.ts is the source of truth
+    components: jsonb("components")
+      .$type<{ recency: number; frequency: number; breadth: number }>()
+      .notNull(),
+    capturedOn: text("captured_on").notNull(), // UTC "YYYY-MM-DD" derived from the injected `now`
+    // mode:"date" is intentional — ActivityEvent.createdAt is typed as Date.
+    // Other tables use the drizzle default (mode:"string"); align them in a
+    // follow-up clean-up, not here.
+    capturedAt: timestamp("captured_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    orgCustomerDayUnique: uniqueIndex("customer_health_snapshots_org_customer_day_unique").on(
+      t.orgId,
+      t.customerId,
+      t.capturedOn,
+    ),
+    orgCustomerIdx: index("customer_health_snapshots_org_customer_idx").on(
+      t.orgId,
+      t.customerId,
+      t.capturedOn.desc(),
+    ),
+  }),
+);

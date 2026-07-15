@@ -38,6 +38,8 @@ export const ACTIVITY_VERBS = [
   "commented",
   "comment_deleted",
   "viewed",
+  // sentinel
+  "health_dropped",
 ] as const;
 export type ActivityVerb = (typeof ACTIVITY_VERBS)[number];
 
