@@ -281,4 +281,26 @@ describe("getCustomerActivityStats — aggregate reader", () => {
     expect(stats.size).toBe(1);
     expect(stats.get(6)!.eventsLast30d).toBe(1);
   });
+
+  // Invariant lock: the actor IS NOT NULL exclusion belongs to the SCORING
+  // aggregate ONLY. System events (e.g. Sentinel's health_dropped alerts)
+  // must still surface in the activity FEEDS — a future refactor copying
+  // the scoring predicate into the feed readers would silently hide alerts
+  // and break slice 38's core composition. This test fails if that happens.
+  it("system events (actor null) are excluded from scoring stats but still visible in feeds", async () => {
+    await insertEvents(db, [
+      {
+        orgId: 1, entityType: "customer", entityId: 7, verb: "health_dropped",
+        summary: "Health dropped: Test healthy → watch", actor: null,
+      },
+    ]);
+    const stats = await getCustomerActivityStats(db, 1);
+    expect(stats.has(7)).toBe(false); // scoring: excluded
+
+    const feed = await getOrgActivity(db, 1);
+    expect(feed.some((e) => e.verb === "health_dropped" && e.entityId === 7)).toBe(true); // org feed: visible
+
+    const entityFeed = await getEntityActivity(db, 1, "customer", 7);
+    expect(entityFeed.some((e) => e.verb === "health_dropped")).toBe(true); // entity feed: visible
+  });
 });
