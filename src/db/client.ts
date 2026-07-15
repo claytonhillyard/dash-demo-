@@ -25,7 +25,10 @@ export function getDb(): Db {
   if (url) {
     singleton = drizzleNeon(neon(url), { schema });
   } else {
-    const client = new PGlite();
+    // Desktop builds persist across launches via PGLITE_DATA_DIR (set by desktop/main.js
+    // to <userData>/pglite-data); unset (tests/dev) keeps today's in-memory behavior.
+    const dataDir = process.env.PGLITE_DATA_DIR;
+    const client = new PGlite(dataDir || undefined);
     const db = drizzlePglite(client, { schema });
     // Local pglite bootstrap. We capture (not discard) the migration promise so
     // request paths can await readiness via ensureDbReady() — otherwise the very
