@@ -13,6 +13,7 @@ function verbDotClass(verb: ActivityVerb): string {
     case "deleted":
     case "comment_deleted":
     case "bid_rejected":
+    case "health_dropped":
       return "bg-rose-400";
     case "bid_placed":
     case "bid_withdrawn":

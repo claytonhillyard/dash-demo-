@@ -584,3 +584,61 @@ describe("DEMO_WATCHLISTS (slice 25)", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+import { DEMO_HEALTH_SNAPSHOTS } from "@/lib/demo/seed";
+import type { HealthBand } from "@/lib/customers/healthScore";
+
+const VALID_HEALTH_BANDS: HealthBand[] = ["healthy", "watch", "at_risk"];
+const YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/;
+
+describe("DEMO_HEALTH_SNAPSHOTS (slice 38)", () => {
+  it("has exactly 6 rows (3 daily rows x 2 customers)", () => {
+    expect(DEMO_HEALTH_SNAPSHOTS.length).toBe(6);
+  });
+
+  it("all rows are scoped to DEMO_ORG_ID = 1", () => {
+    for (const r of DEMO_HEALTH_SNAPSHOTS) {
+      expect(r.orgId).toBe(1);
+    }
+  });
+
+  it("all bands are valid HealthBand values", () => {
+    for (const r of DEMO_HEALTH_SNAPSHOTS) {
+      expect(VALID_HEALTH_BANDS).toContain(r.band);
+    }
+  });
+
+  it("capturedOn matches the UTC YYYY-MM-DD shape and agrees with capturedAt", () => {
+    for (const r of DEMO_HEALTH_SNAPSHOTS) {
+      expect(r.capturedOn).toMatch(YYYY_MM_DD);
+      expect(r.capturedOn).toBe(r.capturedAt.toISOString().slice(0, 10));
+    }
+  });
+
+  it("ids are unique", () => {
+    const ids = DEMO_HEALTH_SNAPSHOTS.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("customer 2201 trends upward, watch band throughout", () => {
+    const rows = DEMO_HEALTH_SNAPSHOTS.filter((r) => r.customerId === 2201).sort(
+      (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime(),
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.band === "watch")).toBe(true);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].score).toBeGreaterThan(rows[i - 1].score);
+    }
+  });
+
+  it("customer 2204's last two rows show a healthy -> watch drop", () => {
+    const rows = DEMO_HEALTH_SNAPSHOTS.filter((r) => r.customerId === 2204).sort(
+      (a, b) => a.capturedAt.getTime() - b.capturedAt.getTime(),
+    );
+    expect(rows).toHaveLength(3);
+    const [, prior, latest] = rows;
+    expect(prior.band).toBe("healthy");
+    expect(latest.band).toBe("watch");
+    expect(latest.score).toBeLessThan(prior.score);
+  });
+});
