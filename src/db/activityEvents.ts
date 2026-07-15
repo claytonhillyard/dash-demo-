@@ -160,6 +160,10 @@ export async function getEntityActivity(
  * out would punish long-standing customers twice. Only `eventsLast30d` and
  * `distinctVerbs30d` are windowed to the 30 days before `now`.
  *
+ * System-authored events (`actor` NULL — e.g. Sentinel's own `health_dropped`
+ * alerts, slice 38) are excluded from every count here, so Sentinel's own
+ * detection can never feed back into the score it monitors.
+ *
  * `now` is injected (defaults to `new Date()`) for deterministic tests and a
  * single consistent render timestamp across a page.
  */
@@ -176,7 +180,12 @@ export async function getCustomerActivityStats(
       { entityId: number; lastActivityAt: Date; eventsLast30d: number; verbs: Set<string> }
     >();
     for (const e of DEMO_ACTIVITY) {
-      if (e.orgId !== viewerOrgId || e.entityType !== "customer" || e.entityId === null) {
+      if (
+        e.orgId !== viewerOrgId ||
+        e.entityType !== "customer" ||
+        e.entityId === null ||
+        e.actor === null
+      ) {
         continue;
       }
       const entityId = e.entityId;
@@ -213,7 +222,7 @@ export async function getCustomerActivityStats(
            count(*) FILTER (WHERE created_at > ${cutoff}) AS events_last_30d,
            count(DISTINCT verb) FILTER (WHERE created_at > ${cutoff}) AS distinct_verbs_30d
       FROM activity_events
-     WHERE org_id = ${viewerOrgId} AND entity_type = 'customer' AND entity_id IS NOT NULL
+     WHERE org_id = ${viewerOrgId} AND entity_type = 'customer' AND entity_id IS NOT NULL AND actor IS NOT NULL
      GROUP BY entity_id
   `);
 

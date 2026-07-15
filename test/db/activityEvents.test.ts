@@ -12,7 +12,14 @@ async function insertEvents(
 ) {
   for (const r of rows) {
     await db.insert(schema.activityEvents).values({
-      orgId: 1, entityType: "customer", entityId: 1, verb: "created", summary: "x",
+      // actor defaults to a real user string — a NULL actor is the
+      // system-event convention (e.g. Sentinel's health_dropped alerts) and
+      // getCustomerActivityStats now excludes those from every count
+      // (slice 38 final review, score-feedback-loop fix). Real user-triggered
+      // events always carry an actor, so that's the correct default here;
+      // tests that specifically need a system (actor: null) event pass it
+      // explicitly via `r`.
+      orgId: 1, entityType: "customer", entityId: 1, verb: "created", summary: "x", actor: "test-user",
       ...r,
     });
     // Force monotonic created_at when iterating fast — pglite resolves to

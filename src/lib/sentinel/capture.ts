@@ -53,7 +53,12 @@ type LatestSnapshot = { score: number; band: HealthBand; capturedOn: string };
  * `scored` is empty (also avoids building an invalid empty SQL `IN ()`).
  * Best-effort: the whole body runs under one try/catch tagged
  * `{ feature: "sentinel", subStep: "capture" }` and swallows — Sentinel can
- * never break the customers-page render it piggybacks on.
+ * never break the customers-page render it piggybacks on. Beyond that outer
+ * backstop (which only exists to catch the batched SELECT above), each
+ * customer's insert/update/detect block ALSO runs under its own try/catch
+ * (`subStep: "capture.perCustomer"`) — one customer's failure (e.g. a
+ * same-day concurrent-render unique-constraint race) must never silently
+ * abort capture for the rest of the batch.
  */
 export async function captureHealthSnapshots(
   db: Db,
@@ -108,54 +113,69 @@ export async function captureHealthSnapshots(
     const today = toUtcDay(now);
 
     for (const customer of scored) {
-      const prior = latestByCustomer.get(customer.customerId);
+      // Per-customer guard: db.insert/update contractually shouldn't reject
+      // for a well-formed row, but a same-day concurrent-render
+      // unique-constraint race (or any other per-row failure) must not
+      // abort capture for the rest of the batch — mirrors the per-watch
+      // guard precedent in notifyWatchersSafely (src/lib/watchlists/notify.ts).
+      try {
+        const prior = latestByCustomer.get(customer.customerId);
 
-      if (prior && prior.capturedOn === today) {
-        await db
-          .update(customerHealthSnapshots)
-          .set({
-            score: customer.score,
-            band: customer.band,
-            components: customer.components,
-          })
-          .where(
-            and(
-              eq(customerHealthSnapshots.orgId, orgId),
-              eq(customerHealthSnapshots.customerId, customer.customerId),
-              eq(customerHealthSnapshots.capturedOn, today),
-            ),
-          );
-        continue;
-      }
-
-      await db.insert(customerHealthSnapshots).values({
-        orgId,
-        customerId: customer.customerId,
-        score: customer.score,
-        band: customer.band,
-        components: customer.components,
-        capturedOn: today,
-      });
-
-      if (prior && bandRank(customer.band) < bandRank(prior.band)) {
-        await recordActivitySafely(
-          db,
-          {
-            orgId,
-            actor: null,
-            entityType: "customer",
-            entityId: customer.customerId,
-            verb: "health_dropped",
-            summary: `Health dropped: ${customer.name} ${prior.band} → ${customer.band}`,
-            payload: {
-              prevBand: prior.band,
-              band: customer.band,
-              prevScore: prior.score,
+        if (prior && prior.capturedOn === today) {
+          await db
+            .update(customerHealthSnapshots)
+            .set({
               score: customer.score,
+              band: customer.band,
+              components: customer.components,
+            })
+            .where(
+              and(
+                eq(customerHealthSnapshots.orgId, orgId),
+                eq(customerHealthSnapshots.customerId, customer.customerId),
+                eq(customerHealthSnapshots.capturedOn, today),
+              ),
+            );
+          continue;
+        }
+
+        await db.insert(customerHealthSnapshots).values({
+          orgId,
+          customerId: customer.customerId,
+          score: customer.score,
+          band: customer.band,
+          components: customer.components,
+          capturedOn: today,
+        });
+
+        if (prior && bandRank(customer.band) < bandRank(prior.band)) {
+          await recordActivitySafely(
+            db,
+            {
+              orgId,
+              actor: null,
+              entityType: "customer",
+              entityId: customer.customerId,
+              verb: "health_dropped",
+              summary: `Health dropped: ${customer.name} ${prior.band} → ${customer.band}`,
+              payload: {
+                prevBand: prior.band,
+                band: customer.band,
+                prevScore: prior.score,
+                score: customer.score,
+              },
             },
-          },
-          { action: "sentinel.capture" },
-        );
+            { action: "sentinel.capture" },
+          );
+        }
+      } catch (e) {
+        Sentry.withScope((scope) => {
+          scope.setTag("feature", "sentinel");
+          scope.setTag("subStep", "capture.perCustomer");
+          scope.setTag("customerId", customer.customerId);
+          Sentry.captureException(e);
+        });
+        // Best-effort per customer. Never re-throw — see the doc comment above.
       }
     }
   } catch (e) {

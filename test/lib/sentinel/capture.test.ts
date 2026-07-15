@@ -330,4 +330,68 @@ describe("captureHealthSnapshots", () => {
     // snapshot row is still written even though the downstream call rejected.
     expect(await getSnapshotRows()).toHaveLength(2);
   });
+
+  // Final review Fix 2 (IMPORTANT): per-customer error isolation. Before this
+  // fix, one customer's failure deep in the per-customer block (e.g. a
+  // same-day concurrent-render unique-constraint race) threw out of the
+  // shared `for` loop entirely, silently aborting capture for every
+  // customer after it in the batch. Mirrors notifyWatchersSafely's per-watch
+  // guard test shape (src/lib/watchlists/notify.ts / notify.test.ts).
+  it("per-customer isolation: customer A's failure doesn't block customer B's snapshot row", async () => {
+    const OTHER_ID = 2205;
+
+    // Both customers have a prior "worse-than-today" comparison point so A's
+    // failure happens on the drop-detection path (recordActivitySafely) —
+    // the deepest, most realistic per-customer failure point.
+    await seedYesterday({ customerId: CUSTOMER_ID, band: "healthy", score: 74 });
+    await db.insert(customerHealthSnapshots).values({
+      orgId: ORG_ID,
+      customerId: OTHER_ID,
+      score: 58,
+      band: "watch",
+      components: { recency: 24, frequency: 21, breadth: 13 },
+      capturedOn: toUtcDay(YESTERDAY),
+    });
+
+    // A's recordActivitySafely call rejects exactly once (customer A is
+    // first in the batch and is dropping, so it reaches that call first).
+    vi.mocked(recordActivitySafely).mockRejectedValueOnce(new Error("A boom"));
+
+    await expect(
+      captureHealthSnapshots(
+        db,
+        ORG_ID,
+        [
+          scoredCustomer({ score: 61, band: "watch" }), // customer A: drop -> recordActivitySafely throws
+          {
+            customerId: OTHER_ID,
+            name: "Marcus Klein",
+            score: 60,
+            band: "watch",
+            components: { recency: 25, frequency: 22, breadth: 13 },
+          }, // customer B: steady, no alert call
+        ],
+        NOW,
+      ),
+    ).resolves.toBeUndefined();
+
+    // A's own snapshot row still landed (the INSERT happens before the
+    // failing recordActivitySafely call) — yesterday's seed + today's row.
+    expect(await getSnapshotRows(CUSTOMER_ID)).toHaveLength(2);
+    // The critical assertion: B was still processed despite A's downstream
+    // failure — without the per-customer guard, A's throw would have
+    // aborted the loop before ever reaching B.
+    expect(await getSnapshotRows(OTHER_ID)).toHaveLength(2);
+
+    // A's failure is Sentry-tagged per-customer, not just the top-level
+    // "capture" subStep.
+    const tags = (globalThis as Record<string, unknown>).__sentinelSentryTags as
+      | Record<string, unknown>
+      | undefined;
+    expect(tags).toMatchObject({
+      feature: "sentinel",
+      subStep: "capture.perCustomer",
+      customerId: CUSTOMER_ID,
+    });
+  });
 });
