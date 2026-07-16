@@ -2,6 +2,7 @@
   "name": "ceo-command-center",
   "version": "0.1.0",
   "private": true,
+  "main": "desktop/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +11,12 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "lighthouse": "lhci autorun"
+    "lighthouse": "lhci autorun",
+    "desktop:build:app": "BUILD_STANDALONE=1 next build",
+    "desktop:pack:mac": "electron-builder --config desktop/electron-builder.yml --mac",
+    "desktop:pack:win": "electron-builder --config desktop/electron-builder.yml --win",
+    "desktop:pack:linux": "electron-builder --config desktop/electron-builder.yml --linux",
+    "desktop:build": "npm run desktop:build:app && electron-builder --config desktop/electron-builder.yml -mwl"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -43,6 +49,8 @@
     "@vitejs/plugin-react": "4.3.4",
     "autoprefixer": "10.4.20",
     "drizzle-kit": "0.31.10",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
     "jsdom": "25.0.1",
     "postcss": "8.5.10",
     "tailwindcss": "3.4.16",

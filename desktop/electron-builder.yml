@@ -1,0 +1,84 @@
+# electron-builder config for the iDesign Command Center desktop test
+# installers. Invoked as:
+#   electron-builder --config desktop/electron-builder.yml --mac|--win|--linux
+#
+# See docs/superpowers/plans/2026-07-03-d2-desktop-installers.md for the
+# pinned technical decisions this file implements (decision list item 3,
+# plus #8/#10/#11).
+
+appId: com.idesign.commandcenter
+productName: iDesign Command Center
+
+directories:
+  # Unsigned local/CI build artifacts (gitignored).
+  output: desktop/dist
+  # Where electron-builder looks for icons etc. No custom icons yet (decision
+  # #8) — electron-builder falls back to its own default icon and just warns.
+  buildResources: desktop
+
+# Explicit allowlist, not the default "everything not gitignored" glob:
+# desktop/main.js and desktop/preload.js only ever require() Node/Electron
+# builtins (child_process, path, fs, net, http, crypto) — no npm package is
+# needed at runtime for the Electron shell itself, so node_modules doesn't
+# need to ship at all. package.json is required so Electron can read the
+# "main" field and find desktop/main.js inside the packaged app.
+files:
+  - desktop/main.js
+  - desktop/preload.js
+  - package.json
+
+# The actual dashboard: Next's standalone server (built separately via
+# `npm run desktop:build:app`, i.e. `BUILD_STANDALONE=1 next build`) plus the
+# two directories standalone output deliberately omits (documented Next
+# behavior — decision #4). Copied here so they land as siblings of server.js
+# inside the packaged resources dir, exactly where the standalone server
+# expects to find them at runtime:
+#   resources/standalone/server.js
+#   resources/standalone/.next/static/...
+#   resources/standalone/public/...
+# This is also why the build script does NOT need to do its own copy step —
+# electron-builder's extraResources does it during packaging.
+extraResources:
+  - from: .next/standalone
+    to: standalone
+  - from: .next/static
+    to: standalone/.next/static
+  - from: public
+    to: standalone/public
+
+# Nothing native to rebuild for the target Electron ABI — pglite is WASM, and
+# main.js/preload.js have no npm dependencies (see `files` above). Skipping
+# this saves real time on every pack and avoids an unnecessary native-toolchain
+# dependency for what is otherwise a pure-JS + WASM app.
+npmRebuild: false
+
+# Unpacked for this first iteration: the spawned standalone server reads its
+# own files (server.js, .next/, node_modules/, public/) straight off disk from
+# process.resourcesPath, and Next's standalone output was never designed to
+# run from inside an asar archive. Packing standalone into asar would require
+# either unpacking it again (asarUnpack) for no real benefit or teaching Next
+# to tolerate asar's virtual filesystem — not worth it for unsigned test
+# installers. Revisit if/when shipping signed, size-optimized installers.
+asar: false
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # Explicitly unsigned: no Developer ID certificate for test installers, and
+  # this stops electron-builder from prompting for local keychain access.
+  identity: null
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Utility
