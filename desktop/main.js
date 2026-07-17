@@ -183,6 +183,13 @@ async function startServer() {
   serverProcess = spawn(process.execPath, [serverPath], {
     env: {
       ...process.env,
+      // A tester launching the packaged app from a dev shell may have
+      // DATABASE_URL exported for this repo's Neon work — getDb() branches on
+      // it FIRST, which would silently point the "local, disposable" desktop
+      // app at a real remote database. Clear it unconditionally: the desktop
+      // build's contract is pglite-on-disk, period. (spawn drops env keys set
+      // to undefined — verified, they do not stringify.)
+      DATABASE_URL: undefined,
       ELECTRON_RUN_AS_NODE: "1",
       PORT: String(port),
       HOSTNAME: "127.0.0.1",
@@ -227,6 +234,22 @@ function createWindow(serverUrl) {
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.js"),
     },
+  });
+  // Electron hardening (official checklist #13/#14): a bare BrowserWindow has
+  // no address bar, so a popup or off-origin navigation would be visually
+  // indistinguishable from the real app. Nothing in the dashboard opens
+  // external links today — deny popups outright and pin navigation to the
+  // local server's origin.
+  const appOrigin = new URL(serverUrl).origin;
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    let origin = null;
+    try {
+      origin = new URL(url).origin;
+    } catch {
+      // Unparseable target — block it.
+    }
+    if (origin !== appOrigin) event.preventDefault();
   });
   mainWindow.loadURL(serverUrl);
   mainWindow.on("closed", () => {
