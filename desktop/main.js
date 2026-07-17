@@ -266,9 +266,19 @@ if (!gotLock) {
       currentServerUrl = await startServer();
       createWindow(currentServerUrl);
     } catch (err) {
+      const message = `${err && err.message ? err.message : String(err)}`;
+      // Always mirror the failure to stderr — dialog.showErrorBox BLOCKS
+      // until dismissed, which makes unattended runs (smoke tests, CI) hang
+      // silently with zero diagnostics. IDESIGN_SMOKE=1 skips the dialog
+      // entirely and exits nonzero so scripts fail fast and loud.
+      console.error(`[main] startup failed: ${message}`);
+      if (process.env.IDESIGN_SMOKE === "1") {
+        app.exit(1);
+        return;
+      }
       dialog.showErrorBox(
         "iDesign Command Center failed to start",
-        `${err && err.message ? err.message : String(err)}\n\n` +
+        `${message}\n\n` +
           "See server.log in the app data folder for details."
       );
       app.quit();

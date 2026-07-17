@@ -41,10 +41,16 @@ files:
 extraResources:
   - from: .next/standalone
     to: standalone
+  # electron-builder applies its default ignore set (which drops node_modules)
+  # even inside extraResources trees — the standalone server's pruned
+  # node_modules (~96MB, REQUIRED to boot) silently vanished from the first
+  # packaged build. Mapping it explicitly by name bypasses the ignore.
+  - from: .next/standalone/node_modules
+    to: standalone/node_modules
   - from: .next/static
     to: standalone/.next/static
-  - from: public
-    to: standalone/public
+  # NOTE: no `public/` mapping — this app has no public/ directory. Add one
+  # here if a future slice introduces it (standalone output won't auto-include it).
 
 # Nothing native to rebuild for the target Electron ABI — pglite is WASM, and
 # main.js/preload.js have no npm dependencies (see `files` above). Skipping
@@ -65,7 +71,10 @@ mac:
   target:
     - target: dmg
       arch:
-        - arm64
+        # x64: this dev machine is an Intel Mac (i7-7820HQ) — the local build
+        # must be runnable/smokable here. Apple-silicon (arm64) DMGs come from
+        # the CI workflow's macos-latest runners (both arches built there).
+        - x64
   # Explicitly unsigned: no Developer ID certificate for test installers, and
   # this stops electron-builder from prompting for local keychain access.
   identity: null

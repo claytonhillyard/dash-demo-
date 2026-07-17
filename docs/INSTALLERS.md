@@ -19,8 +19,8 @@ bundles its own Chromium + Node runtime.
 ```bash
 npm install                # once, or after pulling dependency changes
 npm run desktop:build:app  # BUILD_STANDALONE=1 next build -> .next/standalone/
-npm run desktop:pack:mac   # -> desktop/dist/*.dmg   (Apple Silicon/arm64 only; Intel Macs use the CI build)
-npm run desktop:pack:win   # -> desktop/dist/*.exe   (nsis, x64)
+npm run desktop:pack:mac   # -> desktop/dist/*.dmg   (Intel/x64 — see arch note below)
+npm run desktop:pack:win   # -> desktop/dist/*.exe   (NSIS, x64)
 npm run desktop:pack:linux # -> desktop/dist/*.AppImage (x64)
 ```
 
@@ -29,24 +29,37 @@ three targets in one shot (`electron-builder ... -mwl`). `desktop:build:app`
 must run again any time app source changes; the pack scripts alone just
 repackage whatever is already in `.next/standalone`.
 
-Cross-packing the Windows `.exe` from macOS (`desktop:pack:win`) can require
-Wine locally (electron-builder shells out to Windows-only tooling — NSIS,
-`rcedit` — to build the installer) and is the least reliable of the three
-targets when not built on native Windows. If it fails locally, don't fight
-it — the CI workflow below (or a native Windows machine) is the reliable
-path for the `.exe`. The `.dmg` (built on macOS) and `.AppImage` (built on
-Linux, or cross-built from macOS) don't have this issue.
+All three targets verifiably cross-build from macOS (D2-3 built and shipped
+all three locally, no Wine needed for the Windows NSIS target with
+electron-builder 26). Reference build (v0.1.0, built + smoke-tested on an
+Intel Mac, macOS 13):
+
+| Artifact | Size | Verified |
+|---|---|---|
+| `iDesign Command Center-0.1.0.dmg` (mac x64) | ~260 MB | installed app launch-smoked: serves login in ~8s, persists data |
+| `iDesign Command Center Setup 0.1.0.exe` (win x64 NSIS) | ~210 MB | built + structure-verified; runtime testing needs a Windows machine |
+| `iDesign Command Center-0.1.0.AppImage` (linux x64) | ~249 MB | built + structure-verified; runtime testing needs a Linux machine |
+
+**Mac architecture note:** the local pack targets **x64** (Intel) because the
+dev machine is an Intel Mac and an unrunnable arm64 binary can't be
+smoke-tested there. Apple-silicon DMGs come from the CI workflow, whose mac
+job builds **both** arches.
+
+**Electron version note:** pinned to `electron@35` (devDependency). Electron
+43 was tried first and hangs during framework init on Intel + macOS 13
+(before any app code runs — newer Electron majors have raised their macOS
+floor). Bump the major only after verifying launch on the oldest mac you
+still test on.
 
 Artifacts land in `desktop/dist/` (gitignored — never commit build output).
 
-### Reproducible 3-OS builds via CI (planned, next slice)
+### Reproducible 3-OS builds via CI
 
-A `workflow_dispatch` GitHub Actions workflow that builds all three targets on
-their native OS (macOS, Windows, Ubuntu runners) is planned as a follow-up —
-the most trustworthy Windows build path, since it actually runs on Windows
-rather than cross-packaging from macOS. Not wired up yet; this section will
-be filled in with the actual `Actions → ... → Run workflow` instructions once
-that workflow exists.
+`.github/workflows/desktop-installers.yml` builds all three targets on their
+native OS. GitHub → **Actions** → **Desktop installers** → **Run workflow**,
+wait for the three matrix jobs, then download the per-OS artifacts
+(`idesign-command-center-mac-dmg` / `-windows-exe` / `-linux-appimage`) from
+the run page. The mac job produces both Intel and Apple-silicon DMGs.
 
 ## Logging in
 

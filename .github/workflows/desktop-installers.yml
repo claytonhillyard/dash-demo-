@@ -1,0 +1,66 @@
+name: Desktop installers
+
+# Manual only. These build the unsigned mac/Windows/Linux test installers
+# described in docs/INSTALLERS.md — they are NOT part of the Netlify deploy
+# path and don't run on push/PR. Trigger from the Actions tab whenever you
+# need fresh installers. All three targets also cross-build from macOS
+# (verified in D2-3: mac x64 + win NSIS + linux AppImage all packed locally),
+# but this workflow builds each on its native OS and is the only source of
+# APPLE-SILICON mac DMGs: the local dev machine is an Intel Mac, so
+# desktop/electron-builder.yml pins x64 for local smokeability and the mac
+# job below overrides to build both arches.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            # --x64 --arm64 overrides the yml's local-smokeability x64 pin so
+            # CI ships DMGs for both Intel and Apple-silicon Macs.
+            target: --mac --x64 --arm64
+            artifact_name: mac-dmg
+            artifact_glob: desktop/dist/*.dmg
+          - os: windows-latest
+            target: --win
+            artifact_name: windows-exe
+            artifact_glob: desktop/dist/*.exe
+          - os: ubuntu-latest
+            target: --linux
+            artifact_name: linux-appimage
+            artifact_glob: desktop/dist/*.AppImage
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build standalone Next.js output
+        # BUILD_STANDALONE must come from the `env:` block, not an inline
+        # `BUILD_STANDALONE=1 next build` — that syntax doesn't work under
+        # windows-latest's default shell (pwsh/cmd), only bash/zsh.
+        run: npx next build
+        env:
+          BUILD_STANDALONE: "1"
+
+      - name: Package installer (${{ matrix.os }})
+        run: npx electron-builder --config desktop/electron-builder.yml ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: idesign-command-center-${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
