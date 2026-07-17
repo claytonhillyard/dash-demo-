@@ -97,6 +97,20 @@ export const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // D2-1: env-gated standalone output for the Electron desktop shell (see
+  // docs/superpowers/plans/2026-07-03-d2-desktop-installers.md, decision #1).
+  // BUILD_STANDALONE=1 (desktop build script only) emits .next/standalone/server.js
+  // for desktop/main.js to spawn. Unset — the Netlify build path — leaves `output`
+  // undefined, so that build stays byte-identical to before this slice.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
+  // D2-1 companion: a stray lockfile in the user's HOME makes Next infer ~ as
+  // the workspace root, which nests the standalone bundle under the full path
+  // echo (.next/standalone/Downloads/dashboard project /root/...). Pinning the
+  // tracing root keeps server.js at .next/standalone/server.js. Same gate as
+  // `output` so the Netlify build path is untouched.
+  ...(process.env.BUILD_STANDALONE === "1"
+    ? { outputFileTracingRoot: process.cwd() }
+    : {}),
   // Slice 17: server-action multipart bodies for deal-photo uploads need
   // to exceed Next's 1MB default. 10MB matches the per-file cap enforced
   // by `uploadDealAttachment` (validateAttachmentSize). Lives under

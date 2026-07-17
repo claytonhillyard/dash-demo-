@@ -37,3 +37,6 @@ yarn-error.log*
 # Each report is a 100-500KB JSON + HTML pair; they accumulate. Never
 # committed.
 .lighthouseci/
+
+# Desktop installer build output (D-2 slice) — unsigned local/CI artifacts.
+desktop/dist/
