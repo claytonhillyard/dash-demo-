@@ -238,7 +238,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 24 | Activity feed panel (audit log) | core | shipped: `09986bf` (Phase A+B) | this-tab | Schema + helpers + tests + customers actions instrumented. 11 commits, +35 tests (1106/1106). Phase C (UI + remaining action files) becomes slice 24b. |
 | 24b | Activity feed — remaining action instrumentation (deals/circles/inventory) | core | shipped: `2464acc` | this-tab | 3 tasks. 18 handlers instrumented (5 deals + 6 circles + 7 inventory) + 18 test assertions. `client.test.ts` timeout bump. 1106/1106 green. |
 | 24c | Activity feed — UI (ActivityPanel + /activity route + per-customer section) | core | shipped: `ed432b0` | this-tab | 5 commits. Shared ActivityList; panel auto-appears for existing layouts (getEffectiveLayout merge); link-cursor pagination precedent set. +15 tests (1121/1121). Activity feed arc (24/24b/24c) complete. |
-| D-2 | Desktop test installers (mac/win/linux) | infra | claimed 2026-07-03 | **this tab** | User-requested. Electron + electron-builder + Next standalone; PGLITE_DATA_DIR persistence; unsigned test builds + CI workflow. Design approved in-session. |
+| D-2 | Desktop test installers (mac/win/linux) | infra | shipped: `987af81` | this-tab | 3 artifacts built + mac launch-smoked; CI matrix for native/arm64 builds; surfaced + fixed the main `next build` breakage (b0be40a). docs/INSTALLERS.md has install steps. |
 
 ### Queued — claim before starting
 
