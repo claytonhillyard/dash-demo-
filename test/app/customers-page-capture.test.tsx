@@ -48,4 +48,16 @@ describe("/customers RSC (list page + Sentinel capture wiring)", () => {
 
     expect(html).not.toContain("No customers yet.");
   });
+
+  // Slice 26-4: "Import CSV" link added to the header next to "New customer".
+  it("renders an Import CSV link next to New customer in the header", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+
+    const html = renderToString(await renderPage());
+
+    expect(html).toContain('href="/customers/import"');
+    expect(html).toContain("Import CSV");
+    expect(html).toContain('href="/customers/new"');
+    expect(html).toContain("New customer");
+  });
 });

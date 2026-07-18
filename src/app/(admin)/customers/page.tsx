@@ -84,6 +84,12 @@ export default async function CustomersPage({
             New customer
           </Link>
           <Link
+            href="/customers/import"
+            className="rounded border border-border px-3 py-1.5 text-xs uppercase tracking-wider text-text/70 hover:text-gold"
+          >
+            Import CSV
+          </Link>
+          <Link
             href="/"
             className="text-sm text-text/50 hover:text-text"
           >
