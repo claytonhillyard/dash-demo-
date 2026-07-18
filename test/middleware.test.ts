@@ -61,6 +61,18 @@ describe("middleware matcher", () => {
     expect(isMatched("/website")).toBe(true);
   });
 
+  it("guards /customers incl. subroutes, /activity, /watchlists (backfill)", () => {
+    for (const route of [
+      "/customers",
+      "/customers/new",
+      "/customers/2201/edit",
+      "/activity",
+      "/watchlists",
+    ]) {
+      expect(isMatched(route)).toBe(true);
+    }
+  });
+
   it("does not guard the public login page", () => {
     expect(isMatched("/login")).toBe(false);
   });

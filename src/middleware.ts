@@ -28,5 +28,11 @@ export const config = {
     "/", "/api/quotes", "/api/convert", "/api/history", "/api/diamond-history",
     "/inventory", "/diamonds", "/deals", "/website", "/circles", "/exchange",
     "/company/:path*",
+    // Backfill (D-2 era review finding): these three admin routes shipped in
+    // slices 22/24c/25 without matcher entries. No data was exposed —
+    // requireSession/getCurrentOrgId throw server-side — but logged-out
+    // visitors got a raw error page instead of the login redirect every
+    // other admin route gives.
+    "/customers/:path*", "/activity", "/watchlists",
   ],
 };
