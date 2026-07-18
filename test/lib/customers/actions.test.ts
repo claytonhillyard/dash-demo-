@@ -20,7 +20,7 @@ import {
   resetSharedDb,
   closeSharedDb,
 } from "../../helpers/shared-db";
-import { customers, activityEvents } from "@/db/schema";
+import { customers, activityEvents, invoices } from "@/db/schema";
 import {
   createCustomer,
   updateCustomer,
@@ -390,6 +390,42 @@ describe("deleteCustomer — validation", () => {
   it("rejects non-integer id", async () => {
     const res = await deleteCustomer({ id: 1.5 });
     expect(res.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteCustomer — FK guard (slice 27: invoices reference customers with a
+// no-action FK, so the DB itself blocks the delete). Before slice 27-3,
+// mapDbConstraintError had no 23503 branch, so this hit the generic "Server
+// error" path — this test locks in the friendlier message added alongside
+// the invoices actions.
+// ---------------------------------------------------------------------------
+
+describe("deleteCustomer — FK guard (invoices)", () => {
+  it("returns a friendly error instead of deleting a customer that has an invoice", async () => {
+    const created = await createCustomer({ name: "Has Invoices" });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await db.insert(invoices).values({
+      orgId: 1,
+      customerId: created.id,
+      invoiceNumber: "INV-2026-0001",
+      billTo: { name: "Has Invoices" },
+      subtotalCents: 1000,
+      taxCents: 0,
+      totalCents: 1000,
+    });
+
+    const res = await deleteCustomer({ id: created.id });
+    expect(res).toEqual({
+      ok: false,
+      error: "Cannot delete a customer that has invoices",
+    });
+    const rows = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, created.id));
+    expect(rows).toHaveLength(1);
   });
 });
 
