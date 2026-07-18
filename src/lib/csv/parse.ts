@@ -10,6 +10,9 @@ export type CsvParseResult = { headers: string[]; rows: string[][] };
  *  - quoted fields may embed literal commas and newlines
  *  - both CRLF and LF line endings
  *  - a leading UTF-8 BOM is stripped before parsing
+ *  - lenient: a `"` appearing mid-field (not at field start) is treated as a
+ *    literal character (`ab"cd,ef` → field `ab"cd`) — consistent with the
+ *    never-reject-on-shape contract below
  *
  * Shape contract (spec §3 / §8 decision 1 — data-quality errors belong to
  * the mapper/preview, not a parse crash; this function never rejects a file

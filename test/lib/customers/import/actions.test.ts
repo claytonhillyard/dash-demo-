@@ -181,6 +181,15 @@ describe("commitImport — fixture on an empty org", () => {
       .from(customers)
       .where(eq(customers.externalRef, "WJ-1004"));
     expect(wj1004.firstSeenAt?.toISOString().slice(0, 10)).toBe("2029-01-05");
+    // Review finding: assert a populated address survives the jsonb round-trip
+    // (no street2 in the fixture row -> key absent, not empty string).
+    expect(wj1004.address).toEqual({
+      street1: "55 Market St",
+      city: "San Francisco",
+      state: "CA",
+      zip: "94105",
+      country: "US",
+    });
 
     // WJ-1003 has no Customer Since column value in the fixture -> stays null.
     const [wj1003] = await db
@@ -284,6 +293,21 @@ describe("caps", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error).not.toMatch(/unterminated/i);
+  });
+
+  it("rejects a file over 5MB in BYTES even when under 5M UTF-16 code units", async () => {
+    // Review finding: z.string().max() counts UTF-16 code units — a CJK-heavy
+    // file at ~4M code units is ~12MB of UTF-8 bytes and sailed past the old
+    // "5MB" check. The byteLength refine closes it.
+    const cjkRow = "一丁丂".repeat(500); // 1500 code units, 4500 bytes
+    const rows = Array.from({ length: 2800 }, (_, i) => `WJ-C${i},${cjkRow}`);
+    const big = `Cust#,Contact\n${rows.join("\n")}`;
+    expect(big.length).toBeLessThan(5 * 1024 * 1024); // passes the code-unit screen
+    expect(Buffer.byteLength(big, "utf8")).toBeGreaterThan(5 * 1024 * 1024); // over in bytes
+    const res = await previewImport({ csvText: big });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toMatch(/too large/i);
   });
 
   it("rejects a 5001-row CSV (post-parse cap, not a truncation)", async () => {

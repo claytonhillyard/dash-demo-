@@ -382,6 +382,16 @@ describe("mapRow — targeted unit rows", () => {
       }
     });
 
+    it("pivot BOUNDARY: year exactly 30 -> 1930 (the < 30 rule is strict)", () => {
+      // Review finding: both neighbors (29, 31) were tested but not 30 itself —
+      // a mutation of `< 30` to `<= 30` would have slipped through.
+      const result = mapRow(map, rowWith({ firstSeenAt: "1/5/30" }), 1);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.firstSeenAt).toEqual(new Date(Date.UTC(1930, 0, 5)));
+      }
+    });
+
     it("YYYY-MM-DD", () => {
       const result = mapRow(map, rowWith({ firstSeenAt: "2021-09-30" }), 1);
       expect(result.ok).toBe(true);

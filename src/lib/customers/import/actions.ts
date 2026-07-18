@@ -52,7 +52,19 @@ const MEMBERSHIP_CHUNK = 500;
 const UPSERT_CHUNK = 500;
 
 const importInput = z.object({
-  csvText: z.string().min(1).max(MAX_CSV_BYTES),
+  // Byte-accurate cap: z.string().max() counts UTF-16 code units, which lets
+  // a ~10MB CJK-heavy file pass a "5MB" check (3-byte UTF-8 sequences collapse
+  // to 1 code unit). Buffer.byteLength measures what actually crossed the
+  // wire. The client-side check (ImportWizard) uses file.size — also bytes —
+  // so the two caps agree. Cheap length pre-check first so a pathological
+  // string never reaches byteLength unnecessarily.
+  csvText: z
+    .string()
+    .min(1)
+    .max(MAX_CSV_BYTES) // fast UTF-16 upper screen (bytes >= code units)
+    .refine((s) => Buffer.byteLength(s, "utf8") <= MAX_CSV_BYTES, {
+      message: "CSV is too large (5MB max)",
+    }),
 });
 
 export type ImportSampleEntry = {
