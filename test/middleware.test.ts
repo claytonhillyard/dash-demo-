@@ -73,6 +73,12 @@ describe("middleware matcher", () => {
     }
   });
 
+  it("guards /invoices incl. subroutes (slice 27)", () => {
+    for (const route of ["/invoices", "/invoices/new", "/invoices/3/edit"]) {
+      expect(isMatched(route)).toBe(true);
+    }
+  });
+
   it("does not guard the public login page", () => {
     expect(isMatched("/login")).toBe(false);
   });
