@@ -1,0 +1,13 @@
+Cust#,Contact,Company,E-mail,Phone 1,Address 1,Address 2,City,ST,Postal Code,Country,Customer Since
+WJ-1001,Priya Sharma,Sharma Gems,priya@sharmagems.com,212-555-0101,100 Diamond Row,Suite 4,New York,NY,10036,US,03/14/2019
+WJ-1002,Owen Clarke,"Smith, Jones & Co",owen@smithjones.example,,,,,,,,07/01/2020
+WJ-1003,Fatima Noor,,,,,,,,,,
+WJ-1004,Diego Alvarez,Alvarez & Sons,diego@alvarezsons.example,415-555-0110,55 Market St,,San Francisco,CA,94105,US,1/5/29
+WJ-1005,Grace Kim,,grace.kim@example.com,646-555-0199,,,,,,,
+WJ-1006,Hana Yamada,Yamada Studio,not-an-email,03-5555-0101,,,,,,,05/20/2021
+WJ-1007,Marcus Bell,,marcus.bell@example.com,,,,,,,,13/45/2025
+WJ-1001,Priya Sharma-Patel,Sharma Gems,priya.patel@sharmagems.com,212-555-0102,,,,,,,09/09/2022
+WJ-1009,,Noor Trading,info@noortrading.example,,,,,,,,
+WJ-1010,Liu Wei,,,,,,Beijing,,,CN,
+WJ-1011,Oscar Diaz,,,(212) 555-0134,,,,,,,
+WJ-1012,Anaïs Fournier,Fournier Bijoux,anais@fournierbijoux.example,,12 Rue de la Paix,,Paris,,75002,FR,2020-11-03

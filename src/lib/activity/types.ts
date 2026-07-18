@@ -38,6 +38,9 @@ export const ACTIVITY_VERBS = [
   "commented",
   "comment_deleted",
   "viewed",
+  // import (slice 26 — WinJewel CSV import; one summary event per commit,
+  // entityType "org", never per-row)
+  "imported",
   // sentinel
   "health_dropped",
 ] as const;
