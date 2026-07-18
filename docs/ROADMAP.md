@@ -247,7 +247,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 23 | AI image-to-listing (Vercel AI Gateway) | core | queued | open | Stub: generic photo→listing prefill |
 | 25 | Watchlists + email alerts (Resend) | core | shipped: `df991d0` | this-tab | Email seam live (simulated until RESEND_API_KEY set). Dispatch rides the slice-24 chokepoint. 25b (deal/inventory watch toggles) queueable when wanted. |
 | 26 | WinJewel CSV import wizard (W2) | core (WinJewel preset seam) | shipped: `4e36ed1` | this-tab | /customers/import wizard. Idempotent UPSERT on (org_id, external_ref); in-house RFC-4180 parser; byte-accurate 5MB cap. 126 tests. Works in the desktop build — real AIYA roster loadable today. W3 (invoices, slice 27) is next in the arc. |
-| 27 | Invoice schema + create/edit form (W3) | core | queued | open | Mechanic + schema in core; templates in module |
+| 27 | Invoice schema + create/edit form (W3) | core | claimed 2026-07-18 | **this tab** | Mechanic + schema in core; templates in module. References slice-22/26 customers; 28 (PDF+email), 29 (payments), 30 (history import) stack on it. |
 | 28 | Invoice PDF + email send (W4) | core | queued | open | Reuses Resend from 25 |
 | 29 | Payments + balance tracking (W5) | core | queued | open | Audit-logged via 24 |
 | 30 | WinJewel invoice history import (W6) | aiya-jewelry | queued | open | Depends on 26/27/29 |
