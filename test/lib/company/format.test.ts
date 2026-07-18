@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCents, updatedAgo, timeAgo } from "@/lib/company/format";
+import { formatCents, formatCentsExact, updatedAgo, timeAgo } from "@/lib/company/format";
 
 describe("formatCents", () => {
   it("formats integer cents as USD whole dollars", () => {
@@ -10,6 +10,18 @@ describe("formatCents", () => {
   it("renders an em dash for null/undefined", () => {
     expect(formatCents(null)).toBe("—");
     expect(formatCents(undefined)).toBe("—");
+  });
+});
+
+describe("formatCentsExact", () => {
+  it("formats integer cents as exact USD with 2 decimal places", () => {
+    expect(formatCentsExact(123456)).toBe("$1,234.56");
+    expect(formatCentsExact(5)).toBe("$0.05");
+    expect(formatCentsExact(0)).toBe("$0.00");
+  });
+  it("renders an em dash for null/undefined", () => {
+    expect(formatCentsExact(null)).toBe("—");
+    expect(formatCentsExact(undefined)).toBe("—");
   });
 });
 
