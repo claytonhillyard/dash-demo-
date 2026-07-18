@@ -12,6 +12,7 @@ export const ACTIVITY_ENTITY_TYPES = [
   "bid",
   "org",
   "watchlist",
+  "invoice",
 ] as const;
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 
@@ -23,6 +24,8 @@ export const ACTIVITY_VERBS = [
   "deleted",
   "archived",
   "restored",
+  "issued",
+  "voided",
   // membership / social
   "invited",
   "joined",

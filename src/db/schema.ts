@@ -614,3 +614,81 @@ export const customerHealthSnapshots = pgTable(
     ),
   }),
 );
+
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    // No onDelete (no-action): the DB blocks deleting a customer that has
+    // invoices — financial records are never allowed to dangle. The action
+    // layer maps the resulting 23503 to a friendly message via
+    // mapDbConstraintError (src/lib/actionErrors.ts).
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    invoiceNumber: text("invoice_number").notNull(), // editable; auto-suggested INV-YYYY-NNNN
+    status: text("status", { enum: ["draft", "issued", "void"] }) // 'paid' added by slice 29
+      .notNull()
+      .default("draft"),
+    // { name, businessName?, email?, address? } snapshot of the customer row
+    // at save time (CustomerAddress shape — src/db/customers.ts — inside
+    // `address`). Refreshed on every draft save; frozen at issue.
+    billTo: jsonb("bill_to").notNull(),
+    issueDate: text("issue_date"), // "YYYY-MM-DD", stamped by issueInvoice
+    dueDate: text("due_date"), // "YYYY-MM-DD", operator-set
+    currency: text("currency").notNull().default("USD"),
+    subtotalCents: integer("subtotal_cents").notNull(),
+    taxRateBps: integer("tax_rate_bps").notNull().default(0), // basis points, 0..2500 (Zod-enforced)
+    taxCents: integer("tax_cents").notNull(),
+    totalCents: integer("total_cents").notNull(),
+    notes: text("notes"), // ≤2000, Zod-enforced
+    // mode:"date" is intentional — ActivityEvent.createdAt is typed as Date.
+    // Other tables use the drizzle default (mode:"string"); align them in a
+    // follow-up clean-up, not here.
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    orgNumberUnique: uniqueIndex("invoices_org_number_unique").on(
+      t.orgId,
+      t.invoiceNumber,
+    ),
+    orgStatusCreatedIdx: index("invoices_org_status_created_idx").on(
+      t.orgId,
+      t.status,
+      t.createdAt.desc(),
+    ),
+    orgCustomerIdx: index("invoices_org_customer_idx").on(
+      t.orgId,
+      t.customerId,
+    ),
+  }),
+);
+
+export const invoiceItems = pgTable(
+  "invoice_items",
+  {
+    id: serial("id").primaryKey(),
+    invoiceId: integer("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }), // child-ownership convention
+    position: integer("position").notNull(), // 0-based render order
+    description: text("description").notNull(), // 1..500, Zod-enforced
+    quantity: integer("quantity").notNull().default(1), // 1..10000, Zod-enforced
+    unitPriceCents: integer("unit_price_cents").notNull(), // 0..100_000_000 ($0..$1M), Zod-enforced
+    lineTotalCents: integer("line_total_cents").notNull(), // quantity × unit_price, server-computed
+  },
+  (t) => ({
+    invoicePositionIdx: index("invoice_items_invoice_position_idx").on(
+      t.invoiceId,
+      t.position,
+    ),
+  }),
+);
