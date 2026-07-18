@@ -246,7 +246,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 |---|---|---|---|---|---|
 | 23 | AI image-to-listing (Vercel AI Gateway) | core | queued | open | Stub: generic photo→listing prefill |
 | 25 | Watchlists + email alerts (Resend) | core | shipped: `df991d0` | this-tab | Email seam live (simulated until RESEND_API_KEY set). Dispatch rides the slice-24 chokepoint. 25b (deal/inventory watch toggles) queueable when wanted. |
-| 26 | WinJewel CSV import wizard (W2) | aiya-jewelry | queued | open | Depends on slice 22 |
+| 26 | WinJewel CSV import wizard (W2) | core (WinJewel preset seam) | claimed 2026-07-17 | **this tab** | Core CSV-import mechanic + WinJewel column preset (module extraction ready). Consumes slice-22 external_ref idempotency key. Pairs with D-2 installers — zero API keys needed. |
 | 27 | Invoice schema + create/edit form (W3) | core | queued | open | Mechanic + schema in core; templates in module |
 | 28 | Invoice PDF + email send (W4) | core | queued | open | Reuses Resend from 25 |
 | 29 | Payments + balance tracking (W5) | core | queued | open | Audit-logged via 24 |
