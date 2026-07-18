@@ -13,7 +13,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 import { ForbiddenError } from "@/lib/auth/errors";
 import { firstZodError } from "@/lib/company/validation";
 import { toUtcDay } from "@/lib/sentinel/capture";
-import { computeTotals } from "./totals";
+import { computeTotals, type TotalsLineItem } from "./totals";
 import { suggestInvoiceNumber } from "./numbering";
 import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
 import { safeErrShape, mapDbConstraintError } from "@/lib/actionErrors";
@@ -41,7 +41,40 @@ const invoiceItemInput = z.object({
   unitPriceCents: z.number().int().min(0).max(100_000_000),
 });
 
-const createInvoiceInput = z.object({
+// int4 (Postgres integer) max — the width of subtotal_cents / tax_cents /
+// total_cents / line_total_cents. The per-item caps above are individually
+// int4-safe, but nothing bounds quantity*unitPrice or the summed total, so a
+// legitimate large invoice (e.g. 25 × $1,000,000) could overflow the column
+// and surface as an opaque "Server error". Cap the COMPUTED total: since
+// unitPrice ≥ 0 and quantity ≥ 1, every lineTotal and the subtotal are ≤ the
+// total, so bounding the total bounds all four columns at once. (Slice 27
+// review finding — the same assumption recurs in slice 30's history import.)
+const MAX_MONEY_CENTS = 2_147_483_647;
+
+/**
+ * Attach the total-overflow guard to an invoice-input object schema. Applied
+ * to both create + update variants AFTER any `.extend()` — Zod's refine
+ * returns a ZodEffects, which is not `.extend()`-able, so the base object
+ * must be extended first and refined last.
+ */
+// Return type is left to inference: Zod v4's classic API doesn't re-export a
+// stable `ZodEffects` type name, and the refine doesn't change the parsed
+// shape, so `z.infer` on the result still yields the base object's type.
+function withTotalsCap<T extends z.ZodTypeAny>(schema: T) {
+  return schema.superRefine((val, ctx) => {
+    const v = val as { items: TotalsLineItem[]; taxRateBps?: number };
+    const { totalCents } = computeTotals(v.items, v.taxRateBps ?? 0);
+    if (totalCents > MAX_MONEY_CENTS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items"],
+        message: "Invoice total is too large — reduce quantities or unit prices",
+      });
+    }
+  });
+}
+
+const invoiceBaseInput = z.object({
   customerId: z.number().int().positive(),
   items: z.array(invoiceItemInput).min(1).max(50),
   taxRateBps: z.number().int().min(0).max(2500).default(0),
@@ -50,11 +83,13 @@ const createInvoiceInput = z.object({
   notes: z.string().trim().min(1).max(2000).optional(),
   currency: z.string().trim().min(1).max(3).default("USD"),
 });
+
+const createInvoiceInput = withTotalsCap(invoiceBaseInput);
 export type CreateInvoiceInput = z.infer<typeof createInvoiceInput>;
 
-const updateInvoiceInput = createInvoiceInput.extend({
-  id: z.number().int().positive(),
-});
+const updateInvoiceInput = withTotalsCap(
+  invoiceBaseInput.extend({ id: z.number().int().positive() }),
+);
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceInput>;
 
 const issueInvoiceInput = z.object({ id: z.number().int().positive() });

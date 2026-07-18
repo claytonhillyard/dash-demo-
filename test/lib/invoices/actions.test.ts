@@ -285,6 +285,36 @@ describe("createInvoice — validation", () => {
     });
     expect(res.ok).toBe(false);
   });
+
+  it("rejects a computed total that would overflow int4 (no row inserted)", async () => {
+    // Each item is individually int4-safe, but 25 × $1,000,000 = 2.5e9 cents
+    // exceeds the 2,147,483,647 column ceiling. Must fail at the Zod boundary
+    // with a friendly message, NOT an opaque Postgres 22003 "Server error".
+    const customer = await insertCustomer();
+    const res = await createInvoice({
+      customerId: customer.id,
+      items: [{ description: "Wholesale lot", quantity: 25, unitPriceCents: 100_000_000 }],
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/too large/i);
+    expect(await db.select().from(invoices)).toHaveLength(0);
+  });
+
+  it("accepts a large total just under the int4 ceiling", async () => {
+    // 21 × $1,000,000 = 2,100,000,000 cents < 2,147,483,647 → must pass;
+    // 22 × $1,000,000 = 2,200,000,000 > ceiling → the prior test's guard.
+    const customer = await insertCustomer();
+    const res = await createInvoice({
+      customerId: customer.id,
+      items: Array.from({ length: 21 }, (_, i) => ({
+        description: `Lot ${i}`,
+        quantity: 1,
+        unitPriceCents: 100_000_000,
+      })),
+      taxRateBps: 0,
+    });
+    expect(res.ok).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
