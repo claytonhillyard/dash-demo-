@@ -201,6 +201,58 @@ describe("invoices migration (slice 27)", () => {
     expect(after.rows).toHaveLength(0);
   });
 
+  // --- Slice 29: payments table ---
+
+  it("creates the payments table with the expected columns and nullability", async () => {
+    const cols = await db.execute(sql`
+      SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+       WHERE table_name = 'payments'
+       ORDER BY ordinal_position
+    `);
+    const byName = new Map(cols.rows.map((r) => [r.column_name as string, r]));
+    expect(byName.get("id")).toMatchObject({ data_type: "integer", is_nullable: "NO" });
+    expect(byName.get("org_id")).toMatchObject({ data_type: "integer", is_nullable: "NO" });
+    expect(byName.get("invoice_id")).toMatchObject({ data_type: "integer", is_nullable: "NO" });
+    expect(byName.get("amount_cents")).toMatchObject({ data_type: "integer", is_nullable: "NO" });
+    expect(byName.get("method")).toMatchObject({ data_type: "text", is_nullable: "NO" });
+    expect(byName.get("received_date")).toMatchObject({ data_type: "text", is_nullable: "NO" });
+    expect(byName.get("note")).toMatchObject({ data_type: "text", is_nullable: "YES" });
+    expect(byName.get("created_at")).toMatchObject({
+      data_type: "timestamp with time zone",
+      is_nullable: "NO",
+    });
+    // No updatedAt column — payments are immutable (delete + re-record).
+    expect(byName.has("updated_at")).toBe(false);
+  });
+
+  it("indexes payments_org_invoice_idx exists", async () => {
+    const idx = await db.execute(sql`
+      SELECT indexname FROM pg_indexes WHERE tablename = 'payments'
+    `);
+    const names = idx.rows.map((r) => r.indexname as string);
+    expect(names).toContain("payments_org_invoice_idx");
+  });
+
+  it("blocks deleting an invoice that has a payment (FK no-action on payments.invoice_id)", async () => {
+    const customerId = await seedOrgAndCustomer();
+    const invoiceRes = await db.execute(sql`
+      INSERT INTO invoices (org_id, customer_id, invoice_number, status, bill_to, subtotal_cents, tax_cents, total_cents)
+      VALUES (1, ${customerId}, 'INV-2026-0001', 'issued', '{"name":"Priya Mehta"}'::jsonb, 1000, 0, 1000)
+      RETURNING id
+    `);
+    const invoiceId = (invoiceRes as unknown as { rows: { id: number }[] }).rows[0].id;
+
+    await db.execute(sql`
+      INSERT INTO payments (org_id, invoice_id, amount_cents, method, received_date)
+      VALUES (1, ${invoiceId}, 500, 'cash', '2026-07-01')
+    `);
+
+    await expect(
+      db.execute(sql`DELETE FROM invoices WHERE id = ${invoiceId}`),
+    ).rejects.toThrow();
+  });
+
   it("bill_to jsonb round-trips through a drizzle insert/select", async () => {
     await db.execute(sql`INSERT INTO orgs (id, slug, name) VALUES (1, 'a', 'A') ON CONFLICT (id) DO NOTHING`);
     const [customer] = await db

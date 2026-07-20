@@ -45,6 +45,10 @@ export const ACTIVITY_VERBS = [
   // import (slice 26 — WinJewel CSV import; one summary event per commit,
   // entityType "org", never per-row)
   "imported",
+  // payments (slice 29) — entityType "invoice" (entityId = invoice id); no
+  // new entity type, payment history lands in the invoice's own feed.
+  "payment_recorded",
+  "payment_deleted",
   // sentinel
   "health_dropped",
 ] as const;

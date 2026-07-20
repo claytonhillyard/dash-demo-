@@ -1081,6 +1081,7 @@ import type {
   InvoiceItemRow,
   InvoiceDetail,
 } from "@/db/invoices";
+import type { PaymentRow } from "@/db/payments";
 
 export type DemoInvoice = {
   id: number;
@@ -1313,12 +1314,21 @@ export function getSeedInvoicesForOrg(
     createdAt: inv.createdAt,
     sentAt: inv.sentAt,
     sentTo: inv.sentTo,
+    // Slice 29: sum of DEMO_PAYMENTS on this invoice (org-scoped by the
+    // getSeedPaymentsByInvoiceId filter, defined below in this file).
+    paidCents: getSeedPaymentsByInvoiceId(orgId, inv.id).reduce(
+      (sum, p) => sum + p.amountCents,
+      0,
+    ),
   }));
 }
 
 /** Demo-mode helper used by `getInvoiceById` — null when the row doesn't
  *  exist OR exists in a different org (same contract as the SQL query).
- *  Items come from DEMO_INVOICE_ITEMS, ordered by position. */
+ *  Items come from DEMO_INVOICE_ITEMS, ordered by position. `payments` /
+ *  `paidCents` / `balanceCents` (slice 29) mirror the real reader: payments
+ *  come from DEMO_PAYMENTS via getSeedPaymentsByInvoiceId, paidCents is
+ *  summed in JS from those rows, balanceCents = totalCents - paidCents. */
 export function getSeedInvoiceById(orgId: number, id: number): InvoiceDetail | null {
   const inv = DEMO_INVOICES.find((i) => i.id === id && i.orgId === orgId);
   if (!inv) return null;
@@ -1326,6 +1336,8 @@ export function getSeedInvoiceById(orgId: number, id: number): InvoiceDetail | n
     .slice()
     .sort((a, b) => a.position - b.position)
     .map(({ invoiceId: _invoiceId, ...item }) => item);
+  const payments = getSeedPaymentsByInvoiceId(orgId, id);
+  const paidCents = payments.reduce((sum, p) => sum + p.amountCents, 0);
   return {
     id: inv.id,
     customerId: inv.customerId,
@@ -1345,5 +1357,63 @@ export function getSeedInvoiceById(orgId: number, id: number): InvoiceDetail | n
     sentAt: inv.sentAt,
     sentTo: inv.sentTo,
     items,
+    payments,
+    paidCents,
+    balanceCents: inv.totalCents - paidCents,
   };
+}
+
+// --- Slice 29 demo seed: payments ---
+// Same pattern as DEMO_INVOICE_ITEMS — a TS constant, not inserted at
+// runtime; src/db/payments.ts and src/db/invoices.ts short-circuit demo
+// mode and read this filtered/sorted in-memory.
+//
+// Two payments on invoice 9302 (issued, Yuki Tanaka) — the only seeded
+// invoice with payments, so it reads "Partial" (0 < paid < total). 9301
+// (draft) and 9303 (void) get none. Amounts are integer fractions of 9302's
+// SEEDED totalCents (Math.floor), never a hardcoded literal that would
+// silently drift if 9302's items/totals ever change:
+//   9501: card, Math.floor(totalCents * 0.4) — a deposit taken a few days
+//     after issue, before the invoice was emailed (sentAt HOURS_AGO(2*24)).
+//   9502: wire, Math.floor(totalCents * 0.2) — a second, more recent
+//     payment, after the email went out.
+// Sum is 60% of totalCents — comfortably < totalCents, so the integrity
+// test (test/lib/demo/seed.test.ts) can assert "partial, never overpaid"
+// without hand-computing the exact cents.
+export type DemoPayment = PaymentRow & { orgId: number; invoiceId: number };
+
+const PAYMENT_9302_TOTAL_CENTS = DEMO_INVOICES.find((inv) => inv.id === 9302)!.totalCents;
+
+export const DEMO_PAYMENTS: DemoPayment[] = [
+  {
+    id: 9501,
+    orgId: DEMO_AIYA_ORG_ID,
+    invoiceId: 9302,
+    amountCents: Math.floor(PAYMENT_9302_TOTAL_CENTS * 0.4),
+    method: "card",
+    receivedDate: invoiceDay(7),
+    note: "Deposit via card, taken at order confirmation.",
+    createdAt: HOURS_AGO(7 * 24),
+  },
+  {
+    id: 9502,
+    orgId: DEMO_AIYA_ORG_ID,
+    invoiceId: 9302,
+    amountCents: Math.floor(PAYMENT_9302_TOTAL_CENTS * 0.2),
+    method: "wire",
+    receivedDate: invoiceDay(1),
+    note: null,
+    createdAt: HOURS_AGO(1 * 24),
+  },
+];
+
+/** Demo-mode helper used by `getPaymentsByInvoiceId` — filters DEMO_PAYMENTS
+ *  by org + invoice, ordered receivedDate DESC then id DESC (same contract
+ *  as the SQL query). Strips orgId/invoiceId before returning — PaymentRow
+ *  has neither field (the caller already knows both). */
+export function getSeedPaymentsByInvoiceId(orgId: number, invoiceId: number): PaymentRow[] {
+  return DEMO_PAYMENTS.filter((p) => p.orgId === orgId && p.invoiceId === invoiceId)
+    .slice()
+    .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id)
+    .map(({ orgId: _orgId, invoiceId: _invoiceId, ...row }) => row);
 }
