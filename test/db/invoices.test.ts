@@ -147,6 +147,35 @@ describe("getInvoices — list reader", () => {
     expect(rows[0]!.createdAt).toBeInstanceOf(Date);
   });
 
+  it("list row includes sentAt/sentTo (null when never sent; populated after a send)", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      billTo: { name: "Customer A" },
+    });
+    const sentAt = new Date("2026-07-10T12:00:00Z");
+    await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0002",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      sentAt,
+      sentTo: "customer@example.com",
+    });
+
+    const rows = await getInvoices(db, 1);
+    const unsent = rows.find((r) => r.invoiceNumber === "INV-2026-0001")!;
+    const sent = rows.find((r) => r.invoiceNumber === "INV-2026-0002")!;
+    expect(unsent.sentAt).toBeNull();
+    expect(unsent.sentTo).toBeNull();
+    expect(sent.sentAt).toBeInstanceOf(Date);
+    expect(sent.sentAt?.toISOString()).toBe(sentAt.toISOString());
+    expect(sent.sentTo).toBe("customer@example.com");
+  });
+
   it("default limit is 50 — clamps to 200 maximum", async () => {
     const c1 = await seedCustomer(db, 1, "Customer A");
     for (let i = 0; i < 210; i++) {
@@ -258,10 +287,31 @@ describe("getInvoiceById — single-invoice reader", () => {
       taxCents: 400,
       totalCents: 5400,
       notes: "Test note",
+      sentAt: null,
+      sentTo: null,
       items: [],
     });
     expect(result!.createdAt).toBeInstanceOf(Date);
     expect(result!.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("returns sentAt/sentTo when a send has been recorded", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const sentAt = new Date("2026-07-15T09:30:00Z");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0009",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      sentAt,
+      sentTo: "billing@example.com",
+    });
+
+    const result = await getInvoiceById(db, 1, invoice.id);
+    expect(result!.sentAt).toBeInstanceOf(Date);
+    expect(result!.sentAt?.toISOString()).toBe(sentAt.toISOString());
+    expect(result!.sentTo).toBe("billing@example.com");
   });
 
   it("returns items: [] (not undefined) when an invoice has no items", async () => {
@@ -322,5 +372,21 @@ describe("getInvoices / getInvoiceById — demo mode", () => {
     const mod = await import("@/db/invoices");
     const db = await getSharedDb();
     expect(await mod.getInvoiceById(db, 999_999, 9302)).toBeNull();
+  });
+
+  it("getInvoiceById(9302) — the seeded sent example — has sentAt (Date) and sentTo populated", async () => {
+    const mod = await import("@/db/invoices");
+    const db = await getSharedDb();
+    const result = await mod.getInvoiceById(db, 1, 9302);
+    expect(result!.sentAt).toBeInstanceOf(Date);
+    expect(result!.sentTo).toBe("y.tanaka@ginzapearl.jp");
+  });
+
+  it("getInvoiceById(9301) — never sent — has null sentAt/sentTo", async () => {
+    const mod = await import("@/db/invoices");
+    const db = await getSharedDb();
+    const result = await mod.getInvoiceById(db, 1, 9301);
+    expect(result!.sentAt).toBeNull();
+    expect(result!.sentTo).toBeNull();
   });
 });

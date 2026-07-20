@@ -98,6 +98,62 @@ describe("sendEmail", () => {
     expect(body.from).toBe("no-reply@idesign.example");
   });
 
+  it("attachments serialized into the mocked fetch body — base64 + filename present, contentType NOT sent", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, true));
+    const r = await sendEmail({
+      ...VALID_INPUT,
+      attachments: [
+        { filename: "invoice.pdf", content: "aGVsbG8=", contentType: "application/pdf" },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    const [, init] = vi.mocked(fetch).mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.attachments).toEqual([{ filename: "invoice.pdf", content: "aGVsbG8=" }]);
+    expect(body.attachments[0]).not.toHaveProperty("contentType");
+  });
+
+  it("no attachments → fetch body omits the attachments key entirely", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, true));
+    await sendEmail(VALID_INPUT);
+    const [, init] = vi.mocked(fetch).mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).not.toHaveProperty("attachments");
+  });
+
+  it("simulated path ignores attachments entirely (fetch not called, ok/simulated:true)", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    const r = await sendEmail({
+      ...VALID_INPUT,
+      attachments: [
+        { filename: "invoice.pdf", content: "aGVsbG8=", contentType: "application/pdf" },
+      ],
+    });
+    expect(r.ok && r.simulated).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("Zod rejects more than 3 attachments", async () => {
+    const attachment = { filename: "a.pdf", content: "aGVsbG8=", contentType: "application/pdf" };
+    const r = await sendEmail({
+      ...VALID_INPUT,
+      attachments: [attachment, attachment, attachment, attachment],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("error");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("Zod rejects an empty attachment filename", async () => {
+    const r = await sendEmail({
+      ...VALID_INPUT,
+      attachments: [{ filename: "", content: "aGVsbG8=", contentType: "application/pdf" }],
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("error");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("429 → rate_limited", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(429, false));
     const r = await sendEmail(VALID_INPUT);

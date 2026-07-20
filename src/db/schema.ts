@@ -645,6 +645,15 @@ export const invoices = pgTable(
     taxCents: integer("tax_cents").notNull(),
     totalCents: integer("total_cents").notNull(),
     notes: text("notes"), // ≤2000, Zod-enforced
+    // Slice 28: sendInvoice stamps both on a real (non-simulated) send;
+    // NULL until then. sentTo is the frozen recipient at send time — an
+    // emailed invoice stays status "issued" (sending is not a status
+    // change). Re-sending overwrites both.
+    // mode:"date" is intentional — ActivityEvent.createdAt is typed as Date.
+    // Other tables use the drizzle default (mode:"string"); align them in a
+    // follow-up clean-up, not here.
+    sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
+    sentTo: text("sent_to"),
     // mode:"date" is intentional — ActivityEvent.createdAt is typed as Date.
     // Other tables use the drizzle default (mode:"string"); align them in a
     // follow-up clean-up, not here.

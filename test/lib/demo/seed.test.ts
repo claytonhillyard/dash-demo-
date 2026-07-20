@@ -734,4 +734,22 @@ describe("DEMO_INVOICES / DEMO_INVOICE_ITEMS (slice 27)", () => {
     const numbers = DEMO_INVOICES.map((inv) => inv.invoiceNumber);
     expect(new Set(numbers).size).toBe(numbers.length);
   });
+
+  it("invoice 9302 (the sent example) has sentAt/sentTo populated; 9301/9303 remain null (slice 28)", () => {
+    const sent = DEMO_INVOICES.find((inv) => inv.id === 9302)!;
+    expect(sent.sentAt).toBeInstanceOf(Date);
+    expect(sent.sentTo).toBe("y.tanaka@ginzapearl.jp");
+
+    const unsent1 = DEMO_INVOICES.find((inv) => inv.id === 9301)!;
+    const unsent3 = DEMO_INVOICES.find((inv) => inv.id === 9303)!;
+    expect(unsent1.sentAt).toBeNull();
+    expect(unsent1.sentTo).toBeNull();
+    expect(unsent3.sentAt).toBeNull();
+    expect(unsent3.sentTo).toBeNull();
+  });
+
+  it("sentTo, when set, matches the referenced customer's actual email (bill_to snapshot) (slice 28)", () => {
+    const sent = DEMO_INVOICES.find((inv) => inv.id === 9302)!;
+    expect(sent.sentTo).toBe(sent.billTo.email);
+  });
 });
