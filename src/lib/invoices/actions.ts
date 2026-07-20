@@ -7,16 +7,22 @@ import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import { invoices, invoiceItems } from "@/db/schema";
 import { getCustomerById, type CustomerView } from "@/db/customers";
-import type { BillTo } from "@/db/invoices";
+import { getInvoiceById, type BillTo, type InvoiceDetail } from "@/db/invoices";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { ForbiddenError } from "@/lib/auth/errors";
+import { resolveOrgLabel } from "@/lib/auth/orgLabel";
 import { firstZodError } from "@/lib/company/validation";
+import { formatCentsExact } from "@/lib/company/format";
 import { toUtcDay } from "@/lib/sentinel/capture";
 import { computeTotals, type TotalsLineItem } from "./totals";
 import { suggestInvoiceNumber } from "./numbering";
+import { buildInvoicePdfModel } from "./pdfModel";
+import { renderInvoicePdf } from "./pdfRender";
 import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
 import { safeErrShape, mapDbConstraintError } from "@/lib/actionErrors";
+import { sendEmail } from "@/lib/email/sendEmail";
+import type { EmailErrorCode } from "@/lib/email/types";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -98,9 +104,28 @@ export type IssueInvoiceInput = z.infer<typeof issueInvoiceInput>;
 const voidInvoiceInput = z.object({ id: z.number().int().positive() });
 export type VoidInvoiceInput = z.infer<typeof voidInvoiceInput>;
 
+const sendInvoiceInput = z.object({
+  id: z.number().int().positive(),
+  toEmail: z.email().max(200).optional(),
+});
+export type SendInvoiceInput = z.infer<typeof sendInvoiceInput>;
+
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Thrown inside a `run()` callback to surface a short, user-facing message
+ * that is neither an authz reject (`ForbiddenError` -> "Forbidden") nor an
+ * opaque, Sentry-captured failure ("Server error"). sendInvoice is the first
+ * caller: "Only issued invoices can be sent", the no-recipient-on-file case,
+ * and a mapped sendEmail seam failure all need their own distinct wording
+ * (spec §7's truth table), and `run()`'s `fn` signature returns `void` with
+ * no other channel back to the caller. Local to this file — no other action
+ * here has a validation-ish failure that isn't already either a Forbidden or
+ * a DB constraint violation.
+ */
+class FriendlyError extends Error {}
 
 /** bill_to snapshot per spec §3.1: `{ name, businessName?, email?, address? }`
  *  — omit any field that's null/empty on the source customer row rather than
@@ -160,6 +185,9 @@ async function run<T>(
   } catch (e) {
     if (e instanceof ForbiddenError) {
       return { ok: false, error: "Forbidden" };
+    }
+    if (e instanceof FriendlyError) {
+      return { ok: false, error: e.message };
     }
     const friendly = mapDbConstraintError(e);
     if (friendly !== null) {
@@ -499,4 +527,126 @@ export async function voidInvoice(raw: unknown): Promise<ActionResult> {
       extraRevalidate: (input) => [`/invoices/${input.id}/edit`],
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// sendInvoice
+// ---------------------------------------------------------------------------
+
+/** Short, user-facing text for every sendEmail seam failure code
+ *  (src/lib/email/types.ts EmailErrorCode) — never the raw code, never the
+ *  underlying provider error (PII/opaque-detail discipline, same spirit as
+ *  safeErrShape). */
+const EMAIL_ERROR_MESSAGES: Record<EmailErrorCode, string> = {
+  rate_limited: "Email service is rate-limited — try again shortly",
+  unavailable: "Email service is temporarily unavailable — try again shortly",
+  error: "Couldn't send the email — try again",
+};
+
+/** Plain-text email body: number, total, due date (when set), item count,
+ *  then the fixed "attached" line (spec §5.2). No HTML — plain text is
+ *  professional and spam-safe (spec §8 decision). */
+function buildSendSummary(invoice: InvoiceDetail): string {
+  const lines = [
+    `Invoice ${invoice.invoiceNumber}`,
+    `Total: ${formatCentsExact(invoice.totalCents)}`,
+  ];
+  if (invoice.dueDate) lines.push(`Due date: ${invoice.dueDate}`);
+  lines.push(`Items: ${invoice.items.length}`);
+  lines.push("");
+  lines.push("The invoice PDF is attached.");
+  return lines.join("\n");
+}
+
+/**
+ * sendInvoice — issued-only (spec §5.2): draft/void get the distinct
+ * `FriendlyError("Only issued invoices can be sent")`, separate from the
+ * cross-org/missing `ForbiddenError`. Recipient defaults to the frozen
+ * bill_to.email, overridable per-send via `toEmail`; neither present is
+ * another `FriendlyError`, not a hard failure. Renders the PDF fresh (never
+ * stored — the row is the source of truth, spec §2) and hands it to the
+ * slice-25 email seam as a base64 attachment.
+ *
+ * Stamping is gated on `!simulated`: a simulated send (no RESEND_API_KEY
+ * configured, or demo/build) must NOT write sent_at/sent_to — that would
+ * fake a delivery record for an email that never left the process. `run()`
+ * already blocks demo mode above `fn`, so the only source of `simulated`
+ * here in practice is a missing API key. The `simulated` flag itself is
+ * threaded back to the caller via a closure variable rather than widening
+ * `run()`'s success shape — `run()` stays untouched for the other three
+ * actions, and the two return shapes only really differ by one optional key.
+ *
+ * The audit event fires for BOTH outcomes (real or simulated) once sendEmail
+ * itself succeeds — `payload: { simulated }` only. The recipient address
+ * NEVER appears in the audit event or reaches Sentry; it lives solely in the
+ * org-scoped `sent_to` column (PII rule, spec §5.2/§8).
+ */
+export async function sendInvoice(
+  raw: unknown,
+): Promise<{ ok: true; simulated?: true } | { ok: false; error: string }> {
+  let simulated = false;
+  const res = await run(
+    sendInvoiceInput,
+    raw,
+    async (input, orgId, actor) => {
+      const d = db();
+
+      const invoice = await getInvoiceById(d, orgId, input.id);
+      if (!invoice) throw new ForbiddenError();
+      if (invoice.status !== "issued") {
+        throw new FriendlyError("Only issued invoices can be sent");
+      }
+
+      const recipient = input.toEmail ?? invoice.billTo.email;
+      if (!recipient) {
+        throw new FriendlyError("No email on file for this customer — enter one to send");
+      }
+
+      const orgName = await resolveOrgLabel(d, orgId);
+      const model = buildInvoicePdfModel(invoice, orgName, new Date());
+      const bytes = await renderInvoicePdf(model);
+      const content = Buffer.from(bytes).toString("base64");
+
+      const emailRes = await sendEmail({
+        to: recipient,
+        subject: `Invoice ${invoice.invoiceNumber} from ${orgName}`,
+        text: buildSendSummary(invoice),
+        attachments: [
+          { filename: `${invoice.invoiceNumber}.pdf`, content, contentType: "application/pdf" },
+        ],
+        feature: "invoice",
+      });
+      if (!emailRes.ok) {
+        throw new FriendlyError(EMAIL_ERROR_MESSAGES[emailRes.error]);
+      }
+      simulated = emailRes.simulated;
+
+      if (!emailRes.simulated) {
+        await d
+          .update(invoices)
+          .set({ sentAt: new Date(), sentTo: recipient, updatedAt: new Date() })
+          .where(and(eq(invoices.id, invoice.id), eq(invoices.orgId, orgId)));
+      }
+
+      await recordActivitySafely(
+        d,
+        {
+          orgId,
+          actor,
+          entityType: "invoice",
+          entityId: invoice.id,
+          verb: "sent",
+          summary: `Sent invoice ${invoice.invoiceNumber} to ${invoice.billTo.name}`,
+          payload: { simulated },
+        },
+        { action: "invoices.send" },
+      );
+    },
+    {
+      action: "sendInvoice",
+      extraRevalidate: (input) => [`/invoices/${input.id}/edit`],
+    },
+  );
+  if (!res.ok) return res;
+  return simulated ? { ok: true, simulated: true } : { ok: true };
 }
