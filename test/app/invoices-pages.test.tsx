@@ -21,6 +21,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
+import { getSeedInvoiceById, getSeedPaymentsByInvoiceId } from "@/lib/demo/seed";
+import { formatCentsExact } from "@/lib/company/format";
 import InvoicesPage from "@/app/(admin)/invoices/page";
 import NewInvoicePage from "@/app/(admin)/invoices/new/page";
 import EditInvoicePage from "@/app/(admin)/invoices/[id]/edit/page";
@@ -74,6 +76,23 @@ describe("/invoices RSC list", () => {
     const html = renderToString(await renderList());
     expect(html).toContain("No invoices yet.");
     expect(html).toContain("Create your first invoice");
+  });
+
+  // Slice 29-3: Balance column, derived as totalCents - paidCents. Computed
+  // here from the seed helpers themselves (never hardcoded) — 9302's
+  // payments (9501/9502) are integer fractions of its totalCents (spec §7),
+  // so a hand-typed dollar literal would silently drift if the seed ever
+  // changes the split.
+  it("the Balance column shows invoice 9302's computed remaining balance", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderList());
+    const invoice = getSeedInvoiceById(1, 9302)!;
+    const paidCents = getSeedPaymentsByInvoiceId(1, 9302).reduce(
+      (sum, p) => sum + p.amountCents,
+      0,
+    );
+    const remaining = invoice.totalCents - paidCents;
+    expect(html).toContain(formatCentsExact(remaining));
   });
 });
 
@@ -149,5 +168,32 @@ describe("/invoices/[id]/edit RSC", () => {
     const html = renderToString(await renderEdit("9302"));
     expect(html).toContain("Last sent");
     expect(html).toContain("y.tanaka@ginzapearl.jp");
+  });
+
+  // Slice 29-3: PaymentsPanel renders for issued/void, never draft (spec
+  // §8.2). 9302 is the seeded partial-payment example (DEMO_PAYMENTS
+  // 9501/9502, src/lib/demo/seed.ts) — assert a seed payment's own amount
+  // string actually renders, not just the panel's presence.
+  it("the payments panel renders on the issued invoice with a seed payment amount visible", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderEdit("9302"));
+    expect(html).toContain('data-testid="payments-panel"');
+    const [firstPayment] = getSeedPaymentsByInvoiceId(1, 9302);
+    expect(html).toContain(formatCentsExact(firstPayment.amountCents));
+  });
+
+  it("the payments panel renders read-only on the void invoice — history present, no record form", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderEdit("9303"));
+    expect(html).toContain('data-testid="payments-panel"');
+    expect(html).toContain("History");
+    expect(html).not.toContain("Record payment");
+    expect(html).not.toContain("<button");
+  });
+
+  it("the payments panel does not render on the draft invoice", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderEdit("9301"));
+    expect(html).not.toContain('data-testid="payments-panel"');
   });
 });

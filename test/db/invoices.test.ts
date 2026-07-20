@@ -31,6 +31,24 @@ async function seedInvoice(db: Db, overrides: InvoiceOverrides) {
   return row!;
 }
 
+type PaymentOverrides = Partial<typeof schema.payments.$inferInsert> & {
+  orgId: number;
+  invoiceId: number;
+  amountCents: number;
+};
+
+async function seedPayment(db: Db, overrides: PaymentOverrides) {
+  const [row] = await db
+    .insert(schema.payments)
+    .values({
+      method: "cash",
+      receivedDate: "2026-07-01",
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 describe("getInvoices — list reader", () => {
   let db: Db;
   beforeAll(async () => {
@@ -190,6 +208,81 @@ describe("getInvoices — list reader", () => {
     expect((await getInvoices(db, 1, { limit: 100 })).length).toBe(100);
     expect((await getInvoices(db, 1, { limit: 500 })).length).toBe(200);
   }, 45_000);
+
+  // --- Slice 29: paidCents via LEFT JOIN grouped subquery ---
+
+  it("paidCents is 0 for an invoice with no payments", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      billTo: { name: "Customer A" },
+    });
+    const rows = await getInvoices(db, 1);
+    expect(rows[0]!.paidCents).toBe(0);
+  });
+
+  it("paidCents reflects a single payment", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      totalCents: 10_000,
+    });
+    await seedPayment(db, { orgId: 1, invoiceId: invoice.id, amountCents: 3000 });
+
+    const rows = await getInvoices(db, 1);
+    expect(rows[0]!.paidCents).toBe(3000);
+  });
+
+  it("paidCents sums 2 payments on the same invoice", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      totalCents: 10_000,
+    });
+    await seedPayment(db, { orgId: 1, invoiceId: invoice.id, amountCents: 3000, method: "card" });
+    await seedPayment(db, { orgId: 1, invoiceId: invoice.id, amountCents: 1500, method: "wire" });
+
+    const rows = await getInvoices(db, 1);
+    expect(rows[0]!.paidCents).toBe(4500);
+  });
+
+  it("a payment recorded under a different org never inflates this org's paidCents sum (cross-org isolation on the JOIN)", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      totalCents: 10_000,
+    });
+    // Legitimate org-1 payment.
+    await seedPayment(db, { orgId: 1, invoiceId: invoice.id, amountCents: 500 });
+    // Adversarial: a payment row whose own org_id (999) disagrees with the
+    // invoice it points at (an org-1 invoice) — simulates a data-integrity
+    // anomaly, not something the action layer would ever produce itself.
+    // The org-scoped subquery must key off payments.org_id, not the
+    // invoice's real owner, so this must NOT count toward org 1's sum.
+    await seedPayment(db, { orgId: 999, invoiceId: invoice.id, amountCents: 99_999 });
+
+    const rows = await getInvoices(db, 1);
+    expect(rows[0]!.paidCents).toBe(500);
+
+    // getInvoiceById's payments list must show the same isolation.
+    const detail = await getInvoiceById(db, 1, invoice.id);
+    expect(detail!.paidCents).toBe(500);
+    expect(detail!.payments).toHaveLength(1);
+  });
 });
 
 describe("getInvoiceById — single-invoice reader", () => {
@@ -325,6 +418,108 @@ describe("getInvoiceById — single-invoice reader", () => {
     const result = await getInvoiceById(db, 1, invoice.id);
     expect(result!.items).toEqual([]);
   });
+
+  // --- Slice 29: payments / paidCents / balanceCents ---
+
+  it("an invoice with no payments returns payments: [], paidCents 0, and balanceCents === totalCents", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      totalCents: 7500,
+    });
+    const result = await getInvoiceById(db, 1, invoice.id);
+    expect(result!.payments).toEqual([]);
+    expect(result!.paidCents).toBe(0);
+    expect(result!.balanceCents).toBe(7500);
+  });
+
+  it("sums paidCents from payments and computes balanceCents = totalCents - paidCents", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      totalCents: 10_000,
+    });
+    await seedPayment(db, {
+      orgId: 1,
+      invoiceId: invoice.id,
+      amountCents: 3000,
+      method: "card",
+      receivedDate: "2026-07-05",
+    });
+    await seedPayment(db, {
+      orgId: 1,
+      invoiceId: invoice.id,
+      amountCents: 1500,
+      method: "wire",
+      receivedDate: "2026-07-10",
+    });
+
+    const result = await getInvoiceById(db, 1, invoice.id);
+    expect(result!.paidCents).toBe(4500);
+    expect(result!.balanceCents).toBe(5500);
+  });
+
+  it("orders payments by receivedDate DESC, then id DESC as a tiebreak", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      status: "issued",
+      billTo: { name: "Customer A" },
+      totalCents: 10_000,
+    });
+    const earliest = await seedPayment(db, {
+      orgId: 1,
+      invoiceId: invoice.id,
+      amountCents: 100,
+      receivedDate: "2026-07-01",
+    });
+    // Two payments on the SAME receivedDate, inserted in ascending id order
+    // — id DESC must break the tie (the second insert sorts first).
+    const sameDateFirst = await seedPayment(db, {
+      orgId: 1,
+      invoiceId: invoice.id,
+      amountCents: 200,
+      receivedDate: "2026-07-10",
+    });
+    const sameDateSecond = await seedPayment(db, {
+      orgId: 1,
+      invoiceId: invoice.id,
+      amountCents: 300,
+      receivedDate: "2026-07-10",
+    });
+
+    const result = await getInvoiceById(db, 1, invoice.id);
+    expect(result!.payments.map((p) => p.id)).toEqual([
+      sameDateSecond.id,
+      sameDateFirst.id,
+      earliest.id,
+    ]);
+  });
+
+  it("coerces payment createdAt to a real Date instance", async () => {
+    const c1 = await seedCustomer(db, 1, "Customer A");
+    const invoice = await seedInvoice(db, {
+      orgId: 1,
+      customerId: c1,
+      invoiceNumber: "INV-2026-0001",
+      status: "issued",
+      billTo: { name: "Customer A" },
+    });
+    await seedPayment(db, { orgId: 1, invoiceId: invoice.id, amountCents: 100 });
+
+    const result = await getInvoiceById(db, 1, invoice.id);
+    expect(result!.payments[0]!.createdAt).toBeInstanceOf(Date);
+  });
 });
 
 describe("getInvoices / getInvoiceById — demo mode", () => {
@@ -388,5 +583,42 @@ describe("getInvoices / getInvoiceById — demo mode", () => {
     const result = await mod.getInvoiceById(db, 1, 9301);
     expect(result!.sentAt).toBeNull();
     expect(result!.sentTo).toBeNull();
+  });
+
+  // --- Slice 29: demo payments ---
+
+  it("getInvoices demo branch: paidCents for 9302 equals the sum of DEMO_PAYMENTS on it", async () => {
+    const mod = await import("@/db/invoices");
+    const { DEMO_PAYMENTS } = await import("@/lib/demo/seed");
+    const db = await getSharedDb();
+    const rows = await mod.getInvoices(db, 1);
+    const row9302 = rows.find((r) => r.id === 9302)!;
+    const expected = DEMO_PAYMENTS.filter((p) => p.invoiceId === 9302).reduce(
+      (sum, p) => sum + p.amountCents,
+      0,
+    );
+    expect(row9302.paidCents).toBe(expected);
+    expect(row9302.paidCents).toBeGreaterThan(0);
+  });
+
+  it("getInvoiceById(9302) demo branch: payments/paidCents/balanceCents populated; 9301 and 9303 carry no payments", async () => {
+    const mod = await import("@/db/invoices");
+    const db = await getSharedDb();
+
+    const result9302 = await mod.getInvoiceById(db, 1, 9302);
+    expect(result9302!.payments.length).toBe(2);
+    expect(result9302!.paidCents).toBeGreaterThan(0);
+    expect(result9302!.balanceCents).toBe(result9302!.totalCents - result9302!.paidCents);
+    // 9302 is the seeded "Partial" example — paid but not paid in full.
+    expect(result9302!.balanceCents).toBeGreaterThan(0);
+
+    const result9301 = await mod.getInvoiceById(db, 1, 9301);
+    expect(result9301!.payments).toEqual([]);
+    expect(result9301!.paidCents).toBe(0);
+    expect(result9301!.balanceCents).toBe(result9301!.totalCents);
+
+    const result9303 = await mod.getInvoiceById(db, 1, 9303);
+    expect(result9303!.payments).toEqual([]);
+    expect(result9303!.paidCents).toBe(0);
   });
 });

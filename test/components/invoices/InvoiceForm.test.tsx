@@ -67,6 +67,9 @@ function existingInvoice(over: Partial<InvoiceDetail> = {}): InvoiceDetail {
         lineTotalCents: 1000,
       },
     ],
+    payments: [],
+    paidCents: 0,
+    balanceCents: 2418,
     ...over,
   };
 }

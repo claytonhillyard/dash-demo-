@@ -753,3 +753,34 @@ describe("DEMO_INVOICES / DEMO_INVOICE_ITEMS (slice 27)", () => {
     expect(sent.sentTo).toBe(sent.billTo.email);
   });
 });
+
+import { DEMO_PAYMENTS, getSeedPaymentsByInvoiceId } from "@/lib/demo/seed";
+
+describe("DEMO_PAYMENTS (slice 29)", () => {
+  it("all payments are on invoice 9302, org 1, with unique ids >= 9501", () => {
+    expect(DEMO_PAYMENTS.length).toBeGreaterThan(0);
+    for (const p of DEMO_PAYMENTS) {
+      expect(p.invoiceId).toBe(9302);
+      expect(p.orgId).toBe(DEMO_AIYA_ORG_ID);
+      expect(p.id).toBeGreaterThanOrEqual(9501);
+      expect(p.amountCents).toBeGreaterThan(0);
+    }
+    const ids = DEMO_PAYMENTS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("the sum of DEMO_PAYMENTS on 9302 is positive and strictly less than 9302's totalCents (partial, never overpaid)", () => {
+    const invoice9302 = DEMO_INVOICES.find((inv) => inv.id === 9302)!;
+    const sum = DEMO_PAYMENTS.filter((p) => p.invoiceId === 9302).reduce(
+      (n, p) => n + p.amountCents,
+      0,
+    );
+    expect(sum).toBeGreaterThan(0);
+    expect(sum).toBeLessThan(invoice9302.totalCents);
+  });
+
+  it("getSeedPaymentsByInvoiceId returns [] for invoices with no seeded payments (9301 draft, 9303 void)", () => {
+    expect(getSeedPaymentsByInvoiceId(DEMO_AIYA_ORG_ID, 9301)).toEqual([]);
+    expect(getSeedPaymentsByInvoiceId(DEMO_AIYA_ORG_ID, 9303)).toEqual([]);
+  });
+});

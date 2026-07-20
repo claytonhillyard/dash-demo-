@@ -30,6 +30,9 @@ function makeInvoice(overrides: Partial<InvoiceDetail> = {}): InvoiceDetail {
     items: [
       { id: 1, position: 0, description: "Widget", quantity: 1, unitPriceCents: 10_000, lineTotalCents: 10_000 },
     ],
+    payments: [],
+    paidCents: 0,
+    balanceCents: 10_000,
     ...overrides,
   };
 }

@@ -8,6 +8,7 @@ function verbDotClass(verb: ActivityVerb): string {
     case "restored":
     case "bid_accepted":
     case "issued":
+    case "payment_recorded":
       return "bg-emerald-400";
     case "updated":
       return "bg-amber-300";
@@ -16,6 +17,7 @@ function verbDotClass(verb: ActivityVerb): string {
     case "bid_rejected":
     case "health_dropped":
     case "voided":
+    case "payment_deleted":
       return "bg-rose-400";
     case "bid_placed":
     case "bid_withdrawn":

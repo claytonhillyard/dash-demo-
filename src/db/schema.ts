@@ -630,7 +630,10 @@ export const invoices = pgTable(
       .notNull()
       .references(() => customers.id),
     invoiceNumber: text("invoice_number").notNull(), // editable; auto-suggested INV-YYYY-NNNN
-    status: text("status", { enum: ["draft", "issued", "void"] }) // 'paid' added by slice 29
+    // Slice 29: "Paid"/"Partial" are DERIVED badges (balanceCents === 0 /
+    // 0 < paid < total on an issued invoice) computed from payments — NOT a
+    // 4th status value. draft/issued/void remains the complete set.
+    status: text("status", { enum: ["draft", "issued", "void"] })
       .notNull()
       .default("draft"),
     // { name, businessName?, email?, address? } snapshot of the customer row
@@ -699,5 +702,36 @@ export const invoiceItems = pgTable(
       t.invoiceId,
       t.position,
     ),
+  }),
+);
+
+// Slice 29: payments recorded against issued invoices. The invoice's
+// balance is DERIVED (invoices.total_cents - SUM(payments.amount_cents)),
+// never stored on the invoice row — see src/db/payments.ts / the paidCents
+// / balanceCents fields computed in src/db/invoices.ts.
+export const payments = pgTable(
+  "payments",
+  {
+    id: serial("id").primaryKey(),
+    // Plain no-action FK: payments must block nothing (invoices are
+    // void-not-delete anyway) and must never cascade away — financial rows.
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    invoiceId: integer("invoice_id")
+      .notNull()
+      .references(() => invoices.id),
+    amountCents: integer("amount_cents").notNull(), // > 0 enforced at the Zod boundary
+    method: text("method").notNull(), // cash | check | card | wire | other (Zod-enforced)
+    receivedDate: text("received_date").notNull(), // "YYYY-MM-DD" calendar date (house dates-as-text)
+    note: text("note"),
+    // Timestamps use mode:"date" so drizzle returns real Date objects.
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    // No updatedAt — payments are immutable (delete + re-record; both audited).
+  },
+  (t) => ({
+    orgInvoiceIdx: index("payments_org_invoice_idx").on(t.orgId, t.invoiceId),
   }),
 );

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { type Db } from "@/db/client";
 import { isDemoMode } from "@/lib/demo/mode";
 import type { CustomerAddress } from "@/db/customers";
+import { getPaymentsByInvoiceId, type PaymentRow } from "@/db/payments";
 
 function rowsOf<T>(res: unknown): T[] {
   return (res as { rows: T[] }).rows;
@@ -23,7 +24,9 @@ export type BillTo = {
 };
 
 /** The `/invoices` list row shape — `billToName` comes from the bill_to
- *  snapshot, never a customers join (display never joins customers). */
+ *  snapshot, never a customers join (display never joins customers).
+ *  `paidCents` (slice 29) comes from a LEFT JOIN grouped SUM over payments —
+ *  balance is derivable by the caller as `totalCents - paidCents`. */
 export type InvoiceListRow = {
   id: number;
   invoiceNumber: string;
@@ -36,6 +39,7 @@ export type InvoiceListRow = {
   createdAt: Date;
   sentAt: Date | null;
   sentTo: string | null;
+  paidCents: number;
 };
 
 export type InvoiceItemRow = {
@@ -48,7 +52,10 @@ export type InvoiceItemRow = {
 };
 
 /** Full invoice + its ordered line items — the edit page / InvoiceForm's
- *  "edit" mode shape. */
+ *  "edit" mode shape. `payments` (slice 29) is ordered receivedDate DESC,
+ *  id DESC; `paidCents` is summed in JS from those rows (no second
+ *  aggregate query) and `balanceCents = totalCents - paidCents` — both
+ *  derived, never stored. */
 export type InvoiceDetail = {
   id: number;
   customerId: number;
@@ -68,6 +75,9 @@ export type InvoiceDetail = {
   sentAt: Date | null;
   sentTo: string | null;
   items: InvoiceItemRow[];
+  payments: PaymentRow[];
+  paidCents: number;
+  balanceCents: number;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -91,13 +101,28 @@ export async function getInvoices(
   const limit = Math.min(opts.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
   const status = opts.status ?? null;
 
+  // paidCents via a LEFT JOIN onto a grouped subquery (spec §6) — one query,
+  // no N+1. The subquery is org-scoped INSIDE itself (not just relying on
+  // the outer `i.org_id` filter): payments carry their own org_id column,
+  // and a payment row whose org_id disagrees with its invoice's real owner
+  // must never inflate this viewer's sum — see the cross-org test in
+  // test/db/invoices.test.ts. SUM(amount_cents) is a bigint aggregate;
+  // pglite/pg return it as a string over the raw execute() path, hence the
+  // Number() below (same convention as src/db/activityEvents.ts).
   const res = await db.execute(sql`
-    SELECT id, invoice_number, status, bill_to, total_cents, currency,
-           issue_date, due_date, created_at, sent_at, sent_to
-    FROM invoices
-    WHERE org_id = ${viewerOrgId}
-      AND (${status}::text IS NULL OR status = ${status}::text)
-    ORDER BY created_at DESC, id DESC
+    SELECT i.id, i.invoice_number, i.status, i.bill_to, i.total_cents, i.currency,
+           i.issue_date, i.due_date, i.created_at, i.sent_at, i.sent_to,
+           COALESCE(p.paid_cents, 0) AS paid_cents
+    FROM invoices i
+    LEFT JOIN (
+      SELECT invoice_id, SUM(amount_cents) AS paid_cents
+      FROM payments
+      WHERE org_id = ${viewerOrgId}
+      GROUP BY invoice_id
+    ) p ON p.invoice_id = i.id
+    WHERE i.org_id = ${viewerOrgId}
+      AND (${status}::text IS NULL OR i.status = ${status}::text)
+    ORDER BY i.created_at DESC, i.id DESC
     LIMIT ${limit}
   `);
 
@@ -113,6 +138,7 @@ export async function getInvoices(
     created_at: Date | string;
     sent_at: Date | string | null;
     sent_to: string | null;
+    paid_cents: string | number;
   }>(res);
 
   return rows.map((r) => ({
@@ -127,6 +153,7 @@ export async function getInvoices(
     createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
     sentAt: r.sent_at == null ? null : r.sent_at instanceof Date ? r.sent_at : new Date(r.sent_at),
     sentTo: r.sent_to,
+    paidCents: Number(r.paid_cents),
   }));
 }
 
@@ -198,6 +225,13 @@ export async function getInvoiceById(
     lineTotalCents: Number(it.line_total_cents),
   }));
 
+  // One extra org-scoped query for the payment rows (already ordered
+  // receivedDate DESC, id DESC by getPaymentsByInvoiceId). paidCents is
+  // summed in JS from those rows — no second aggregate query (spec §6).
+  const payments = await getPaymentsByInvoiceId(db, viewerOrgId, Number(r.id));
+  const paidCents = payments.reduce((sum, p) => sum + p.amountCents, 0);
+  const totalCents = Number(r.total_cents);
+
   return {
     id: Number(r.id),
     customerId: Number(r.customer_id),
@@ -210,12 +244,15 @@ export async function getInvoiceById(
     subtotalCents: Number(r.subtotal_cents),
     taxRateBps: Number(r.tax_rate_bps),
     taxCents: Number(r.tax_cents),
-    totalCents: Number(r.total_cents),
+    totalCents,
     notes: r.notes,
     createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
     updatedAt: r.updated_at instanceof Date ? r.updated_at : new Date(r.updated_at),
     sentAt: r.sent_at == null ? null : r.sent_at instanceof Date ? r.sent_at : new Date(r.sent_at),
     sentTo: r.sent_to,
     items,
+    payments,
+    paidCents,
+    balanceCents: totalCents - paidCents,
   };
 }
