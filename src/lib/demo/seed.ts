@@ -1099,6 +1099,8 @@ export type DemoInvoice = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  sentAt: Date | null;
+  sentTo: string | null;
 };
 
 export type DemoInvoiceItem = InvoiceItemRow & { invoiceId: number };
@@ -1156,6 +1158,11 @@ export const DEMO_INVOICES: DemoInvoice[] = [
     notes: "Ships via insured courier from Tokyo; signature required on delivery.",
     createdAt: HOURS_AGO(9 * 24 + 4),
     updatedAt: HOURS_AGO(9 * 24),
+    // Slice 28: the seeded "sent" example — emailed to the customer's own
+    // address (bill_to snapshot) ~2 days ago. Sending doesn't change status;
+    // this invoice is still "issued".
+    sentAt: HOURS_AGO(2 * 24),
+    sentTo: TANAKA_BILL_TO.email ?? null,
   },
   // Issued ~20 days ago, then voided ~5 days ago — INV-2026-0002.
   {
@@ -1177,6 +1184,8 @@ export const DEMO_INVOICES: DemoInvoice[] = [
     notes: "Canceled — customer requested a different stone size. Rebooked as a new order.",
     createdAt: HOURS_AGO(20 * 24 + 5),
     updatedAt: HOURS_AGO(5 * 24),
+    sentAt: null,
+    sentTo: null,
   },
   // Still being drafted (created ~1 day ago, last touched 3h ago) — INV-2026-0003.
   {
@@ -1198,6 +1207,8 @@ export const DEMO_INVOICES: DemoInvoice[] = [
     notes: null,
     createdAt: HOURS_AGO(1 * 24 + 3),
     updatedAt: HOURS_AGO(3),
+    sentAt: null,
+    sentTo: null,
   },
 ];
 
@@ -1300,6 +1311,8 @@ export function getSeedInvoicesForOrg(
     issueDate: inv.issueDate,
     dueDate: inv.dueDate,
     createdAt: inv.createdAt,
+    sentAt: inv.sentAt,
+    sentTo: inv.sentTo,
   }));
 }
 
@@ -1329,6 +1342,8 @@ export function getSeedInvoiceById(orgId: number, id: number): InvoiceDetail | n
     notes: inv.notes,
     createdAt: inv.createdAt,
     updatedAt: inv.updatedAt,
+    sentAt: inv.sentAt,
+    sentTo: inv.sentTo,
     items,
   };
 }

@@ -57,6 +57,27 @@ describe("invoices migration (slice 27)", () => {
     });
   });
 
+  it("sent_at column exists, nullable timestamptz (slice 28)", async () => {
+    const cols = await db.execute(sql`
+      SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+       WHERE table_name = 'invoices' AND column_name = 'sent_at'
+    `);
+    expect(cols.rows[0]).toMatchObject({
+      data_type: "timestamp with time zone",
+      is_nullable: "YES",
+    });
+  });
+
+  it("sent_to column exists, nullable text (slice 28)", async () => {
+    const cols = await db.execute(sql`
+      SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+       WHERE table_name = 'invoices' AND column_name = 'sent_to'
+    `);
+    expect(cols.rows[0]).toMatchObject({ data_type: "text", is_nullable: "YES" });
+  });
+
   it("creates the invoice_items table with the expected columns and nullability", async () => {
     const cols = await db.execute(sql`
       SELECT column_name, data_type, is_nullable

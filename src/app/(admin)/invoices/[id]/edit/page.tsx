@@ -6,6 +6,7 @@ import { getInvoiceById, type InvoiceDetail, type InvoiceStatus } from "@/db/inv
 import { getCustomers, type CustomerAddress } from "@/db/customers";
 import { InvoiceForm } from "@/components/invoices/InvoiceForm";
 import { InvoiceStatusActions } from "@/components/invoices/InvoiceStatusActions";
+import { SendInvoicePanel } from "@/components/invoices/SendInvoicePanel";
 import { formatCentsExact } from "@/lib/company/format";
 
 export const dynamic = "force-dynamic";
@@ -54,9 +55,20 @@ export default async function EditInvoicePage({
         <h1 className="font-display text-xl tracking-widest text-gold">
           {invoice.invoiceNumber}
         </h1>
-        <Link href="/invoices" className="text-sm text-text/50 hover:text-text">
-          Back to invoices
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Download allowed at any status — proofreading a draft is
+              legitimate, spec §8. Plain link, no client component needed:
+              the route itself streams the PDF bytes. */}
+          <a
+            href={`/invoices/${invoice.id}/pdf`}
+            className="text-sm text-text/50 hover:text-text"
+          >
+            Download PDF
+          </a>
+          <Link href="/invoices" className="text-sm text-text/50 hover:text-text">
+            Back to invoices
+          </Link>
+        </div>
       </header>
 
       {isDraft ? (
@@ -68,6 +80,19 @@ export default async function EditInvoicePage({
       <div className="mt-4">
         <InvoiceStatusActions id={invoice.id} status={invoice.status} />
       </div>
+
+      {/* Sending is the issued-only act (spec §6/§8) — draft/void don't
+          get a send panel, only the download link above. */}
+      {invoice.status === "issued" ? (
+        <div className="mt-4">
+          <SendInvoicePanel
+            id={invoice.id}
+            billToEmail={invoice.billTo.email ?? null}
+            sentAt={invoice.sentAt}
+            sentTo={invoice.sentTo}
+          />
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -34,6 +34,8 @@ export type InvoiceListRow = {
   issueDate: string | null;
   dueDate: string | null;
   createdAt: Date;
+  sentAt: Date | null;
+  sentTo: string | null;
 };
 
 export type InvoiceItemRow = {
@@ -63,6 +65,8 @@ export type InvoiceDetail = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  sentAt: Date | null;
+  sentTo: string | null;
   items: InvoiceItemRow[];
 };
 
@@ -89,7 +93,7 @@ export async function getInvoices(
 
   const res = await db.execute(sql`
     SELECT id, invoice_number, status, bill_to, total_cents, currency,
-           issue_date, due_date, created_at
+           issue_date, due_date, created_at, sent_at, sent_to
     FROM invoices
     WHERE org_id = ${viewerOrgId}
       AND (${status}::text IS NULL OR status = ${status}::text)
@@ -107,6 +111,8 @@ export async function getInvoices(
     issue_date: string | null;
     due_date: string | null;
     created_at: Date | string;
+    sent_at: Date | string | null;
+    sent_to: string | null;
   }>(res);
 
   return rows.map((r) => ({
@@ -119,6 +125,8 @@ export async function getInvoices(
     issueDate: r.issue_date,
     dueDate: r.due_date,
     createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
+    sentAt: r.sent_at == null ? null : r.sent_at instanceof Date ? r.sent_at : new Date(r.sent_at),
+    sentTo: r.sent_to,
   }));
 }
 
@@ -141,7 +149,7 @@ export async function getInvoiceById(
   const res = await db.execute(sql`
     SELECT id, customer_id, invoice_number, status, bill_to, issue_date, due_date,
            currency, subtotal_cents, tax_rate_bps, tax_cents, total_cents, notes,
-           created_at, updated_at
+           created_at, updated_at, sent_at, sent_to
     FROM invoices
     WHERE id = ${id} AND org_id = ${viewerOrgId}
     LIMIT 1
@@ -163,6 +171,8 @@ export async function getInvoiceById(
     notes: string | null;
     created_at: Date | string;
     updated_at: Date | string;
+    sent_at: Date | string | null;
+    sent_to: string | null;
   }>(res);
   if (!r) return null;
 
@@ -204,6 +214,8 @@ export async function getInvoiceById(
     notes: r.notes,
     createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
     updatedAt: r.updated_at instanceof Date ? r.updated_at : new Date(r.updated_at),
+    sentAt: r.sent_at == null ? null : r.sent_at instanceof Date ? r.sent_at : new Date(r.sent_at),
+    sentTo: r.sent_to,
     items,
   };
 }

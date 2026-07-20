@@ -22,6 +22,7 @@ function verbDotClass(verb: ActivityVerb): string {
     case "invited":
     case "joined":
     case "left":
+    case "sent":
       return "bg-sky-400";
     default:
       return "bg-zinc-500";

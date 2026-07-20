@@ -26,6 +26,7 @@ export const ACTIVITY_VERBS = [
   "restored",
   "issued",
   "voided",
+  "sent",
   // membership / social
   "invited",
   "joined",

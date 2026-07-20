@@ -5,11 +5,18 @@ import { isBuildPhase } from "@/lib/market/buildPhase";
 import { EMAIL_FEATURES } from "./types";
 import type { EmailErrorCode, SendEmailInput, SendEmailResult } from "./types";
 
+const emailAttachmentSchema = z.object({
+  filename: z.string().trim().min(1).max(100),
+  content: z.string().min(1).max(10_000_000), // base64, ~7MB of raw bytes
+  contentType: z.string().min(1).max(100),
+});
+
 const sendEmailInputSchema = z.object({
   to: z.email().max(200),
   subject: z.string().min(1).max(200),
   text: z.string().min(1).max(10_000),
   feature: z.enum(EMAIL_FEATURES),
+  attachments: z.array(emailAttachmentSchema).max(3).optional(),
 });
 
 function mapStatus(status: number): EmailErrorCode {
@@ -51,6 +58,14 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         to: parsed.data.to,
         subject: parsed.data.subject,
         text: parsed.data.text,
+        ...(parsed.data.attachments
+          ? {
+              attachments: parsed.data.attachments.map((a) => ({
+                filename: a.filename,
+                content: a.content,
+              })),
+            }
+          : {}),
       }),
       cache: "no-store",
     });

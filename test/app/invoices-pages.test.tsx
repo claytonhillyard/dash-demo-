@@ -114,4 +114,40 @@ describe("/invoices/[id]/edit RSC", () => {
     expect(html).toContain("Priya Mehta");
     expect(html).not.toContain("<button");
   });
+
+  // Slice 28-4: Download PDF is a plain header link, present at every
+  // status (draft included — proofreading a draft is legitimate, spec §8).
+  it("the Download PDF link is present on both a draft and an issued edit page", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const draftHtml = renderToString(await renderEdit("9301"));
+    const issuedHtml = renderToString(await renderEdit("9302"));
+    expect(draftHtml).toContain('href="/invoices/9301/pdf"');
+    expect(draftHtml).toContain("Download PDF");
+    expect(issuedHtml).toContain('href="/invoices/9302/pdf"');
+    expect(issuedHtml).toContain("Download PDF");
+  });
+
+  // SendInvoicePanel is issued-only (spec §6) — draft 9301 must not render it.
+  it("the send panel renders for the issued invoice but not the draft", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const draftHtml = renderToString(await renderEdit("9301"));
+    const issuedHtml = renderToString(await renderEdit("9302"));
+    expect(issuedHtml).toContain("Send invoice");
+    expect(draftHtml).not.toContain("Send invoice");
+  });
+
+  // Seed 9302 is the slice-28 "sent" example (src/lib/demo/seed.ts,
+  // sentAt HOURS_AGO(2*24)/sentTo TANAKA_BILL_TO.email) — assert on the
+  // "Last sent" line + recipient email, not a date string: seed dates are
+  // wall-clock-relative (HOURS_AGO(...) off `new Date()`), so a hardcoded
+  // date would be flaky. Note: the bill-to email already appears elsewhere
+  // on this page (the read-only bill-to block), so "Last sent" is the part
+  // that actually pins this down to the sent-state line, not a false
+  // positive off the unrelated bill-to render.
+  it("seed 9302's sent-state (recipient email) is visible on its edit page", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderEdit("9302"));
+    expect(html).toContain("Last sent");
+    expect(html).toContain("y.tanaka@ginzapearl.jp");
+  });
 });

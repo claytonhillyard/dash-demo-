@@ -47,6 +47,8 @@ function existingInvoice(over: Partial<InvoiceDetail> = {}): InvoiceDetail {
     notes: "Deliver to the Mumbai showroom.",
     createdAt: new Date("2026-07-01T00:00:00Z"),
     updatedAt: new Date("2026-07-10T00:00:00Z"),
+    sentAt: null,
+    sentTo: null,
     items: [
       {
         id: 9401,

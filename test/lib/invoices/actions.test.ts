@@ -13,6 +13,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth/requireSession", () => ({
   requireSession: vi.fn(async () => ({ user: "boss", orgId: 1 })),
 }));
+vi.mock("@/lib/email/sendEmail", () => ({ sendEmail: vi.fn() }));
 
 import type { Db } from "@/db/client";
 import {
@@ -26,10 +27,13 @@ import {
   updateInvoice,
   issueInvoice,
   voidInvoice,
+  sendInvoice,
   __setTestDb,
 } from "@/lib/invoices/actions";
 import { requireSession } from "@/lib/auth/requireSession";
+import { sendEmail } from "@/lib/email/sendEmail";
 import { revalidatePath } from "next/cache";
+import { formatCentsExact } from "@/lib/company/format";
 import { and, eq } from "drizzle-orm";
 
 let db: Db;
@@ -636,5 +640,218 @@ describe("voidInvoice", () => {
     const calls = vi.mocked(revalidatePath).mock.calls.map((c) => c[0]);
     expect(calls).toContain("/invoices");
     expect(calls).toContain(`/invoices/${created.id}/edit`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendInvoice
+// ---------------------------------------------------------------------------
+
+describe("sendInvoice", () => {
+  async function createIssuedInvoice(
+    customerOverrides: Parameters<typeof insertCustomer>[0] = {},
+  ) {
+    const customer = await insertCustomer(customerOverrides);
+    const created = await createInvoice({ customerId: customer.id, items: baseItems() });
+    if (!created.ok) throw new Error("fixture: createInvoice failed");
+    await issueInvoice({ id: created.id });
+    return { customer, invoiceId: created.id };
+  }
+
+  it("sends to the bill_to email by default and stamps sent_at/sent_to on a real send", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+
+    const res = await sendInvoice({ id: invoiceId });
+    expect(res).toEqual({ ok: true });
+
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    expect(row.sentAt).toBeInstanceOf(Date);
+    expect(row.sentTo).toBe("priya@example.com");
+
+    const callArg = vi.mocked(sendEmail).mock.calls[0]![0];
+    expect(callArg.to).toBe("priya@example.com");
+  });
+
+  it("an explicit toEmail overrides bill_to.email as both the recipient and the stamped sent_to", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+
+    const res = await sendInvoice({ id: invoiceId, toEmail: "override@example.com" });
+    expect(res).toEqual({ ok: true });
+
+    const callArg = vi.mocked(sendEmail).mock.calls[0]![0];
+    expect(callArg.to).toBe("override@example.com");
+
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    expect(row.sentTo).toBe("override@example.com");
+  });
+
+  it("returns a friendly no-email message when neither toEmail nor bill_to.email exist, and never calls sendEmail", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: null });
+
+    const res = await sendInvoice({ id: invoiceId });
+    expect(res).toEqual({
+      ok: false,
+      error: "No email on file for this customer — enter one to send",
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
+
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    expect(row.sentAt).toBeNull();
+  });
+
+  it("returns the distinct 'issued only' message for a draft invoice, without calling sendEmail", async () => {
+    const customer = await insertCustomer();
+    const created = await createInvoice({ customerId: customer.id, items: baseItems() });
+    if (!created.ok) return;
+
+    const res = await sendInvoice({ id: created.id });
+    expect(res).toEqual({ ok: false, error: "Only issued invoices can be sent" });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns the distinct 'issued only' message for a void invoice", async () => {
+    const customer = await insertCustomer();
+    const created = await createInvoice({ customerId: customer.id, items: baseItems() });
+    if (!created.ok) return;
+    await voidInvoice({ id: created.id });
+
+    const res = await sendInvoice({ id: created.id });
+    expect(res).toEqual({ ok: false, error: "Only issued invoices can be sent" });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not stamp sent_at/sent_to on a simulated send, but returns simulated:true and still records the audit event", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: true, durationMs: 5 });
+
+    const res = await sendInvoice({ id: invoiceId });
+    expect(res).toEqual({ ok: true, simulated: true });
+
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    expect(row.sentAt).toBeNull();
+    expect(row.sentTo).toBeNull();
+
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "invoice"), eq(activityEvents.verb, "sent")));
+    expect(actRow).toBeDefined();
+    expect(actRow.payload).toEqual({ simulated: true });
+    expect(JSON.stringify(actRow)).not.toMatch(/@/);
+  });
+
+  it("maps every sendEmail seam failure code to a short friendly error and never stamps", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    const cases: Array<["rate_limited" | "unavailable" | "error", string]> = [
+      ["rate_limited", "Email service is rate-limited — try again shortly"],
+      ["unavailable", "Email service is temporarily unavailable — try again shortly"],
+      ["error", "Couldn't send the email — try again"],
+    ];
+    for (const [code, message] of cases) {
+      vi.mocked(sendEmail).mockResolvedValueOnce({ ok: false, error: code, durationMs: 5 });
+      const res = await sendInvoice({ id: invoiceId });
+      expect(res).toEqual({ ok: false, error: message });
+    }
+
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    expect(row.sentAt).toBeNull();
+  });
+
+  it("re-sending updates sent_at and sent_to to the latest send", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+    await sendInvoice({ id: invoiceId });
+    const [first] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    expect(first.sentTo).toBe("priya@example.com");
+
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+    await sendInvoice({ id: invoiceId, toEmail: "second@example.com" });
+    const [second] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    expect(second.sentTo).toBe("second@example.com");
+    expect(second.sentAt!.getTime()).toBeGreaterThanOrEqual(first.sentAt!.getTime());
+  });
+
+  it("forbids sending a cross-org invoice id", async () => {
+    const foreignCustomer = await insertCustomer({ orgId: 999 });
+    const foreignInvoice = await insertRawInvoice({
+      orgId: 999,
+      customerId: foreignCustomer.id,
+      invoiceNumber: "INV-999-0004",
+    });
+    const res = await sendInvoice({ id: foreignInvoice.id });
+    expect(res).toEqual({ ok: false, error: "Forbidden" });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("records a 'sent' audit event on a real send, with the recipient email nowhere in the payload/summary", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+    await sendInvoice({ id: invoiceId });
+
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "invoice"), eq(activityEvents.verb, "sent")));
+    expect(actRow).toBeDefined();
+    expect(actRow.actor).toBe("boss");
+    expect(actRow.entityId).toBe(invoiceId);
+    expect(actRow.summary).toBe(`Sent invoice ${row.invoiceNumber} to Priya Mehta`);
+    expect(actRow.payload).toEqual({ simulated: false });
+    expect(JSON.stringify(actRow)).not.toMatch(/@/);
+  });
+
+  it("truncates the audit summary for a very long customer name instead of dropping the event", async () => {
+    // Review finding M4: an over-cap summary fails recordActivity's Zod and
+    // recordActivitySafely swallows it — the send would leave no audit row.
+    // 260 chars — "Sent invoice <number> to " (~30) + 260 comfortably tops the
+    // 240 cap. Raw-inserted, so the customers Zod name cap doesn't apply here.
+    const longName = "Alexandrina-Wilhelmina von Hohenzollern-Sigmaringen ".repeat(5).slice(0, 260);
+    const { invoiceId } = await createIssuedInvoice({
+      name: longName,
+      email: "priya@example.com",
+    });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+    await sendInvoice({ id: invoiceId });
+
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "invoice"), eq(activityEvents.verb, "sent")));
+    expect(actRow).toBeDefined();
+    expect(actRow.summary.length).toBeLessThanOrEqual(240);
+    expect(actRow.summary.endsWith("…")).toBe(true);
+    expect(actRow.summary).toContain("Sent invoice ");
+  });
+
+  it("revalidates /invoices and the edit page on a successful send", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+    await sendInvoice({ id: invoiceId });
+    const calls = vi.mocked(revalidatePath).mock.calls.map((c) => c[0]);
+    expect(calls).toContain("/invoices");
+    expect(calls).toContain(`/invoices/${invoiceId}/edit`);
+  });
+
+  it("sends the rendered PDF as a base64 attachment named <number>.pdf, with the right subject/feature/contentType", async () => {
+    const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+    await sendInvoice({ id: invoiceId });
+
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    const callArg = vi.mocked(sendEmail).mock.calls[0]![0];
+    expect(callArg.subject).toBe(`Invoice ${row.invoiceNumber} from AIYA Designs`);
+    expect(callArg.feature).toBe("invoice");
+    expect(callArg.text).toContain(row.invoiceNumber);
+    expect(callArg.text).toContain(formatCentsExact(row.totalCents));
+    expect(callArg.text).toContain("The invoice PDF is attached.");
+    expect(callArg.attachments).toHaveLength(1);
+    const attachment = callArg.attachments![0]!;
+    expect(attachment.filename).toBe(`${row.invoiceNumber}.pdf`);
+    expect(attachment.contentType).toBe("application/pdf");
+    const pdfBytes = Buffer.from(attachment.content, "base64");
+    expect(pdfBytes.subarray(0, 5).toString("utf-8")).toBe("%PDF-");
   });
 });
