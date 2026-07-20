@@ -19,7 +19,8 @@ vi.mock("@/lib/auth/requireSession", () => ({
 }));
 
 import { requireSession } from "@/lib/auth/requireSession";
-import { GET, sanitizePdfFilename } from "@/app/(admin)/invoices/[id]/pdf/route";
+import { GET } from "@/app/(admin)/invoices/[id]/pdf/route";
+import { sanitizePdfFilename } from "@/lib/invoices/pdfFilename";
 
 function callRoute(id: string) {
   return GET(new Request(`http://localhost/invoices/${id}/pdf`), {
@@ -69,6 +70,12 @@ describe("GET /invoices/[id]/pdf — demo mode", () => {
     const res = await callRoute("abc");
     expect(res.status).toBe(404);
   });
+
+  it("404s for an id beyond the int4 ceiling instead of overflowing in the db layer", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const res = await callRoute("99999999999");
+    expect(res.status).toBe(404);
+  });
 });
 
 describe("GET /invoices/[id]/pdf — auth", () => {
@@ -86,5 +93,16 @@ describe("sanitizePdfFilename", () => {
 
   it("leaves an ordinary invoice number untouched", () => {
     expect(sanitizePdfFilename("INV-2026-0001")).toBe("INV-2026-0001");
+  });
+
+  it("drops non-ASCII (which would make the ByteString header throw) but keeps the ASCII part", () => {
+    // Review finding M1: undici rejects any header char > 0xFF outright.
+    expect(sanitizePdfFilename("請求INV-1")).toBe("INV-1");
+    expect(sanitizePdfFilename("Facture-Nº-7")).toBe("Facture-N-7");
+  });
+
+  it("falls back to 'invoice' when the number strips to nothing", () => {
+    expect(sanitizePdfFilename("請求書")).toBe("invoice");
+    expect(sanitizePdfFilename('" \r\n "')).toBe("invoice");
   });
 });

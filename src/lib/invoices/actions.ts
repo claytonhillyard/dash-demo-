@@ -20,6 +20,7 @@ import { suggestInvoiceNumber } from "./numbering";
 import { buildInvoicePdfModel } from "./pdfModel";
 import { renderInvoicePdf } from "./pdfRender";
 import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
+import { ACTIVITY_SUMMARY_MAX_LEN } from "@/lib/activity/types";
 import { safeErrShape, mapDbConstraintError } from "@/lib/actionErrors";
 import { sendEmail } from "@/lib/email/sendEmail";
 import type { EmailErrorCode } from "@/lib/email/types";
@@ -609,7 +610,10 @@ export async function sendInvoice(
 
       const emailRes = await sendEmail({
         to: recipient,
-        subject: `Invoice ${invoice.invoiceNumber} from ${orgName}`,
+        // Capped at sendEmail's 200-char subject limit — orgs.name is
+        // unbounded, and an over-long subject would fail the seam's Zod with
+        // a misleading "Couldn't send" instead of just truncating.
+        subject: `Invoice ${invoice.invoiceNumber} from ${orgName}`.slice(0, 200),
         text: buildSendSummary(invoice),
         attachments: [
           { filename: `${invoice.invoiceNumber}.pdf`, content, contentType: "application/pdf" },
@@ -622,12 +626,27 @@ export async function sendInvoice(
       simulated = emailRes.simulated;
 
       if (!emailRes.simulated) {
+        // Status guard mirrors issueInvoice/voidInvoice's atomic WHEREs: if a
+        // concurrent void landed during the (multi-second) render + send, the
+        // stamp is silently skipped — the email did go out while issued, but a
+        // void invoice must not gain a fresh sent record. Row count is
+        // deliberately not checked; the send itself still succeeded.
         await d
           .update(invoices)
           .set({ sentAt: new Date(), sentTo: recipient, updatedAt: new Date() })
-          .where(and(eq(invoices.id, invoice.id), eq(invoices.orgId, orgId)));
+          .where(
+            and(
+              eq(invoices.id, invoice.id),
+              eq(invoices.orgId, orgId),
+              eq(invoices.status, "issued"),
+            ),
+          );
       }
 
+      // Truncated to the activity cap — billTo.name alone can be 200 chars,
+      // and an over-long summary fails recordActivity's Zod, silently
+      // dropping the audit row (recordActivitySafely swallows the throw).
+      const fullSummary = `Sent invoice ${invoice.invoiceNumber} to ${invoice.billTo.name}`;
       await recordActivitySafely(
         d,
         {
@@ -636,7 +655,10 @@ export async function sendInvoice(
           entityType: "invoice",
           entityId: invoice.id,
           verb: "sent",
-          summary: `Sent invoice ${invoice.invoiceNumber} to ${invoice.billTo.name}`,
+          summary:
+            fullSummary.length > ACTIVITY_SUMMARY_MAX_LEN
+              ? `${fullSummary.slice(0, ACTIVITY_SUMMARY_MAX_LEN - 1)}…`
+              : fullSummary,
           payload: { simulated },
         },
         { action: "invoices.send" },

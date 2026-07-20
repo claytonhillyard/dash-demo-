@@ -14,6 +14,41 @@ const BANNER_BY_STATUS: Record<InvoiceStatus, "DRAFT" | "VOID" | null> = {
   void: "VOID",
 };
 
+/** Code points in Windows-1252's 0x80–0x9F extension block (€ ‚ ƒ „ … † ‡ ˆ
+ *  ‰ Š ‹ Œ Ž ' ' " " • – — ˜ ™ š › œ ž Ÿ) — drawable by pdf-lib's standard
+ *  fonts alongside plain Latin-1. Listed numerically to keep the source file
+ *  encoding-agnostic. */
+const WINANSI_EXTRAS = new Set([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039,
+  0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122,
+  0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
+]);
+
+/**
+ * Replaces every character pdf-lib's standard (WinAnsi-encoded) Helvetica
+ * cannot draw with "?" — without this, a single CJK character or emoji in a
+ * customer name, item description, or notes makes `drawText` throw, turning
+ * the PDF route into a 500 and sendInvoice into "Server error" (review
+ * finding, slice 28). Applied to every string entering the model, BEFORE
+ * `wrapText`, so the hard-splitter can never cut a surrogate pair in half.
+ * Whitespace controls (tab/newline/CR) become plain spaces: wrapped fields
+ * treat them as word breaks either way, and unwrapped fields stay one line.
+ */
+function toWinAnsiSafe(s: string): string {
+  let out = "";
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!;
+    if (cp === 0x09 || cp === 0x0a || cp === 0x0d) {
+      out += " ";
+    } else if ((cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) || WINANSI_EXTRAS.has(cp)) {
+      out += ch;
+    } else {
+      out += "?";
+    }
+  }
+  return out;
+}
+
 /** Everything `renderInvoicePdf` needs to paint a page, with every
  *  formatting decision (money, dates, wrapping, labels) already made —
  *  the painter does layout only, never business logic (spec §3). */
@@ -123,13 +158,13 @@ export function buildInvoicePdfModel(
   now: Date,
 ): InvoicePdfModel {
   const meta: Array<[string, string]> = [
-    ["Invoice date", invoice.issueDate ?? "—"],
-    ["Due date", invoice.dueDate ?? "—"],
+    ["Issue date", toWinAnsiSafe(invoice.issueDate ?? "—")],
+    ["Due date", toWinAnsiSafe(invoice.dueDate ?? "—")],
     ["Status", invoice.status.toUpperCase()],
   ];
 
   const itemRows = invoice.items.map((item) => ({
-    description: wrapText(item.description, WRAP_WIDTH),
+    description: wrapText(toWinAnsiSafe(item.description), WRAP_WIDTH),
     qty: String(item.quantity),
     unit: formatCentsExact(item.unitPriceCents),
     lineTotal: formatCentsExact(item.lineTotalCents),
@@ -148,13 +183,19 @@ export function buildInvoicePdfModel(
   totals.push(["Total", formatCentsExact(invoice.totalCents), true]);
 
   const notes =
-    invoice.notes && invoice.notes.trim() !== "" ? wrapText(invoice.notes, WRAP_WIDTH) : null;
+    invoice.notes && invoice.notes.trim() !== ""
+      ? wrapText(toWinAnsiSafe(invoice.notes), WRAP_WIDTH)
+      : null;
 
   return {
     banner: BANNER_BY_STATUS[invoice.status],
-    header: { orgName, title: "Invoice", number: invoice.invoiceNumber },
+    header: {
+      orgName: toWinAnsiSafe(orgName),
+      title: "Invoice",
+      number: toWinAnsiSafe(invoice.invoiceNumber),
+    },
     meta,
-    billTo: buildBillToLines(invoice.billTo),
+    billTo: buildBillToLines(invoice.billTo).map(toWinAnsiSafe),
     itemRows,
     totals,
     notes,

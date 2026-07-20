@@ -96,4 +96,36 @@ describe("renderInvoicePdf", () => {
     const loaded = await PDFDocument.load(bytes);
     expect(loaded.getPageCount()).toBe(1);
   });
+
+  it("renders an invoice saturated with CJK/emoji (WinAnsi-unencodable) text without throwing", async () => {
+    // Review finding C1's empirical repro, now expected green: before the
+    // model-level sanitize, any of these fields made pdf-lib's WinAnsi
+    // encoder throw ('WinAnsi cannot encode "銀" (0x9280)').
+    const invoice = makeInvoice({
+      invoiceNumber: "請求-2026-0001",
+      billTo: {
+        name: "銀座パール",
+        businessName: "Ginza 真珠 House",
+        address: { street1: "中央区銀座4丁目", city: "東京", country: "日本" },
+      },
+      notes: "納期は 2 週間です ✨",
+      items: [
+        {
+          id: 1,
+          position: 0,
+          description: "アコヤ真珠ネックレス 💍 " + "とても長い説明 ".repeat(20),
+          quantity: 1,
+          unitPriceCents: 10_000,
+          lineTotalCents: 10_000,
+        },
+      ],
+    });
+    const model = buildInvoicePdfModel(invoice, "銀座パール株式会社", NOW);
+
+    const bytes = await renderInvoicePdf(model);
+
+    expect(pdfMagicBytes(bytes)).toBe("%PDF-");
+    const loaded = await PDFDocument.load(bytes);
+    expect(loaded.getPageCount()).toBeGreaterThanOrEqual(1);
+  });
 });

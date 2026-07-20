@@ -6,27 +6,16 @@ import { getInvoiceById } from "@/db/invoices";
 import { resolveOrgLabel } from "@/lib/auth/orgLabel";
 import { buildInvoicePdfModel } from "@/lib/invoices/pdfModel";
 import { renderInvoicePdf } from "@/lib/invoices/pdfRender";
+import { sanitizePdfFilename } from "@/lib/invoices/pdfFilename";
 
 export const dynamic = "force-dynamic";
 
 // Matches the real seeded orgs row for id=1 ("AIYA Designs" —
 // drizzle/0004_wild_justin_hammer.sql, test/helpers/shared-db.ts, and the
-// app's own branding in src/app/layout.tsx / TopBar.tsx). Demo mode never
-// touches the orgs table for this header — same "serve seed data without a
-// DB round-trip" discipline as getInvoiceById's own demo short-circuit —
-// keeping the whole demo download path DB-independent.
+// app's own branding in src/app/layout.tsx / TopBar.tsx). Spares the orgs
+// read in demo mode, mirroring getInvoiceById's own seed-data short-circuit
+// (ensureDbReady still runs above, as it does on every admin page).
 const DEMO_ORG_NAME = "AIYA Designs";
-
-/**
- * Strips characters that would break or inject into the Content-Disposition
- * header's quoted filename: a `"` would end the quoted string early, and a
- * bare CR/LF could inject a new header line. Exported so the edge case (an
- * invoice number containing a quote or embedded newline) is unit-testable
- * without a full request/response round trip.
- */
-export function sanitizePdfFilename(invoiceNumber: string): string {
-  return invoiceNumber.replace(/["\r\n]/g, "");
-}
 
 /**
  * GET /invoices/[id]/pdf — session-guarded, org-scoped PDF download. Demo
@@ -47,7 +36,9 @@ export async function GET(
 ): Promise<Response> {
   const { id: idStr } = await params;
   const id = Number(idStr);
-  if (!Number.isInteger(id) || id <= 0) {
+  // Upper bound matches the int4 id column — without it a crafted
+  // /invoices/99999999999/pdf overflows in the db layer and 500s.
+  if (!Number.isInteger(id) || id <= 0 || id > 2_147_483_647) {
     return new NextResponse(null, { status: 404 });
   }
 

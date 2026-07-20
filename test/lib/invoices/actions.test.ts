@@ -803,6 +803,29 @@ describe("sendInvoice", () => {
     expect(JSON.stringify(actRow)).not.toMatch(/@/);
   });
 
+  it("truncates the audit summary for a very long customer name instead of dropping the event", async () => {
+    // Review finding M4: an over-cap summary fails recordActivity's Zod and
+    // recordActivitySafely swallows it — the send would leave no audit row.
+    // 260 chars — "Sent invoice <number> to " (~30) + 260 comfortably tops the
+    // 240 cap. Raw-inserted, so the customers Zod name cap doesn't apply here.
+    const longName = "Alexandrina-Wilhelmina von Hohenzollern-Sigmaringen ".repeat(5).slice(0, 260);
+    const { invoiceId } = await createIssuedInvoice({
+      name: longName,
+      email: "priya@example.com",
+    });
+    vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
+    await sendInvoice({ id: invoiceId });
+
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, "invoice"), eq(activityEvents.verb, "sent")));
+    expect(actRow).toBeDefined();
+    expect(actRow.summary.length).toBeLessThanOrEqual(240);
+    expect(actRow.summary.endsWith("…")).toBe(true);
+    expect(actRow.summary).toContain("Sent invoice ");
+  });
+
   it("revalidates /invoices and the edit page on a successful send", async () => {
     const { invoiceId } = await createIssuedInvoice({ email: "priya@example.com" });
     vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, simulated: false, durationMs: 5 });
