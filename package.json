@@ -31,6 +31,7 @@
     "jose": "5.9.6",
     "lightweight-charts": "4.2.1",
     "next": "15.5.18",
+    "pdf-lib": "^1.17.1",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "recharts": "3.8.1",
