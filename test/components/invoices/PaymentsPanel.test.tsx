@@ -34,7 +34,6 @@ type PanelProps = {
   totalCents: number;
   paidCents: number;
   balanceCents: number;
-  currency: string;
 };
 
 function paymentRow(overrides: Partial<PaymentRow> = {}): PaymentRow {
@@ -57,7 +56,6 @@ function panelProps(overrides: Partial<PanelProps> = {}): PanelProps {
     totalCents: 500_000,
     paidCents: 200_000,
     balanceCents: 300_000,
-    currency: "USD",
     ...overrides,
   };
 }

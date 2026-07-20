@@ -39,7 +39,13 @@ function db(): Db {
 
 const recordPaymentInput = z.object({
   invoiceId: z.number().int().positive(),
-  amountCents: z.number().int().positive().max(2_147_483_647),
+  // Friendly messages: the raw Zod defaults ("Too small: expected number to
+  // be >0") leak internal field names into the panel's alert (review F5).
+  amountCents: z
+    .number()
+    .int("Enter a valid payment amount")
+    .positive("Enter a payment amount greater than zero")
+    .max(2_147_483_647, "Payment amount is too large"),
   method: z.enum(PAYMENT_METHODS),
   receivedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
   note: z.string().trim().max(500).optional(),
@@ -145,10 +151,16 @@ async function run<T>(
  * calendar dates sort lexicographically same as chronologically).
  *
  * The overpay guard re-reads `SUM(amount_cents)` INSIDE `db.transaction()`
- * rather than trusting any pre-transaction read — that's what closes the
- * check-then-insert race (pglite is single-writer; Neon is not — spec §5.1
- * step 4). The aggregate is a bigint in Postgres, so pglite/pg return it as
- * a string; `Number()` it, same as the `paid_cents: string | number`
+ * rather than trusting any pre-transaction read. Honest scope of that guard
+ * (review F2): on pglite (the desktop/dev deployment) the client serializes
+ * transactions, so the race is genuinely closed; on server Postgres READ
+ * COMMITTED two concurrent transactions could both read the old sum — a
+ * `SELECT … FOR UPDATE` on the invoice row would be needed there. Today
+ * that's moot: the neon-http driver throws on `transaction()` entirely, so
+ * a server deployment fails closed ("Server error") rather than overpaying.
+ * Tracked as a follow-up alongside the codebase-wide neon-http/transaction
+ * question. The aggregate is a bigint in Postgres, so pglite/pg return it
+ * as a string; `Number()` it, same as the `paid_cents: string | number`
  * pattern in src/db/invoices.ts's `getInvoices`.
  */
 export async function recordPayment(raw: unknown): Promise<ActionResult> {
@@ -229,11 +241,14 @@ export async function recordPayment(raw: unknown): Promise<ActionResult> {
 // ---------------------------------------------------------------------------
 
 /**
- * deletePayment — spec §5.2. Loads the payment org-scoped directly (payments
- * carry their own org_id — no join to invoices needed for the authz check).
- * Deletion is allowed at ANY invoice status, void included: this is the
- * cleanup path for a mistaken entry, and it must keep working after a void
- * (no status gate at all, unlike recordPayment).
+ * deletePayment — spec §5.2. The DELETE itself is the org-scoped authz check
+ * AND the concurrency guard: `DELETE … RETURNING` hands exactly one caller
+ * the row — a concurrent duplicate sees zero rows returned and gets
+ * Forbidden, so the audit trail can never record the same deletion twice
+ * (review F1: the earlier SELECT-then-DELETE shape let two concurrent calls
+ * both "succeed" and double-log). Deletion is allowed at ANY invoice status,
+ * void included: this is the cleanup path for a mistaken entry, and it must
+ * keep working after a void (no status gate at all, unlike recordPayment).
  *
  * The audit summary needs the invoice number, which payments doesn't
  * denormalize onto itself — a second org-scoped lookup, with a `#${id}`
@@ -258,20 +273,14 @@ export async function deletePayment(raw: unknown): Promise<ActionResult> {
     async (input, orgId, actor) => {
       const d = db();
 
+      // Zero-arg returning() (RETURNING *) — the Db union type only surfaces
+      // the parameterless overload.
       const [payment] = await d
-        .select({
-          id: payments.id,
-          invoiceId: payments.invoiceId,
-          amountCents: payments.amountCents,
-          method: payments.method,
-        })
-        .from(payments)
+        .delete(payments)
         .where(and(eq(payments.id, input.id), eq(payments.orgId, orgId)))
-        .limit(1);
+        .returning();
       if (!payment) throw new ForbiddenError();
       invoiceId = payment.invoiceId;
-
-      await d.delete(payments).where(and(eq(payments.id, input.id), eq(payments.orgId, orgId)));
 
       const [invoice] = await d
         .select({ invoiceNumber: invoices.invoiceNumber })

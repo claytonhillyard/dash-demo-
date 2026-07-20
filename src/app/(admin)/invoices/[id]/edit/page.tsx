@@ -107,7 +107,6 @@ export default async function EditInvoicePage({
             totalCents={invoice.totalCents}
             paidCents={invoice.paidCents}
             balanceCents={invoice.balanceCents}
-            currency={invoice.currency}
           />
         </div>
       ) : null}

@@ -235,6 +235,14 @@ describe("recordPayment — overpay guard", () => {
       error: `Payment exceeds the remaining balance (${formatCentsExact(100_000)} left)`,
     });
     expect(await db.select().from(payments)).toHaveLength(0);
+    // The rolled-back insert must leave no audit trace either (review F8) —
+    // audit fires only after the transaction commits.
+    expect(
+      await db
+        .select()
+        .from(activityEvents)
+        .where(eq(activityEvents.verb, "payment_recorded")),
+    ).toHaveLength(0);
   });
 
   it("allows a second payment that sums exactly to the total, then rejects any further payment", async () => {
@@ -340,7 +348,9 @@ describe("recordPayment — amount validation", () => {
       method: "cash",
       receivedDate: "2026-01-05",
     });
-    expect(res.ok).toBe(false);
+    // Friendly copy, not the raw Zod default (review F5). The "amountCents:"
+    // prefix comes from the house firstZodError helper, same as every form.
+    expect(res).toEqual({ ok: false, error: "amountCents: Enter a payment amount greater than zero" });
   });
 
   it("rejects a negative amount at the Zod boundary", async () => {
@@ -461,6 +471,31 @@ describe("deletePayment — happy path", () => {
     const calls = vi.mocked(revalidatePath).mock.calls.map((c) => c[0]);
     expect(calls).toContain("/invoices");
     expect(calls).toContain(`/invoices/${invoice.id}/edit`);
+  });
+});
+
+describe("deletePayment — concurrency", () => {
+  it("two concurrent deletes of the same payment: exactly one succeeds, one audit row", async () => {
+    // Review F1: the earlier SELECT-then-DELETE shape let both calls report
+    // ok and double-log the audit; DELETE … RETURNING gives the row to
+    // exactly one caller.
+    const invoice = await issuedInvoice({ totalCents: 100_000 });
+    const payment = await insertPayment({ invoiceId: invoice.id, amountCents: 40_000 });
+
+    const [a, b] = await Promise.all([
+      deletePayment({ id: payment.id }),
+      deletePayment({ id: payment.id }),
+    ]);
+
+    const results = [a, b];
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok && r.error === "Forbidden")).toHaveLength(1);
+    expect(
+      await db
+        .select()
+        .from(activityEvents)
+        .where(eq(activityEvents.verb, "payment_deleted")),
+    ).toHaveLength(1);
   });
 });
 

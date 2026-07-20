@@ -6,7 +6,6 @@ import { FormStatus } from "@/components/company/FormStatus";
 import { recordPayment, deletePayment } from "@/lib/payments/actions";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/payments/types";
 import { formatCentsExact } from "@/lib/company/format";
-import { toUtcDay } from "@/lib/sentinel/capture";
 import type { InvoiceStatus } from "@/db/invoices";
 import type { PaymentRow } from "@/db/payments";
 
@@ -67,12 +66,14 @@ export function PaymentsPanel({
   totalCents: number;
   paidCents: number;
   balanceCents: number;
-  currency: string;
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0]);
-  const [receivedDate, setReceivedDate] = useState(() => toUtcDay(new Date()));
+  // Inline UTC-today rather than importing @/lib/sentinel/capture's
+  // toUtcDay: that module's import graph pulls drizzle + the whole server
+  // schema into this client bundle (review F3).
+  const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
