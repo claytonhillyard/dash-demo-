@@ -10,7 +10,7 @@ import { NavItem } from "./NavItem";
 const SECTIONS = [
   "Dashboard", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
   "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
-  "Customers", "Activity", "Watchlists", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
+  "Customers", "Activity", "Watchlists", "Invoices", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
   "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
   "Calendar & Tasks", "Documents", "Settings",
 ];
@@ -34,6 +34,10 @@ const ROUTES: Record<string, string> = {
   // Slice 25 — watch an entity, get emailed on activity. Sits right after
   // Activity since a watch is "activity I care about enough to be notified".
   Watchlists: "/watchlists",
+  // Slice 27 — invoices (draft -> issued -> void). Sits right after
+  // Watchlists, closing out the customer-facing record cluster that starts
+  // at Customers.
+  Invoices: "/invoices",
 };
 
 export function Nav() {

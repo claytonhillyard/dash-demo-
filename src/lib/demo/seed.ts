@@ -1059,3 +1059,276 @@ export const DEMO_HEALTH_SNAPSHOTS: DemoHealthSnapshot[] = [
     ...snapshotDay(0),
   },
 ];
+
+// --- Slice 27 demo seed: invoices ---
+// Same pattern as DEMO_WATCHLISTS/DEMO_HEALTH_SNAPSHOTS — TS constants, not
+// inserted at runtime; src/db/invoices.ts short-circuits demo mode and
+// reads these filtered/sorted in-memory.
+//
+// 3 invoices on DEMO_AIYA_ORG_ID, one per lifecycle status, on customers
+// 2201 (Priya Mehta / Mehta Diamonds) and 2204 (Yuki Tanaka / Ginza Pearl
+// House) — both already carry DEMO_ACTIVITY + DEMO_HEALTH_SNAPSHOTS rows, so
+// the demo story stays coherent. Stored totals below are computed BY HAND
+// using the exact `computeTotals` formula (quantity * unitPriceCents per
+// line, then `Math.round(subtotal * taxRateBps / 10000)`) — the seed
+// integrity test in test/lib/demo/seed.test.ts imports the real helper and
+// asserts equality, so any drift between a comment's arithmetic and the
+// stored numbers fails loudly.
+import type {
+  InvoiceStatus,
+  BillTo,
+  InvoiceListRow,
+  InvoiceItemRow,
+  InvoiceDetail,
+} from "@/db/invoices";
+
+export type DemoInvoice = {
+  id: number;
+  orgId: number;
+  customerId: number;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  billTo: BillTo;
+  issueDate: string | null;
+  dueDate: string | null;
+  currency: string;
+  subtotalCents: number;
+  taxRateBps: number;
+  taxCents: number;
+  totalCents: number;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type DemoInvoiceItem = InvoiceItemRow & { invoiceId: number };
+
+/** `daysAgo` days before demo "now" (negative = days in the future), as a
+ *  UTC "YYYY-MM-DD" string — built on HOURS_AGO (the same real-time helper
+ *  DEMO_ACTIVITY/DEMO_HEALTH_SNAPSHOTS use) so invoice dates always read as
+ *  "current" regardless of when the demo is viewed. */
+function invoiceDay(daysAgo: number): string {
+  return HOURS_AGO(daysAgo * 24).toISOString().slice(0, 10);
+}
+
+const MEHTA_BILL_TO: BillTo = {
+  name: "Priya Mehta",
+  businessName: "Mehta Diamonds Pvt Ltd",
+  email: "priya@mehtadiamonds.in",
+  address: {
+    street1: "12 Opera House",
+    city: "Mumbai",
+    state: "MH",
+    zip: "400004",
+    country: "IN",
+  },
+};
+
+const TANAKA_BILL_TO: BillTo = {
+  name: "Yuki Tanaka",
+  businessName: "Ginza Pearl House",
+  email: "y.tanaka@ginzapearl.jp",
+  address: {
+    street1: "5-2-1 Ginza",
+    city: "Tokyo",
+    zip: "104-0061",
+    country: "JP",
+  },
+};
+
+export const DEMO_INVOICES: DemoInvoice[] = [
+  // Issued ~9 days ago, first of the three created — INV-2026-0001.
+  {
+    id: 9302,
+    orgId: DEMO_AIYA_ORG_ID,
+    customerId: 2204,
+    invoiceNumber: "INV-2026-0001",
+    status: "issued",
+    billTo: TANAKA_BILL_TO,
+    issueDate: invoiceDay(9),
+    dueDate: invoiceDay(-21), // 30-day terms from issue
+    currency: "USD",
+    // items 9403-9405: 2,650,000 + 320,000 + 15,000 = 2,985,000
+    subtotalCents: 2_985_000,
+    taxRateBps: 0, // export sale
+    taxCents: 0,
+    totalCents: 2_985_000,
+    notes: "Ships via insured courier from Tokyo; signature required on delivery.",
+    createdAt: HOURS_AGO(9 * 24 + 4),
+    updatedAt: HOURS_AGO(9 * 24),
+  },
+  // Issued ~20 days ago, then voided ~5 days ago — INV-2026-0002.
+  {
+    id: 9303,
+    orgId: DEMO_AIYA_ORG_ID,
+    customerId: 2201,
+    invoiceNumber: "INV-2026-0002",
+    status: "void",
+    billTo: MEHTA_BILL_TO,
+    issueDate: invoiceDay(20),
+    dueDate: invoiceDay(-10), // 30-day terms from issue
+    currency: "USD",
+    // items 9406-9408: 2,250,000 + 12,500 + 12,500 = 2,275,000
+    subtotalCents: 2_275_000,
+    taxRateBps: 825,
+    // Math.round(2,275,000 * 825 / 10000) = Math.round(187,687.5) = 187,688
+    taxCents: 187_688,
+    totalCents: 2_462_688,
+    notes: "Canceled — customer requested a different stone size. Rebooked as a new order.",
+    createdAt: HOURS_AGO(20 * 24 + 5),
+    updatedAt: HOURS_AGO(5 * 24),
+  },
+  // Still being drafted (created ~1 day ago, last touched 3h ago) — INV-2026-0003.
+  {
+    id: 9301,
+    orgId: DEMO_AIYA_ORG_ID,
+    customerId: 2201,
+    invoiceNumber: "INV-2026-0003",
+    status: "draft",
+    billTo: MEHTA_BILL_TO,
+    issueDate: null,
+    dueDate: invoiceDay(-14),
+    currency: "USD",
+    // items 9401-9402: 1,240,000 + 8,500 = 1,248,500
+    subtotalCents: 1_248_500,
+    taxRateBps: 800,
+    // 1,248,500 * 800 / 10000 = 99,880 exactly
+    taxCents: 99_880,
+    totalCents: 1_348_380,
+    notes: null,
+    createdAt: HOURS_AGO(1 * 24 + 3),
+    updatedAt: HOURS_AGO(3),
+  },
+];
+
+export const DEMO_INVOICE_ITEMS: DemoInvoiceItem[] = [
+  // Invoice 9301 (draft, Priya Mehta)
+  {
+    id: 9401,
+    invoiceId: 9301,
+    position: 0,
+    description: "18K Gold Solitaire Ring Setting — 1.02ct Round Diamond, G/VS1",
+    quantity: 1,
+    unitPriceCents: 1_240_000,
+    lineTotalCents: 1_240_000,
+  },
+  {
+    id: 9402,
+    invoiceId: 9301,
+    position: 1,
+    description: "Ring sizing & rhodium polish",
+    quantity: 1,
+    unitPriceCents: 8_500,
+    lineTotalCents: 8_500,
+  },
+  // Invoice 9302 (issued, Yuki Tanaka)
+  {
+    id: 9403,
+    invoiceId: 9302,
+    position: 0,
+    description: "Fancy Yellow Round Diamond, 0.85ct, GIA certified",
+    quantity: 1,
+    unitPriceCents: 2_650_000,
+    lineTotalCents: 2_650_000,
+  },
+  {
+    id: 9404,
+    invoiceId: 9302,
+    position: 1,
+    description: "18K Yellow Gold Setting — custom",
+    quantity: 1,
+    unitPriceCents: 320_000,
+    lineTotalCents: 320_000,
+  },
+  {
+    id: 9405,
+    invoiceId: 9302,
+    position: 2,
+    description: "GIA Certification Fee",
+    quantity: 1,
+    unitPriceCents: 15_000,
+    lineTotalCents: 15_000,
+  },
+  // Invoice 9303 (void, Priya Mehta)
+  {
+    id: 9406,
+    invoiceId: 9303,
+    position: 0,
+    description: "Platinum Diamond Tennis Bracelet, 5.5ct total",
+    quantity: 1,
+    unitPriceCents: 2_250_000,
+    lineTotalCents: 2_250_000,
+  },
+  {
+    id: 9407,
+    invoiceId: 9303,
+    position: 1,
+    description: "18K White Gold Huggie Hoops (pair)",
+    quantity: 2,
+    unitPriceCents: 6_250,
+    lineTotalCents: 12_500,
+  },
+  {
+    id: 9408,
+    invoiceId: 9303,
+    position: 2,
+    description: "Insurance appraisal",
+    quantity: 1,
+    unitPriceCents: 12_500,
+    lineTotalCents: 12_500,
+  },
+];
+
+/** Demo-mode helper used by `getInvoices` — filters DEMO_INVOICES by org
+ *  (+ optional status), newest first, mirroring the real query's shape. */
+export function getSeedInvoicesForOrg(
+  orgId: number,
+  opts: { status?: InvoiceStatus; limit?: number } = {},
+): InvoiceListRow[] {
+  const limit = opts.limit ?? 50;
+  const rows = DEMO_INVOICES.filter((inv) => inv.orgId === orgId)
+    .filter((inv) => !opts.status || inv.status === opts.status)
+    .slice()
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return rows.slice(0, limit).map((inv) => ({
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    status: inv.status,
+    billToName: inv.billTo.name,
+    totalCents: inv.totalCents,
+    currency: inv.currency,
+    issueDate: inv.issueDate,
+    dueDate: inv.dueDate,
+    createdAt: inv.createdAt,
+  }));
+}
+
+/** Demo-mode helper used by `getInvoiceById` — null when the row doesn't
+ *  exist OR exists in a different org (same contract as the SQL query).
+ *  Items come from DEMO_INVOICE_ITEMS, ordered by position. */
+export function getSeedInvoiceById(orgId: number, id: number): InvoiceDetail | null {
+  const inv = DEMO_INVOICES.find((i) => i.id === id && i.orgId === orgId);
+  if (!inv) return null;
+  const items = DEMO_INVOICE_ITEMS.filter((it) => it.invoiceId === id)
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map(({ invoiceId: _invoiceId, ...item }) => item);
+  return {
+    id: inv.id,
+    customerId: inv.customerId,
+    invoiceNumber: inv.invoiceNumber,
+    status: inv.status,
+    billTo: inv.billTo,
+    issueDate: inv.issueDate,
+    dueDate: inv.dueDate,
+    currency: inv.currency,
+    subtotalCents: inv.subtotalCents,
+    taxRateBps: inv.taxRateBps,
+    taxCents: inv.taxCents,
+    totalCents: inv.totalCents,
+    notes: inv.notes,
+    createdAt: inv.createdAt,
+    updatedAt: inv.updatedAt,
+    items,
+  };
+}

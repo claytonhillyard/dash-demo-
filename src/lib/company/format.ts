@@ -10,6 +10,23 @@ export function formatCents(cents: number | null | undefined): string {
   return USD.format(Math.round(cents / 100));
 }
 
+const USD_EXACT = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Integer cents to exact USD string with cents ("$1,234.56"), or an em dash
+ *  when there is no value. Financial records (invoices) need the exact
+ *  amount, unlike the whole-dollar `formatCents` KPI panels use — kept as a
+ *  separate function rather than a flag so callers can't accidentally
+ *  round money away. */
+export function formatCentsExact(cents: number | null | undefined): string {
+  if (cents === null || cents === undefined) return "—";
+  return USD_EXACT.format(cents / 100);
+}
+
 /** "updated today" / "updated Nd ago" provenance label, or null when no date. */
 export function updatedAgo(
   updatedAt: Date | null | undefined,

@@ -34,5 +34,10 @@ export const config = {
     // visitors got a raw error page instead of the login redirect every
     // other admin route gives.
     "/customers/:path*", "/activity", "/watchlists",
+    // Slice 27 — invoices. Matcher shipped alongside the pages themselves
+    // this time (see the backfill note above for what happens when it
+    // isn't). `:path*` covers the bare list, /invoices/new, and
+    // /invoices/[id]/edit in one entry.
+    "/invoices/:path*",
   ],
 };

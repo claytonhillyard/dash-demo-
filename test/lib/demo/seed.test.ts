@@ -642,3 +642,96 @@ describe("DEMO_HEALTH_SNAPSHOTS (slice 38)", () => {
     expect(latest.score).toBeLessThan(prior.score);
   });
 });
+
+import { DEMO_INVOICES, DEMO_INVOICE_ITEMS } from "@/lib/demo/seed";
+import { computeTotals } from "@/lib/invoices/totals";
+import type { InvoiceStatus } from "@/db/invoices";
+
+const VALID_INVOICE_STATUSES: InvoiceStatus[] = ["draft", "issued", "void"];
+
+describe("DEMO_INVOICES / DEMO_INVOICE_ITEMS (slice 27)", () => {
+  it("has exactly 3 invoices, all on DEMO_AIYA_ORG_ID", () => {
+    expect(DEMO_INVOICES).toHaveLength(3);
+    for (const inv of DEMO_INVOICES) {
+      expect(inv.orgId).toBe(DEMO_AIYA_ORG_ID);
+    }
+  });
+
+  it("statuses are each one of draft/issued/void, and all three appear", () => {
+    for (const inv of DEMO_INVOICES) {
+      expect(VALID_INVOICE_STATUSES).toContain(inv.status);
+    }
+    const statuses = new Set(DEMO_INVOICES.map((inv) => inv.status));
+    expect(statuses).toEqual(new Set(["draft", "issued", "void"]));
+  });
+
+  it("customers referenced are 2201 and/or 2204 (the seeded customer book)", () => {
+    for (const inv of DEMO_INVOICES) {
+      expect([2201, 2204]).toContain(inv.customerId);
+    }
+  });
+
+  it("every invoice item references one of the 3 seeded invoice ids", () => {
+    const invoiceIds = new Set(DEMO_INVOICES.map((inv) => inv.id));
+    for (const item of DEMO_INVOICE_ITEMS) {
+      expect(invoiceIds.has(item.invoiceId)).toBe(true);
+    }
+  });
+
+  it("every invoice has at least one item", () => {
+    for (const inv of DEMO_INVOICES) {
+      const items = DEMO_INVOICE_ITEMS.filter((it) => it.invoiceId === inv.id);
+      expect(items.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("stored line_total_cents equals quantity * unit_price_cents per item", () => {
+    for (const item of DEMO_INVOICE_ITEMS) {
+      expect(item.lineTotalCents).toBe(item.quantity * item.unitPriceCents);
+    }
+  });
+
+  it("stored totals equal computeTotals(items, taxRateBps) exactly, per invoice (locks seed/math consistency)", () => {
+    for (const inv of DEMO_INVOICES) {
+      const items = DEMO_INVOICE_ITEMS.filter((it) => it.invoiceId === inv.id).sort(
+        (a, b) => a.position - b.position,
+      );
+      const computed = computeTotals(
+        items.map((it) => ({ quantity: it.quantity, unitPriceCents: it.unitPriceCents })),
+        inv.taxRateBps,
+      );
+      expect(inv.subtotalCents).toBe(computed.subtotalCents);
+      expect(inv.taxCents).toBe(computed.taxCents);
+      expect(inv.totalCents).toBe(computed.totalCents);
+    }
+  });
+
+  it("invoice ids are unique, and item ids are unique", () => {
+    const invoiceIds = DEMO_INVOICES.map((inv) => inv.id);
+    expect(new Set(invoiceIds).size).toBe(invoiceIds.length);
+    const itemIds = DEMO_INVOICE_ITEMS.map((it) => it.id);
+    expect(new Set(itemIds).size).toBe(itemIds.length);
+  });
+
+  it("issue_date/due_date are YYYY-MM-DD strings when present", () => {
+    for (const inv of DEMO_INVOICES) {
+      if (inv.issueDate !== null) expect(inv.issueDate).toMatch(YYYY_MM_DD);
+      if (inv.dueDate !== null) expect(inv.dueDate).toMatch(YYYY_MM_DD);
+    }
+  });
+
+  it("draft invoices have a null issue_date (not yet issued); issued/void have one", () => {
+    for (const inv of DEMO_INVOICES) {
+      if (inv.status === "draft") {
+        expect(inv.issueDate).toBeNull();
+      } else {
+        expect(inv.issueDate).not.toBeNull();
+      }
+    }
+  });
+
+  it("invoice_number values are unique (mirrors the DB unique constraint)", () => {
+    const numbers = DEMO_INVOICES.map((inv) => inv.invoiceNumber);
+    expect(new Set(numbers).size).toBe(numbers.length);
+  });
+});
