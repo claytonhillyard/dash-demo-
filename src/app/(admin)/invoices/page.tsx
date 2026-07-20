@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
-import { getInvoices, type InvoiceStatus } from "@/db/invoices";
+import { getInvoices, type InvoiceListRow, type InvoiceStatus } from "@/db/invoices";
 import { formatCentsExact } from "@/lib/company/format";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,36 @@ const FILTERS: Array<{ label: string; status?: InvoiceStatus }> = [
   { label: "Issued", status: "issued" },
   { label: "Void", status: "void" },
 ];
+
+/**
+ * Balance column cell (slice 29-3, spec §8.3) — derived inline from
+ * `totalCents - paidCents`, no client logic (a plain server-rendered
+ * function, not a component with state). draft/void always read "—":
+ * draft owes nothing yet, void's balance is moot once canceled (any
+ * payments recorded before the void still show in PaymentsPanel's history
+ * on the edit page, just not summarized here). issued gets three looks —
+ * a green "Paid" chip at balance 0, an amber-tinted remaining amount once
+ * partially paid, and a plain remaining amount (== totalCents) untouched.
+ */
+function BalanceCell({ inv }: { inv: InvoiceListRow }) {
+  if (inv.status !== "issued") {
+    return <span className="text-text/40">—</span>;
+  }
+  const balance = inv.totalCents - inv.paidCents;
+  if (balance <= 0) {
+    return (
+      <span className="rounded-full bg-ok/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-ok">
+        Paid
+      </span>
+    );
+  }
+  const partial = inv.paidCents > 0;
+  return (
+    <span className={`font-mono ${partial ? "text-amber-300" : "text-text"}`}>
+      {formatCentsExact(balance)}
+    </span>
+  );
+}
 
 /** Same ignore-invalid-values contract as /activity's `pickType`
  *  (src/app/(admin)/activity/page.tsx) — an unrecognized or missing value
@@ -118,6 +148,9 @@ export default async function InvoicesPage({
                 <th role="columnheader" className="text-right">
                   Total
                 </th>
+                <th role="columnheader" className="text-right">
+                  Balance
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-text/10">
@@ -145,6 +178,9 @@ export default async function InvoicesPage({
                   </td>
                   <td role="cell" className="text-right font-mono text-text">
                     {formatCentsExact(inv.totalCents)}
+                  </td>
+                  <td role="cell" className="text-right">
+                    <BalanceCell inv={inv} />
                   </td>
                 </tr>
               ))}

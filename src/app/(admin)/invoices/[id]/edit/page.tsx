@@ -7,6 +7,7 @@ import { getCustomers, type CustomerAddress } from "@/db/customers";
 import { InvoiceForm } from "@/components/invoices/InvoiceForm";
 import { InvoiceStatusActions } from "@/components/invoices/InvoiceStatusActions";
 import { SendInvoicePanel } from "@/components/invoices/SendInvoicePanel";
+import { PaymentsPanel } from "@/components/invoices/PaymentsPanel";
 import { formatCentsExact } from "@/lib/company/format";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +91,23 @@ export default async function EditInvoicePage({
             billToEmail={invoice.billTo.email ?? null}
             sentAt={invoice.sentAt}
             sentTo={invoice.sentTo}
+          />
+        </div>
+      ) : null}
+
+      {/* Payments (slice 29): issued AND void get the panel — void keeps it
+          read-only for history/cleanup (spec §8.1/§8.2); draft never does,
+          nothing is owed yet. */}
+      {invoice.status === "issued" || invoice.status === "void" ? (
+        <div className="mt-4">
+          <PaymentsPanel
+            invoiceId={invoice.id}
+            status={invoice.status}
+            payments={invoice.payments}
+            totalCents={invoice.totalCents}
+            paidCents={invoice.paidCents}
+            balanceCents={invoice.balanceCents}
+            currency={invoice.currency}
           />
         </div>
       ) : null}
