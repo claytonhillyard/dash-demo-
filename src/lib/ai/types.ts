@@ -5,6 +5,7 @@ export const AI_FEATURES = [
   "command-layer", // slice 35
   "health-score", // slice 36
   "drafting", // slice 37
+  "investor-update", // slice 41
   "smoke-test", // diagnostics / tests
 ] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
