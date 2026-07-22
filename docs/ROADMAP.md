@@ -261,7 +261,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 38 | Anomaly Sentinel | core | shipped: `cb68fb6` | this-tab | Band-drop detection + snapshots (migration 0019). Review caught + fixed a real score-feedback loop (actor IS NOT NULL on scoring aggregate). 38b (more anomaly rules) queueable on this substrate. |
 | 39 | Predictive reorder via market triggers | core | proposed | open | Depends on inventory + market |
 | 40 | Replayable Decisions (snapshot + branch) | core | proposed | open | Big lift; possibly split |
-| 41 | Investor update auto-generator | core | proposed | open | Depends on 28 PDF + 32 AI |
+| 41 | Investor update auto-generator | core | claimed 2026-07-22 | **this tab** | Deps 28 PDF + 32 AI + 33 runway all shipped. KPI collector → AI narrative (simulated keyless) → one-page PDF via the slice-28 painter primitives. |
 | 42 | Negotiation Coach AI (in-thread) | core | proposed | open | Depends on 32/35/10/16 |
 | 43 | Team performance coaching | core | proposed | open | Depends on team / employee data |
 | 44 | Multi-modal search (image → match) | core | proposed | open | Depends on 34 Pinecone |
