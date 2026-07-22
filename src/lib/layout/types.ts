@@ -13,6 +13,8 @@ import type {
 } from "@/components/dashboard/DealRoomPanel";
 import type { SharedInventoryRow } from "@/db/inventory";
 import type { ActivityEvent } from "@/lib/activity/types";
+import type { ReceivablesAging, RunwayResult } from "@/lib/runway/compute";
+import type { TopOldestReceivable } from "@/components/dashboard/CashRunwayPanel";
 
 export type PanelSize = 1 | 2 | 4;
 
@@ -108,6 +110,14 @@ export interface ActivityView {
   events: ActivityEvent[];
 }
 
+export interface RunwayView {
+  aging: ReceivablesAging;
+  runway: RunwayResult;
+  /** Up to 5 oldest outstanding receivables, most-overdue first, with
+   *  daysOverdue precomputed server-side (slice 33). */
+  topOldest: TopOldestReceivable[];
+}
+
 /** Server-read context the page passes into each panel's render. */
 export interface PanelCtx {
   inventory?: InventoryView;
@@ -118,6 +128,7 @@ export interface PanelCtx {
   todaysBids?: TodaysBidsView; // slice 16
   tradenetInventory?: TradeNetInventoryView; // slice 15
   activity?: ActivityView; // slice 24c
+  runway?: RunwayView; // slice 33
 }
 
 export interface PanelEntry {

@@ -40,4 +40,12 @@ describe("panel registry + effective layout", () => {
     expect(entry).toBeDefined();
     expect(entry!.title).toBe("Deal Room");
   });
+
+  // Slice 33-3: cash-runway panel registered.
+  it("PANEL_REGISTRY contains cash-runway, and defaultLayout includes it", () => {
+    const entry = PANEL_REGISTRY.find((p) => p.id === "cash-runway");
+    expect(entry).toBeDefined();
+    expect(entry!.title).toBe("Cash & Receivables");
+    expect(defaultLayout().map((i) => i.id)).toContain("cash-runway");
+  });
 });

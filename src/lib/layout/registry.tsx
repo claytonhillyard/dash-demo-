@@ -10,6 +10,7 @@ import { ProviderStatusPanel } from "@/components/dashboard/ProviderStatusPanel"
 import { TodaysBidsPanel } from "@/components/dashboard/TodaysBidsPanel";
 import { TradeNetInventoryPanel } from "@/components/dashboard/TradeNetInventoryPanel";
 import { ActivityPanel } from "@/components/dashboard/ActivityPanel";
+import { CashRunwayPanel } from "@/components/dashboard/CashRunwayPanel";
 import type { LayoutItem, PanelEntry, PanelSize } from "./types";
 
 export const PANEL_REGISTRY: PanelEntry[] = [
@@ -184,6 +185,21 @@ export const PANEL_REGISTRY: PanelEntry[] = [
     title: "Social & Inbox",
     defaultSize: 2,
     render: () => <BusinessPlaceholder title="Social & Inbox" testid="panel-social-inbox" />,
+  },
+  {
+    id: "cash-runway",
+    title: "Cash & Receivables",
+    defaultSize: 2, // half-width, matching website-overview's density
+    render: (ctx) =>
+      ctx.runway ? (
+        <CashRunwayPanel
+          aging={ctx.runway.aging}
+          runway={ctx.runway.runway}
+          topOldest={ctx.runway.topOldest}
+        />
+      ) : (
+        <BusinessPlaceholder title="Cash & Receivables" testid="panel-cash-runway" />
+      ),
   },
 ];
 
