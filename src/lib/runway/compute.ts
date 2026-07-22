@@ -41,8 +41,13 @@ function utcDayMs(ymd: string): number {
  *  Both sides are resolved to UTC-midnight instants via `Date.UTC` before
  *  differencing, so DST and local-timezone offsets never enter the
  *  computation — the trap this avoids is any date math that depends on the
- *  runtime's local timezone. */
-function daysBetweenUtc(fromYmd: string, toYmd: string): number {
+ *  runtime's local timezone.
+ *
+ *  Exported (slice 33-3) so the dashboard ctx assembly can derive
+ *  `daysOverdue` for the top-oldest receivables list with the exact same
+ *  arithmetic `computeReceivablesAging` uses below — the alternative would
+ *  be a second, easy-to-drift reimplementation of UTC date-diffing. */
+export function daysBetweenUtc(fromYmd: string, toYmd: string): number {
   return Math.floor((utcDayMs(toYmd) - utcDayMs(fromYmd)) / 86_400_000);
 }
 

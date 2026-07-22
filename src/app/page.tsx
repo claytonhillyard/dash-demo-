@@ -44,13 +44,18 @@ import { DEMO_DEAL_ATTACHMENTS } from "@/lib/demo/seed";
 import { updatedAgo } from "@/lib/company/format";
 import { getProviderStatus } from "@/lib/market/health";
 import { isDemoMode } from "@/lib/demo/mode";
+import { getReceivablesRows, getTrailingProfitMonths } from "@/db/runway";
+import { computeReceivablesAging, computeRunway, daysBetweenUtc, type ReceivableRow } from "@/lib/runway/compute";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
-  const [invSummary, dia, activeDeals, circleNamesById, viewerCircleIdList, websiteTrend, sharedInventory, activityEvents] =
+  const [
+    invSummary, dia, activeDeals, circleNamesById, viewerCircleIdList, websiteTrend, sharedInventory,
+    activityEvents, receivablesRows, trailingProfitCents,
+  ] =
     await Promise.all([
       getInventorySummary(db, orgId),
       getDiamondSummary(db, orgId),
@@ -60,6 +65,13 @@ export default async function Home() {
       getWebsiteSnapshotTrend(db, orgId, 8),
       getSharedInventoryForOrg(db, orgId, 5),
       getOrgActivity(db, orgId, { limit: 10 }),
+      // Slice 33: receivables aging + trailing profit for the cash-runway
+      // panel. No try/catch here — matches every other fetch in this
+      // Promise.all (none of them degrade individually today; a thrown
+      // error from any one of them already fails the whole page render,
+      // and this doesn't change that).
+      getReceivablesRows(db, orgId),
+      getTrailingProfitMonths(db, 6),
     ]);
 
   // Slice 10 + 16: per-deal fetches. Parallelized via Promise.all so the 4
@@ -201,11 +213,40 @@ export default async function Home() {
   };
   const tradenetInventory = { items: sharedInventory };
   const activity = { events: activityEvents };
+  // Slice 33: cash-runway panel. `todayUtc` is read once per render (not
+  // per row) so every receivable in this response is judged against the
+  // exact same "today", matching computeReceivablesAging's contract.
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const aging = computeReceivablesAging(receivablesRows, todayUtc);
+  const runwayResult = computeRunway({
+    trailingProfitCents,
+    receivablesTotalCents: aging.totalCents,
+  });
+  // Top 5 oldest (== most overdue — receivablesRows is already oldest-first)
+  // decorated with daysOverdue, computed via the SAME refDate-selection rule
+  // computeReceivablesAging uses (dueDate ?? issueDate; both null -> not
+  // overdue) but reusing its exported daysBetweenUtc for the actual
+  // arithmetic rather than duplicating that too.
+  const topOldest = receivablesRows.slice(0, 5).map((row) => ({
+    ...row,
+    daysOverdue: daysOverdueFor(row, todayUtc),
+  }));
+  const runway = { aging, runway: runwayResult, topOldest };
   return (
     <QuotesProvider>
       <Shell ticker={<TickerStrip />}>
-        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} tradenetInventory={tradenetInventory} activity={activity} />
+        <DashboardGrid inventory={inventory} diamond={diamond} deals={deals} website={website} providerStatus={providerStatus} todaysBids={todaysBidsView} tradenetInventory={tradenetInventory} activity={activity} runway={runway} />
       </Shell>
     </QuotesProvider>
   );
+}
+
+/** Mirrors computeReceivablesAging's refDate rule (dueDate ?? issueDate; both
+ *  null -> 0 days overdue, i.e. "current") for a single row, using the
+ *  exported daysBetweenUtc for the arithmetic. Kept in sync with
+ *  src/lib/runway/compute.ts by design — if that rule ever changes, this
+ *  must change with it. */
+function daysOverdueFor(row: ReceivableRow, todayUtc: string): number {
+  const refDate = row.dueDate ?? row.issueDate;
+  return refDate === null ? 0 : daysBetweenUtc(refDate, todayUtc);
 }
