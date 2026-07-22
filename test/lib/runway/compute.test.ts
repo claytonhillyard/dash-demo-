@@ -243,4 +243,41 @@ describe("computeRunway", () => {
       monthsOfRunwayFromReceivables: 3.5,
     });
   });
+
+  it("normalizes a negative-zero average to +0 so the UI never renders '-$0.00'", () => {
+    // avg of [-1, 1, -1] is -0.33 cents -> Math.round gives -0; the +0
+    // normalization must collapse it (review finding, slice 33).
+    const result = computeRunway({
+      trailingProfitCents: [-1, 1, -1],
+      receivablesTotalCents: 100_000,
+    });
+    expect(result.kind).toBe("cash_positive");
+    if (result.kind === "cash_positive") {
+      expect(Object.is(result.avgMonthlyProfitCents, -0)).toBe(false);
+      expect(result.avgMonthlyProfitCents).toBe(0);
+    }
+  });
+});
+
+describe("computeReceivablesAging — malformed-date defense", () => {
+  it("routes a NaN-producing date to 'current' instead of silently alarming d61_plus", () => {
+    // The readers' trust contract means this shouldn't happen; if it does,
+    // no-evidence-of-overdue-ness beats most-alarming-bucket (review).
+    const result = computeReceivablesAging(
+      [
+        {
+          invoiceId: 1,
+          invoiceNumber: "INV-BAD",
+          billToName: "X",
+          balanceCents: 5_000,
+          dueDate: "garbage",
+          issueDate: null,
+        },
+      ],
+      "2026-07-20",
+    );
+    expect(result.buckets.current).toEqual({ totalCents: 5_000, count: 1 });
+    expect(result.buckets.d61_plus).toEqual({ totalCents: 0, count: 0 });
+    expect(result.oldest).toBeNull();
+  });
 });

@@ -52,6 +52,12 @@ export function daysBetweenUtc(fromYmd: string, toYmd: string): number {
 }
 
 function bucketFor(daysOverdue: number): AgingBucketKey {
+  // NaN (a malformed date slipping past the readers' trust contract) fails
+  // every <= below and would silently land the balance in the most-alarming
+  // bucket while the top-oldest list labels the same row "current" — route
+  // it to "current" instead, the same no-evidence-of-overdue-ness rationale
+  // as the both-dates-null case (review finding, slice 33).
+  if (!Number.isFinite(daysOverdue)) return "current";
   if (daysOverdue <= 0) return "current";
   if (daysOverdue <= 30) return "d1_30";
   if (daysOverdue <= 60) return "d31_60";
@@ -151,7 +157,10 @@ export function computeRunway(input: RunwayInput): RunwayResult {
   }
 
   const sum = window.reduce((total, cents) => total + cents, 0);
-  const avgCents = Math.round(sum / monthsAvailable);
+  // `+ 0` collapses Math.round's negative zero (a true average in
+  // [-0.5, 0) cents/mo) to +0 — Intl would otherwise sign it and the panel
+  // would render "avg -$0.00/mo" (review finding, slice 33).
+  const avgCents = Math.round(sum / monthsAvailable) + 0;
 
   if (avgCents >= 0) {
     return { kind: "cash_positive", avgMonthlyProfitCents: avgCents };

@@ -69,7 +69,7 @@ export async function getReceivablesRows(db: Db, orgId: number): Promise<Receiva
     WHERE i.org_id = ${orgId}
       AND i.status = 'issued'
       AND i.total_cents - COALESCE(p.paid_cents, 0) > 0
-    ORDER BY COALESCE(i.due_date, i.issue_date) ASC NULLS LAST
+    ORDER BY COALESCE(i.due_date, i.issue_date) ASC NULLS LAST, i.id ASC
   `);
 
   const rows = rowsOf<{
