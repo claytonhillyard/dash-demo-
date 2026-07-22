@@ -26,6 +26,10 @@ export function suggestInvoiceNumber(
     if (!match) continue;
     const [, matchedYear, matchedNumber] = match;
     if (Number(matchedYear) !== year) continue;
+    // A sequence beyond 9 digits can't be one of ours — parseInt would go
+    // float-imprecise and a 44-digit import would suggest "INV-2026-1e+44"
+    // (review finding, slice 30: bulk-imported numbers made this reachable).
+    if (matchedNumber!.length > 9) continue;
     const n = parseInt(matchedNumber!, 10);
     if (n > max) max = n;
   }

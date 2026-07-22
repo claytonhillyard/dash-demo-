@@ -13,7 +13,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 import { ForbiddenError } from "@/lib/auth/errors";
 import { firstZodError } from "@/lib/company/validation";
 import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
-import { safeErrShape, mapDbConstraintError } from "@/lib/actionErrors";
+import { safeErrShape, mapDbConstraintError, pgErrorFields } from "@/lib/actionErrors";
 import { parseCsv, type CsvParseResult } from "@/lib/csv/parse";
 import {
   matchInvoiceHeaders,
@@ -297,6 +297,10 @@ async function buildInvoiceImportPlan(
 
   const seenInFile = new Set<string>();
   const classified: ClassifiedRow[] = [];
+  // Historical import means historical dates — a future issue date is
+  // almost certainly an export typo, and it would flow into the payment's
+  // receivedDate as a date recordPayment itself rejects (review finding).
+  const todayUtc = new Date().toISOString().slice(0, 10);
 
   for (const { rowIndex, result } of built.outcomes) {
     if (!result.ok) {
@@ -304,6 +308,11 @@ async function buildInvoiceImportPlan(
       continue;
     }
     const invoice = result.value;
+
+    if (invoice.issueDate > todayUtc) {
+      classified.push({ rowIndex, kind: "skipped", reason: "issue date is in the future", invoice });
+      continue;
+    }
 
     const resolution = resolveCustomerForRow(invoice, byRef, byName);
     if (!resolution.ok) {
@@ -405,6 +414,15 @@ function buildBillToFromCustomer(c: CustomerLite): BillTo {
 function mapActionError(e: unknown, action: string): { ok: false; error: string } {
   if (e instanceof ForbiddenError) {
     return { ok: false, error: "Forbidden" };
+  }
+  // mapDbConstraintError's 23503 message assumes the DELETE direction
+  // ("Cannot delete a customer that has invoices"); this import hits the
+  // same FK from the INSERT direction when a matched customer is deleted
+  // between preview and commit — pre-empt with an actionable message
+  // (review finding, slice 30).
+  const pg = pgErrorFields(e);
+  if (pg.code === "23503" && pg.constraint === "invoices_customer_id_customers_id_fk") {
+    return { ok: false, error: "A matched customer was deleted during import — run preview again" };
   }
   const friendly = mapDbConstraintError(e);
   if (friendly !== null) {

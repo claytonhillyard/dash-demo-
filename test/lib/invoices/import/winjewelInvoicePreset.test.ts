@@ -189,6 +189,7 @@ describe("parseMoneyToCents — accepted formats", () => {
     ["0.00", 0],
     ["  42.10  ", 4210],
     ["$0", 0],
+    ["12,345,678.90", 1234567890],
   ];
 
   for (const [input, expectedCents] of cases) {
@@ -245,6 +246,21 @@ describe("parseMoneyToCents — unparseable input (reason: \"unparseable amount\
 
   it("a trailing decimal point with no digits is unparseable", () => {
     expect(parseMoneyToCents("1234.")).toEqual({ ok: false, reason: "unparseable amount" });
+  });
+
+  // Comma-grouping validation (review finding): a comma that isn't genuine
+  // thousands-grouping must reject loudly, never strip into a wrong amount.
+  it("EU decimal-comma format is rejected, not misparsed ($1.23 trap)", () => {
+    expect(parseMoneyToCents("1.234,56")).toEqual({ ok: false, reason: "unparseable amount" });
+  });
+
+  it("a misplaced grouping comma is rejected", () => {
+    expect(parseMoneyToCents("1,23.45")).toEqual({ ok: false, reason: "unparseable amount" });
+    expect(parseMoneyToCents("1,2,3")).toEqual({ ok: false, reason: "unparseable amount" });
+  });
+
+  it("a comma with no leading group is rejected", () => {
+    expect(parseMoneyToCents(",234.56")).toEqual({ ok: false, reason: "unparseable amount" });
   });
 
   it("multiple decimal points is unparseable", () => {

@@ -538,3 +538,24 @@ describe("audit", () => {
     expect(events[1]!.payload).toEqual({ created: 0, payments: 0, duplicates: 8, skipped: 2 });
   });
 });
+
+describe("review-fix regressions (slice 30 final review)", () => {
+  it("skips a row whose issue date is in the future instead of importing a future payment", async () => {
+    await seedBaseCustomers();
+    const csv = buildCsv(["INV-FUT-1,WJ-101,Priya Sharma,2099-01-15,,500.00,500.00,"]);
+    const res = await previewInvoiceImport({ csvText: csv });
+    if (!res.ok) throw new Error(`preview failed: ${res.error}`);
+    expect(res.importable).toBe(0);
+    expect(res.skipped).toBe(1);
+    expect(res.sampleSkipped[0]!.reason).toBe("issue date is in the future");
+  });
+
+  it("rejects a file over the row cap with the friendly error", async () => {
+    const rows = Array.from(
+      { length: 5001 },
+      (_, i) => `INV-BIG-${i},WJ-101,Priya Sharma,2025-01-01,,10.00,,`,
+    );
+    const res = await previewInvoiceImport({ csvText: buildCsv(rows) });
+    expect(res).toEqual({ ok: false, error: "CSV has too many rows (max 5000)" });
+  });
+});

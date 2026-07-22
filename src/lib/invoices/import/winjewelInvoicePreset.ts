@@ -215,7 +215,15 @@ export function parseMoneyToCents(
   const isLeadingMinus = body.startsWith("-");
   const unsigned = (isLeadingMinus ? body.slice(1) : body).trim();
 
-  const numeric = unsigned.replace(/^\$\s*/, "").replace(/,/g, "");
+  const dollarStripped = unsigned.replace(/^\$\s*/, "");
+  // When a comma is present it must be genuine thousands-grouping. Without
+  // this, an EU-format export ("1.234,56") or a misplaced comma ("1,23.45")
+  // strips into a plausible-but-wrong amount — the parser's one
+  // silent-corruption vector (review finding, slice 30).
+  if (dollarStripped.includes(",") && !/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(dollarStripped)) {
+    return { ok: false, reason: "unparseable amount" };
+  }
+  const numeric = dollarStripped.replace(/,/g, "");
 
   if (!PLAIN_NUMBER.test(numeric)) {
     return { ok: false, reason: "unparseable amount" };
