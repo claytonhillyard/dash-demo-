@@ -97,6 +97,12 @@ export default async function InvoicesPage({
           >
             New invoice
           </Link>
+          <Link
+            href="/invoices/import"
+            className="rounded border border-border px-3 py-1.5 text-xs uppercase tracking-wider text-text/70 hover:text-gold"
+          >
+            Import history
+          </Link>
           <Link href="/" className="text-sm text-text/50 hover:text-text">
             Back to dashboard
           </Link>
