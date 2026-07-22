@@ -202,7 +202,14 @@ export async function generateInvestorNarrative(
     }
 
     const text = res.simulated ? simulatedNarrative(kpis) : res.text;
-    return { ok: true, paragraphs: splitParagraphs(text), simulated: res.simulated };
+    const paragraphs = splitParagraphs(text);
+    // A model can return ok with an empty/whitespace-only body; a PDF with a
+    // bare "Narrative" heading and no text is a worse artifact than a clean
+    // error (review N3) — treat it as a generation failure.
+    if (paragraphs.length === 0) {
+      return { ok: false, error: AI_ERROR_MESSAGES.error };
+    }
+    return { ok: true, paragraphs, simulated: res.simulated };
   } catch {
     return { ok: false, error: AI_ERROR_MESSAGES.error };
   }

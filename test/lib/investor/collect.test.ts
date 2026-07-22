@@ -137,6 +137,15 @@ describe("collectInvestorKpis — invoicing (this UTC month, org-scoped)", () =>
     expect(kpis.invoicing.issuedCount).toBe(1);
     expect(kpis.invoicing.issuedCents).toBe(10_000);
   });
+
+  it("still counts a voided invoice whose issue_date falls in the month (issued is a historical fact — review N4)", async () => {
+    const c = await insertCustomer();
+    await insertInvoice({ customerId: c.id, totalCents: 40_000, status: "void", issueDate: "2026-07-12" });
+
+    const kpis = await collectInvestorKpis(db, 1, REF_NOW);
+    expect(kpis.invoicing.issuedCount).toBe(1);
+    expect(kpis.invoicing.issuedCents).toBe(40_000);
+  });
 });
 
 describe("collectInvestorKpis — collected payments (this UTC month, org-scoped)", () => {

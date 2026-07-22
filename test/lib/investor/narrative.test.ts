@@ -130,6 +130,18 @@ describe("generateInvestorNarrative", () => {
     expect(typeof call.prompt).toBe("string");
   });
 
+  it("treats an ok-but-empty model response as a failure instead of producing a blank narrative (review N3)", async () => {
+    vi.mocked(generateAiText).mockResolvedValueOnce({
+      ok: true,
+      text: "   \n\n  \n ",
+      model: "anthropic/claude-haiku-4.5",
+      simulated: false,
+      durationMs: 5,
+    });
+    const res = await generateInvestorNarrative(makeKpis(), 1);
+    expect(res.ok).toBe(false);
+  });
+
   it("real (non-simulated) success splits the text into trimmed, non-empty paragraphs", async () => {
     vi.mocked(generateAiText).mockResolvedValueOnce({
       ok: true,

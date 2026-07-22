@@ -97,7 +97,10 @@ describe("GET /company/investor-update/pdf — demo mode", () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
     const res = await callRoute();
     const disposition = res.headers.get("Content-Disposition") ?? "";
-    expect(disposition).toMatch(/investor-update-\d{4}-\d{2}\.pdf/);
+    // Pin the ACTUAL current UTC month, not just the shape — a local-time
+    // getMonth() regression would satisfy a \d{4}-\d{2} regex (review N4).
+    const expectedYm = new Date().toISOString().slice(0, 7);
+    expect(disposition).toContain(`investor-update-${expectedYm}.pdf`);
   });
 });
 

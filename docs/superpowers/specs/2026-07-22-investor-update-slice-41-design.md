@@ -80,7 +80,7 @@ export function renderInvestorReportPdf(model): Promise<Uint8Array>;
 
 - **`GET /company/investor-update/pdf`** — `src/app/(admin)/company/investor-update/pdf/route.ts`, mirroring the invoices PDF route: `getCurrentOrgId()` try/catch → 401; demo allowed; collect → narrative (a `!ok` narrative → 503 JSON `{error}` — NOT a broken PDF); model → render; headers `application/pdf`, `Content-Disposition: attachment; filename="investor-update-<YYYY-MM>.pdf"` (filename is self-generated ASCII — no sanitizer needed, but keep Cache-Control: no-store). No non-handler exports (the slice-28 build lesson).
 - **UI**: a card on `/company/projections` (read that page's card conventions): title "Investor update", one line of copy, a plain `<a href="/company/investor-update/pdf">Download PDF</a>` styled like the invoices header actions, plus a muted note: "Narrative is AI-generated" / in demo or keyless the PDF itself carries the banner. Middleware: `/company/:path*` already guarded (slice-2 matcher test asserts /company/* routes) — verify the matcher covers the new subpath and extend the matcher test (+1).
-- Live-mode cost note: each download invokes the AI gateway once; the seam's budget/rate handling applies; no extra cooldown v1 (investor updates are rare) — documented decision.
+- Live-mode cost note: each download invokes the AI gateway once; the app enforces NO budget/cooldown — the seam only maps the gateway's own 402/429 after the fact, so the real backstop is session auth + the gateway account's credit ceiling (~$0.20/100 requests at the fast tier; review N1). No extra cooldown v1 (investor updates are rare) — documented decision.
 
 ## 7. Test plan (~40)
 
@@ -97,4 +97,4 @@ export function renderInvestorReportPdf(model): Promise<Uint8Array>;
 - Simulated narrative is a local deterministic template from real KPIs (not the seam's generic canned text) + a visible banner — honest offline demo.
 - Aggregates-only KPI type = structural PII prevention; the no-@ test locks it.
 - Narrative failure → 503 JSON, never a half-broken PDF.
-- Read-only: no writes, no audit, no cooldown (seam budget guards suffice for a rare action).
+- Read-only: no writes, no audit, no cooldown (auth + the gateway credit ceiling bound a rare action's cost — the seam itself enforces no budget).
