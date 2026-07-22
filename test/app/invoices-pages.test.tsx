@@ -52,6 +52,15 @@ describe("/invoices RSC list", () => {
     expect(html).toContain("Void");
   });
 
+  // Slice 30-3: list header gains a secondary "Import history" link next to
+  // "New invoice", matching /customers' existing New/Import/Back pattern.
+  it("the header contains an Import history link to /invoices/import", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderList());
+    expect(html).toContain('href="/invoices/import"');
+    expect(html).toContain("Import history");
+  });
+
   it("?status=draft narrows the list to the single draft seed", async () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
     const html = renderToString(await renderList({ status: "draft" }));

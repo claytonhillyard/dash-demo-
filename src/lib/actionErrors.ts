@@ -21,7 +21,7 @@
  * (unwrapped) Postgres error — e.g. a future direct driver call — still
  * works unchanged.
  */
-function pgErrorFields(e: unknown): { code?: string; constraint?: string } {
+export function pgErrorFields(e: unknown): { code?: string; constraint?: string } {
   if (typeof e !== "object" || e === null) return {};
   const top = e as { cause?: unknown };
   const source =

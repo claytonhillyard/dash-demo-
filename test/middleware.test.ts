@@ -74,7 +74,16 @@ describe("middleware matcher", () => {
   });
 
   it("guards /invoices incl. subroutes (slice 27)", () => {
-    for (const route of ["/invoices", "/invoices/new", "/invoices/3/edit"]) {
+    for (const route of [
+      "/invoices",
+      "/invoices/new",
+      "/invoices/3/edit",
+      // Slice 30-3: /invoices/import rides the same `/invoices/:path*`
+      // matcher entry — no middleware.ts change needed, asserted here for
+      // the record (backfill note above documents what happens when a new
+      // admin route ships without a matcher check like this one).
+      "/invoices/import",
+    ]) {
       expect(isMatched(route)).toBe(true);
     }
   });

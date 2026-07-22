@@ -18,6 +18,13 @@ describe("suggestInvoiceNumber", () => {
     );
   });
 
+  it("ignores absurdly long imported sequences instead of suggesting float garbage", () => {
+    // Review finding (slice 30): a 44-digit WinJewel-imported number made
+    // parseInt go float-imprecise and suggested "INV-2026-1e+44".
+    const giant = `INV-2026-${"9".repeat(44)}`;
+    expect(suggestInvoiceNumber([giant, "INV-2026-0002"], 2026)).toBe("INV-2026-0003");
+  });
+
   it("ignores non-matching formats", () => {
     expect(
       suggestInvoiceNumber(
