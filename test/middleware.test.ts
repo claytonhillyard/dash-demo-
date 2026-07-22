@@ -43,6 +43,11 @@ describe("middleware matcher", () => {
       "/company/profit",
       "/company/employees",
       "/company/projections",
+      // Slice 41: investor-update PDF download. Rides the existing
+      // /company/:path* matcher entry — no middleware.ts change needed
+      // (same "no change needed, asserted here for the record" idiom as
+      // the /invoices/import row above).
+      "/company/investor-update/pdf",
     ]) {
       expect(isMatched(route)).toBe(true);
     }
