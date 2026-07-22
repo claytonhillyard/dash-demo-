@@ -33,8 +33,11 @@ const WINANSI_EXTRAS = new Set([
  * `wrapText`, so the hard-splitter can never cut a surrogate pair in half.
  * Whitespace controls (tab/newline/CR) become plain spaces: wrapped fields
  * treat them as word breaks either way, and unwrapped fields stay one line.
+ *
+ * Exported (slice 41) so `src/lib/investor/reportPdf.ts` can reuse the exact
+ * same sanitization instead of duplicating it — no behavior change here.
  */
-function toWinAnsiSafe(s: string): string {
+export function toWinAnsiSafe(s: string): string {
   let out = "";
   for (const ch of s) {
     const cp = ch.codePointAt(0)!;
