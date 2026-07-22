@@ -253,7 +253,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 30 | WinJewel invoice history import (W6) | aiya-jewelry | shipped: `6058b45` | this-tab | No migration, no deps. /invoices/import wizard; preset + idempotent one-transaction commit (re-runs create nothing); ~170 tests (1858 green). Review closed the EU-money silent-misparse + a numbering float edge. Migration arc W1–W6 COMPLETE — WinJewel data flows customers→invoices→PDF→payments→history. |
 | 31 | Document vault (contracts, NDAs) | core | proposed | open | Reuses slice-17 Blob seam |
 | 32 | AI Gateway provider integration | core | shipped: `ec65e76` | this-tab | `src/lib/ai/` seam: tier catalog + simulated fallback + generateAiText (tags, durationMs, PII-free Sentry). ai@6.0.219. +15 tests (1136/1136). Live calls gate on AI_GATEWAY_API_KEY in Netlify env. Unblocks 23/35/36/37/41/42/46/50. |
-| 33 | Predictive cash runway panel | core | claimed 2026-07-20 | **this tab** | Deps 27/29 shipped. Receivables aging from invoice balances + burn/profit from revenue_months → deterministic runway + expected-collections panel. Read-only slice, no migration. |
+| 33 | Predictive cash runway panel | core | shipped: `e77456e` | this-tab | Read-only, no migration/deps. Aging buckets + 3-state runway verdict (insufficient/cash-positive/burning) from legacy profit_months (single-tenant, see C-6). Dashboard panel "cash-runway" (auto-appends to persisted layouts). ~43 tests (1907 green). First post-arc slice. |
 | 34 | Pinecone vector store integration | core | proposed | open | Foundation for 44/46/50 |
 | 35 | AI Command Layer (NL → action) | core | proposed | open | Depends on 32 |
 | 36 | Customer health score | core | shipped: `815fee0` | this-tab | 4 commits. Deterministic heuristic + AI insight garnish. HEALTH_WEIGHTS exported for slice 38. 1175 tests green. |
@@ -286,6 +286,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | C-3 | Add `orgs.module: enum` column | core | proposed | open | Lets UI conditionally load AIYA pieces |
 | C-4 | Module registry pattern in code (`src/modules/aiya-jewelry/`) | core | proposed | open | Mechanical refactor; see MODULES.md |
 | C-5 | Move WinJewel-specific UI strings (e.g. "Diamond Index") behind module config | aiya-jewelry | proposed | open | Brand layer |
+| C-6 | Migrate legacy single-tenant `revenue_months`/`profit_months`/`revenue_transactions` to org-scoped | core | proposed | open | Slice-2-era tables, no org_id; slice-33 runway reads them as-is (documented in src/db/runway.ts). Also: dashboard-wide per-panel failure degradation (no try/catch in page.tsx, chipped in slice 33) and the Tailwind `text` color gap (text-text/* classes silently no-op sitewide, ~356 usages). |
 
 ## 10. Coordination protocol between the two tabs
 
