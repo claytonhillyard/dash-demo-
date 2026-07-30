@@ -162,6 +162,13 @@
       "when": 1784554391786,
       "tag": "0022_volatile_shadow_king",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785447615615,
+      "tag": "0023_dry_sabra",
+      "breakpoints": true
     }
   ]
 }
