@@ -1,4 +1,4 @@
-export const EMAIL_FEATURES = ["watchlist-alert", "invoice", "runway-alert", "sentinel", "smoke-test"] as const;
+export const EMAIL_FEATURES = ["watchlist-alert", "invoice", "runway-alert", "sentinel", "drafting", "smoke-test"] as const;
 export type EmailFeature = (typeof EMAIL_FEATURES)[number];
 
 export type EmailErrorCode = "rate_limited" | "unavailable" | "error";

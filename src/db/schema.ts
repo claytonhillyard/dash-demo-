@@ -221,6 +221,7 @@ export const customers = pgTable(
     notes: text("notes"),
     externalRef: text("external_ref"),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    styleNote: text("style_note"), // per-customer drafting voice note (slice 37)
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -733,5 +734,25 @@ export const payments = pgTable(
   },
   (t) => ({
     orgInvoiceIdx: index("payments_org_invoice_idx").on(t.orgId, t.invoiceId),
+  }),
+);
+
+// Slice 37: drafting_prefs — one row per org (the org's outgoing email
+// voice: tone + signature), fed into the AI drafting prompt alongside each
+// customer's own style_note (see customers.style_note above). Upserted via
+// onConflictDoUpdate on the org_id unique index — never multiple rows per org.
+export const draftingPrefs = pgTable(
+  "drafting_prefs",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id), // plain no-action FK
+    tone: text("tone"), // e.g. "warm but concise; plain language; no exclamation marks"
+    signature: text("signature"), // appended verbatim to sent bodies, e.g. "— Clayton, AIYA Designs"
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgUnique: uniqueIndex("drafting_prefs_org_unique").on(t.orgId),
   }),
 );

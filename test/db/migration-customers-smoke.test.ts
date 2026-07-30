@@ -57,6 +57,7 @@ describe("customers — migration smoke", () => {
         "notes",
         "external_ref",
         "first_seen_at",
+        "style_note", // slice 37 — per-customer drafting voice note
         "created_at",
         "updated_at",
       ].sort(),
@@ -112,5 +113,74 @@ describe("customers — migration smoke", () => {
     `);
     const rows = (res as unknown as { rows: Array<{ n: number }> }).rows;
     expect(rows[0]?.n ?? 0).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * Slice 37 migration 0023 smoke test. Proves the additive migration applied
+ * cleanly: the new `drafting_prefs` table exists with its unique org index
+ * enforced, and `customers` gained a nullable `style_note` column. Same
+ * "raw execute() against information_schema / a real constraint violation"
+ * approach as the slice-22 tests above — never through the typed schema
+ * import, so this doesn't also exercise the path it's certifying.
+ */
+describe("drafting_prefs + customers.style_note — migration smoke (slice 37)", () => {
+  let db: Db;
+
+  beforeAll(async () => {
+    db = await getSharedDb();
+  });
+
+  afterAll(async () => {
+    await closeSharedDb();
+  });
+
+  it("created the drafting_prefs table with required columns", async () => {
+    const res = await db.execute(sql`
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'drafting_prefs'
+      ORDER BY ordinal_position
+    `);
+    const rows = (res as unknown as { rows: Array<{ column_name: string }> })
+      .rows;
+    const names = rows.map((r) => r.column_name).sort();
+    expect(names).toEqual(["id", "org_id", "tone", "signature", "updated_at"].sort());
+  });
+
+  it("unique index on org_id rejects a second drafting_prefs row for the same org", async () => {
+    // Test relies on the shared-db default seed: org id=1 exists already.
+    await db.execute(sql`
+      INSERT INTO drafting_prefs (org_id, tone) VALUES (1, 'first')
+    `);
+
+    let caught: unknown = null;
+    try {
+      await db.execute(sql`
+        INSERT INTO drafting_prefs (org_id, tone) VALUES (1, 'second')
+      `);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).not.toBeNull();
+    // Same "assert by row count" discipline as the customers partial-unique
+    // test above — robust to pglite vs. node-postgres error-shape differences.
+    const res = await db.execute(sql`
+      SELECT COUNT(*)::int AS n FROM drafting_prefs WHERE org_id = 1
+    `);
+    const rows = (res as unknown as { rows: Array<{ n: number }> }).rows;
+    expect(rows[0]?.n ?? 0).toBe(1);
+  });
+
+  it("added a nullable style_note column to customers", async () => {
+    const res = await db.execute(sql`
+      SELECT is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = 'style_note'
+    `);
+    const rows = (res as unknown as { rows: Array<{ is_nullable: string }> })
+      .rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.is_nullable).toBe("YES");
   });
 });

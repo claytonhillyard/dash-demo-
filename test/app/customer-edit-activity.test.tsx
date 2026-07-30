@@ -99,3 +99,27 @@ describe("customer edit page — WatchToggle", () => {
     expect(html).not.toContain(">Watching<");
   });
 });
+
+// Slice 37-3: DraftEmailPanel, fed by getDraftingPrefs + getCustomerStyleNote
+// (both demo-branch internally, src/db/drafting.ts — no extra mocking
+// needed beyond the next/navigation stub above, since DraftEmailPanel's own
+// useRouter() call is the only browser-ish API it touches during a static
+// render; navigator.clipboard is only read inside its Copy click handler,
+// never during render). Customer 2204 (Yuki Tanaka) has an email in
+// DEMO_CUSTOMERS (src/lib/demo/seed.ts) — the same seed customer
+// buildDraftingContext's own demo branch singles out as the one with a
+// fully populated context (invoices/payments/health snapshots).
+describe("customer edit page — Draft email panel", () => {
+  it("renders the draft-intent select for customer 2204 (has an email on file)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderPage("2204"));
+    expect(html).toContain('aria-label="draft intent"');
+    expect(html).toContain("Follow up");
+  });
+
+  it("renders the voice-section toggle label for customer 2204", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+    const html = renderToString(await renderPage("2204"));
+    expect(html).toContain("Voice settings");
+  });
+});
