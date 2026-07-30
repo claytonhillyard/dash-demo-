@@ -6,6 +6,19 @@ vi.mock("@/lib/auth/requireSession", () => ({
   requireSession: vi.fn(async () => ({ user: "boss", orgId: 1 })),
 }));
 vi.mock("@/lib/email/sendEmail", () => ({ sendEmail: vi.fn() }));
+// Factory default (survives clearAllMocks): the seam reports simulated, so
+// generateDraftCore uses the local template — byte-identical behavior to the
+// real keyless seam these tests ran against before the mock existed. The
+// mock exists so authz tests can assert ZERO seam invocations (review F6).
+vi.mock("@/lib/ai/generateAiText", () => ({
+  generateAiText: vi.fn(async () => ({
+    ok: true as const,
+    text: "[simulated] draft",
+    model: "simulated",
+    simulated: true,
+    durationMs: 1,
+  })),
+}));
 
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../../helpers/shared-db";
@@ -19,6 +32,7 @@ import {
 } from "@/lib/drafting/actions";
 import { requireSession } from "@/lib/auth/requireSession";
 import { sendEmail } from "@/lib/email/sendEmail";
+import { generateAiText } from "@/lib/ai/generateAiText";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 
@@ -317,15 +331,17 @@ describe("draftEmail — the demo-guard deviation (spec §9)", () => {
 });
 
 describe("draftEmail — authz", () => {
-  it("forbids a cross-org customer id", async () => {
+  it("forbids a cross-org customer id — with ZERO AI-seam invocations (review F6)", async () => {
     const foreign = await insertCustomer({ orgId: 999, name: "Foreign Customer" });
     const res = await draftEmail({ customerId: foreign.id, intent: "follow_up" });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
+    expect(generateAiText).not.toHaveBeenCalled();
   });
 
   it("forbids a missing customer id", async () => {
     const res = await draftEmail({ customerId: 9_999_999, intent: "follow_up" });
     expect(res).toEqual({ ok: false, error: "Forbidden" });
+    expect(generateAiText).not.toHaveBeenCalled();
   });
 
   it("returns Unauthorized with no session", async () => {
@@ -460,6 +476,15 @@ describe("sendDraft — real send", () => {
 
     const res = await sendDraft({ customerId: customer.id, subject: "Hi", body: "Hello there." });
     expect(res).toEqual({ ok: true, simulated: true });
+
+    // The audit row lands for simulated sends too, with the flag in the
+    // payload — the panel's refresh-on-both-outcomes depends on it (review F6).
+    const [actRow] = await db
+      .select()
+      .from(activityEvents)
+      .where(eq(activityEvents.verb, "sent"));
+    expect(actRow).toBeDefined();
+    expect(actRow!.payload).toEqual({ simulated: true });
   });
 
   it("maps every sendEmail seam failure code to a friendly message and records no audit row", async () => {

@@ -14,14 +14,11 @@ import type { DraftingPrefs } from "@/db/drafting";
  * narrative.ts, slice 41).
  */
 
-/**
- * The three intents the drafting panel offers (spec §5). Kept as a runtime
- * array (not just a union type) so `src/lib/drafting/actions.ts` can build a
- * Zod `z.enum(DRAFT_INTENTS)` directly from it — the type and the validator
- * can never drift apart.
- */
-export const DRAFT_INTENTS = ["follow_up", "payment_reminder", "thank_you"] as const;
-export type DraftIntent = (typeof DRAFT_INTENTS)[number];
+// The intents live in ./types (dependency-free, client-importable — review
+// F5); re-exported here so server-side consumers and existing tests keep
+// their import path.
+export { DRAFT_INTENTS, type DraftIntent } from "./types";
+import { DRAFT_INTENTS, type DraftIntent } from "./types";
 
 export type ParsedDraft = { subject: string; body: string };
 
@@ -132,7 +129,19 @@ const MAX_SUBJECT_LEN = 200;
  * it that way.
  */
 export function parseDraft(text: string): ParsedDraft | null {
-  const lines = text.split("\n");
+  // CRLF split (review F1: a bare "\n" split left "\r" on every line, so the
+  // SUBJECT regex — whose $ has no m-flag — silently missed CRLF output and
+  // every subject fell back to "Following up"). Markdown fence prefixes are
+  // stripped per-line (review F2): models sometimes fence the whole response
+  // despite instructions — a fence glued to a marker (```SUBJECT: …) hid the
+  // subject, and bare fence lines leaked into the sendable body.
+  // Two passes: a WHOLE line that is just a fence (with an optional language
+  // tag, e.g. "```json") disappears; then backticks glued directly to content
+  // ("```SUBJECT: …") are stripped without eating the marker word — a single
+  // greedy [\w-]* would have consumed "SUBJECT" as a "language tag".
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[ \t]*```[a-z0-9-]*[ \t]*$/i, "").replace(/^[ \t]*```/, ""));
   let subject: string | null = null;
   let subjectLineIndex = -1;
   const subjectRe = /^[ \t]*SUBJECT:[ \t]*(.*)$/i;
@@ -184,9 +193,11 @@ export function simulatedDraft(
 ): ParsedDraft {
   const firstName = ctx.customerName.split(" ")[0] || ctx.customerName;
   const toneNote = prefs?.tone ? `\n\n(Written to match your saved voice: ${prefs.tone}.)` : "";
-  const styleNoteLine = ctx.styleNote
-    ? `\n\n(Per your note on this customer: ${ctx.styleNote}.)`
-    : "";
+  // The per-customer style note deliberately does NOT appear in the
+  // simulated body (review F4): with RESEND live but AI keyless, one
+  // unedited Send would mail the org's PRIVATE note about the customer to
+  // that customer. The note still shapes the REAL prompt (buildDraftPrompt);
+  // simulated drafts only get the org's own tone hint.
   const invoiceClause = ctx.lastInvoice
     ? ` Your most recent invoice, ${ctx.lastInvoice.number}, was for ${formatCentsExact(ctx.lastInvoice.totalCents)}.`
     : "";
@@ -199,7 +210,7 @@ export function simulatedDraft(
         body:
           `Hi ${firstName},\n\nI wanted to follow up and see how things are going on your end.` +
           `${invoiceClause} ${balance}\n\nLet me know if there's anything you need from us.` +
-          `${toneNote}${styleNoteLine}`,
+          `${toneNote}`,
       };
     case "payment_reminder":
       return {
@@ -209,14 +220,14 @@ export function simulatedDraft(
         body:
           `Hi ${firstName},\n\nThis is a friendly reminder about your account. ${balance}` +
           `${invoiceClause}\n\nPlease let us know if you have any questions about this.` +
-          `${toneNote}${styleNoteLine}`,
+          `${toneNote}`,
       };
     case "thank_you":
       return {
         subject: `Thank you, ${ctx.customerName}`,
         body:
           `Hi ${firstName},\n\nThank you for your continued business.${invoiceClause}` +
-          `\n\nWe appreciate working with you.${toneNote}${styleNoteLine}`,
+          `\n\nWe appreciate working with you.${toneNote}`,
       };
   }
 }

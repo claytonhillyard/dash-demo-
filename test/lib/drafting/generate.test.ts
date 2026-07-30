@@ -131,10 +131,40 @@ describe("parseDraft", () => {
   });
 });
 
+describe("parseDraft — review-fix regressions (F1/F2)", () => {
+  it("parses CRLF model output without losing the subject (F1)", () => {
+    const text = "SUBJECT: Hello Yuki\r\n\r\nBODY:\r\nJust checking in.\r\n";
+    expect(parseDraft(text)).toEqual({ subject: "Hello Yuki", body: "Just checking in." });
+  });
+
+  it("strips a markdown fence wrapping the whole response — no ``` residue in the body (F2)", () => {
+    const text = "```\nSUBJECT: Hi\n\nBODY:\nSee you soon.\n```";
+    const parsed = parseDraft(text);
+    expect(parsed).toEqual({ subject: "Hi", body: "See you soon." });
+    expect(parsed!.body).not.toContain("```");
+  });
+
+  it("recovers the subject when a fence is glued to the SUBJECT marker (F2)", () => {
+    const text = "```SUBJECT: Glued\n\nBODY:\nStill works.\n```";
+    expect(parseDraft(text)).toEqual({ subject: "Glued", body: "Still works." });
+  });
+});
+
 describe("simulatedDraft", () => {
   it("is deterministic — same input produces the same output", () => {
     const ctx = makeCtx({ outstandingBalanceCents: 50_000 });
     expect(simulatedDraft(ctx, "follow_up", PREFS)).toEqual(simulatedDraft(ctx, "follow_up", PREFS));
+  });
+
+  it("never embeds the private per-customer style note in the sendable body (review F4)", () => {
+    // With RESEND live but AI keyless, one unedited Send would otherwise
+    // mail the org's private note about the customer to that customer.
+    const ctx = makeCtx({ styleNote: "Haggler — pushes hard for discounts" });
+    for (const intent of DRAFT_INTENTS) {
+      const draft = simulatedDraft(ctx, intent, PREFS);
+      expect(draft.body).not.toContain("Haggler");
+      expect(draft.subject).not.toContain("Haggler");
+    }
   });
 
   it("varies by intent — the three intents produce different subjects and bodies", () => {

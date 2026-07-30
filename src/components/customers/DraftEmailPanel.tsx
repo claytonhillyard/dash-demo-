@@ -9,7 +9,7 @@ import {
   saveDraftingPrefs,
   saveCustomerStyleNote,
 } from "@/lib/drafting/actions";
-import { DRAFT_INTENTS, type DraftIntent } from "@/lib/drafting/generate";
+import { DRAFT_INTENTS, type DraftIntent } from "@/lib/drafting/types";
 
 const INTENT_LABEL: Record<DraftIntent, string> = {
   follow_up: "Follow up",
@@ -33,7 +33,7 @@ const INTENT_LABEL: Record<DraftIntent, string> = {
  * server-loads the org's drafting prefs and this customer's style note and
  * passes them down read-only; this component never fetches on its own.
  *
- * router.refresh() after a REAL (non-simulated) send AND after a style-note
+ * router.refresh() after a send (real or simulated) AND after a style-note
  * save, but deliberately NOT after a prefs save: both `sendDraft` and
  * `saveCustomerStyleNote` (src/lib/drafting/actions.ts) record an audit row
  * against THIS customer, which would show up in the edit page's own Activity
