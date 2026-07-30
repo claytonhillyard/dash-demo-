@@ -257,7 +257,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 34 | Pinecone vector store integration | core | proposed | open | Foundation for 44/46/50 |
 | 35 | AI Command Layer (NL → action) | core | proposed | open | Depends on 32 |
 | 36 | Customer health score | core | shipped: `815fee0` | this-tab | 4 commits. Deterministic heuristic + AI insight garnish. HEALTH_WEIGHTS exported for slice 38. 1175 tests green. |
-| 37 | AI email drafting + personality memory | core | claimed 2026-07-22 | **this tab** | Deps 32/22 shipped. drafting_prefs (migration 0023) + context-grounded drafts via the AI seam (name+aggregates only, no contact details in prompts — slice-36 precedent); send rides the slice-25 seam. |
+| 37 | AI email drafting + personality memory | core | shipped: `013df82` | this-tab | Migration 0023 (drafting_prefs + customers.style_note). Draft panel on customer edit: intent → grounded editable draft → send via the slice-25 seam / copy; org voice + per-customer note feed the prompt (name+aggregates only, structural — no addresses ever). Review closed a private-note-to-customer leak in simulated drafts pre-merge. ~120 tests (2078 green). |
 | 38 | Anomaly Sentinel | core | shipped: `cb68fb6` | this-tab | Band-drop detection + snapshots (migration 0019). Review caught + fixed a real score-feedback loop (actor IS NOT NULL on scoring aggregate). 38b (more anomaly rules) queueable on this substrate. |
 | 39 | Predictive reorder via market triggers | core | proposed | open | Depends on inventory + market |
 | 40 | Replayable Decisions (snapshot + branch) | core | proposed | open | Big lift; possibly split |
