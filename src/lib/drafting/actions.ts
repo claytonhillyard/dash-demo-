@@ -6,12 +6,19 @@ import { z } from "zod";
 import * as Sentry from "@sentry/nextjs";
 import { getDb, type Db } from "@/db/client";
 import { draftingPrefs, customers } from "@/db/schema";
+import { getCustomerById } from "@/db/customers";
+import { getDraftingPrefs } from "@/db/drafting";
 import { requireSession } from "@/lib/auth/requireSession";
 import { isDemoMode } from "@/lib/demo/mode";
 import { ForbiddenError } from "@/lib/auth/errors";
 import { firstZodError } from "@/lib/company/validation";
 import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
+import { ACTIVITY_SUMMARY_MAX_LEN } from "@/lib/activity/types";
 import { safeErrShape, mapDbConstraintError } from "@/lib/actionErrors";
+import { sendEmail } from "@/lib/email/sendEmail";
+import type { EmailErrorCode } from "@/lib/email/types";
+import { buildDraftingContext } from "./context";
+import { DRAFT_INTENTS, generateDraftCore, type DraftIntent } from "./generate";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -45,6 +52,20 @@ const saveCustomerStyleNoteInput = z.object({
 });
 export type SaveCustomerStyleNoteInput = z.infer<typeof saveCustomerStyleNoteInput>;
 
+const draftEmailInput = z.object({
+  customerId: z.number().int().positive(),
+  intent: z.enum(DRAFT_INTENTS),
+  instruction: z.string().trim().max(300).optional(),
+});
+export type DraftEmailInput = z.infer<typeof draftEmailInput>;
+
+const sendDraftInput = z.object({
+  customerId: z.number().int().positive(),
+  subject: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(5000),
+});
+export type SendDraftInput = z.infer<typeof sendDraftInput>;
+
 // ---------------------------------------------------------------------------
 // Shared helpers — copied from src/lib/payments/actions.ts's run()/
 // FriendlyError (which itself copies src/lib/invoices/actions.ts) — house
@@ -54,15 +75,14 @@ export type SaveCustomerStyleNoteInput = z.infer<typeof saveCustomerStyleNoteInp
 
 /** Thrown inside a `run()` callback to surface a short, user-facing message
  *  that is neither an authz reject (`ForbiddenError` -> "Forbidden") nor an
- *  opaque, Sentry-captured failure ("Server error"). Neither action in
- *  slice 37-1 actually throws it — saveDraftingPrefs is a pure upsert, and
- *  saveCustomerStyleNote's only failure mode is the atomic cross-org
- *  Forbidden check — but slice 37-2 extends this same file with
- *  `sendDraft`, which needs its own wording for "no email on file for this
- *  customer" (mirrors sendInvoice's identical guard). Scaffolded now so
- *  the `run()` catch chain below doesn't change shape between 37-1 and
- *  37-2. Local to this file, not shared, same as every other action
- *  module in this codebase.
+ *  opaque, Sentry-captured failure ("Server error"). Introduced in slice
+ *  37-1 unused by either action defined there — saveDraftingPrefs is a pure
+ *  upsert, and saveCustomerStyleNote's only failure mode is the atomic
+ *  cross-org Forbidden check — scaffolded ahead of slice 37-2's `sendDraft`
+ *  (below), which throws it for "no email on file for this customer"
+ *  (mirrors sendInvoice's identical guard, src/lib/invoices/actions.ts).
+ *  Local to this file, not shared, same as every other action module in
+ *  this codebase.
  */
 class FriendlyError extends Error {}
 
@@ -80,7 +100,7 @@ class FriendlyError extends Error {}
  *
  * Layered error mapping:
  *   ForbiddenError      → "Forbidden"   (deliberate authz reject inside fn)
- *   FriendlyError        → e.message    (reserved for slice 37-2's sendDraft)
+ *   FriendlyError        → e.message    (thrown by sendDraft below)
  *   constraint violation → mapDbConstraintError's friendly string
  *   anything else       → "Server error" (Sentry-captured, opaque to UI)
  */
@@ -237,4 +257,160 @@ export async function saveCustomerStyleNote(raw: unknown): Promise<ActionResult>
       revalidate: (input) => [`/customers/${input.customerId}/edit`],
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// draftEmail
+// ---------------------------------------------------------------------------
+
+/**
+ * draftEmail — the ONE deliberate demo-guard deviation in this file (spec
+ * §9): this action does NOT call `run()` and therefore skips its
+ * `isDemoMode()` short-circuit. Generation is read-only — nothing is
+ * written, nothing is sent — and in demo mode `generateAiText` (the seam
+ * `generateDraftCore` calls) already falls back to a simulated response on
+ * its own. Blocking this action in demo would silently kill the "generate a
+ * draft" half of the panel while leaving the voice/style-note sections
+ * looking normal; slice 36's health-insight card renders in demo for the
+ * identical reason (read-only + seam-simulated). Session and org-scoping
+ * remain fully mandatory below — only the demo short-circuit is skipped.
+ *
+ * Layering mirrors `run()`'s own order (session -> validate -> business
+ * logic) even though this function doesn't call `run()` itself: a missing
+ * session is "Unauthorized" before Zod ever sees the input, and a
+ * missing/cross-org customerId is "Forbidden" (via `buildDraftingContext`
+ * returning null) before any AI call is attempted. NO audit (nothing
+ * happened yet — the draft doesn't exist until it's sent) and NO
+ * `revalidatePath` (nothing on any page changed).
+ */
+export async function draftEmail(
+  raw: unknown,
+): Promise<
+  | { ok: true; subject: string; body: string; simulated: boolean }
+  | { ok: false; error: string }
+> {
+  let orgId: number;
+  try {
+    const session = await requireSession();
+    orgId = session.orgId;
+  } catch {
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  const parsed = draftEmailInput.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: firstZodError(parsed.error) };
+  }
+
+  try {
+    const d = db();
+    const ctx = await buildDraftingContext(d, orgId, parsed.data.customerId);
+    if (!ctx) return { ok: false, error: "Forbidden" };
+
+    const prefs = await getDraftingPrefs(d, orgId);
+    const intent: DraftIntent = parsed.data.intent;
+    return await generateDraftCore(ctx, prefs, intent, parsed.data.instruction, orgId);
+  } catch (e) {
+    const safe = safeErrShape(e);
+    console.error("[drafting action] error", { action: "draftEmail", ...safe });
+    Sentry.captureException(new Error("drafting action failed"), {
+      tags: { layer: "drafting-action", action: "draftEmail" },
+      extra: safe,
+    });
+    return { ok: false, error: "Server error" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// sendDraft
+// ---------------------------------------------------------------------------
+
+/** Short, user-facing text for every sendEmail seam failure code — never
+ *  the raw code, mirrors sendInvoice's identical `EMAIL_ERROR_MESSAGES`
+ *  (src/lib/invoices/actions.ts). */
+const EMAIL_ERROR_MESSAGES: Record<EmailErrorCode, string> = {
+  rate_limited: "Email service is rate-limited — try again shortly",
+  unavailable: "Email service is temporarily unavailable — try again shortly",
+  error: "Couldn't send the email — try again",
+};
+
+/**
+ * sendDraft — fully guarded (demo blocked, unlike `draftEmail` above): this
+ * one goes through `run()` like every other write in this file. Loads the
+ * customer org-scoped via `getCustomerById` (missing/cross-org ->
+ * `ForbiddenError`, same atomic-lookup convention as every other
+ * per-customer action); no email on file -> `FriendlyError` (mirrors
+ * sendInvoice's identical guard, src/lib/invoices/actions.ts).
+ *
+ * The org's signature is appended to the text that actually goes to the
+ * email seam ONLY — never written back into `input.body` — so the
+ * editable textarea always shows exactly what the user wrote (WYSIWYG,
+ * spec §9) and a resend after an edit can never double the signature: each
+ * call appends it exactly once to whatever `body` was passed in that call.
+ *
+ * Audit fires on success for BOTH outcomes (real or simulated), same
+ * `payload: { simulated }` convention as sendInvoice — the subject is
+ * deliberately NOT in the summary (it's free text the customer will read,
+ * not a stable label) and the recipient address never reaches the audit
+ * row or Sentry.
+ */
+export async function sendDraft(
+  raw: unknown,
+): Promise<{ ok: true; simulated?: true } | { ok: false; error: string }> {
+  let simulated = false;
+  const res = await run(
+    sendDraftInput,
+    raw,
+    async (input, orgId, actor) => {
+      const d = db();
+
+      const customer = await getCustomerById(d, orgId, input.customerId);
+      if (!customer) throw new ForbiddenError();
+      if (!customer.email) {
+        throw new FriendlyError("No email on file for this customer");
+      }
+
+      const prefs = await getDraftingPrefs(d, orgId);
+      const text = input.body + (prefs?.signature ? `\n\n${prefs.signature}` : "");
+
+      const emailRes = await sendEmail({
+        to: customer.email,
+        subject: input.subject,
+        text,
+        feature: "drafting",
+      });
+      if (!emailRes.ok) {
+        throw new FriendlyError(EMAIL_ERROR_MESSAGES[emailRes.error]);
+      }
+      simulated = emailRes.simulated;
+
+      // Truncated to the activity cap — customer.name alone could exceed it,
+      // and an over-long summary fails recordActivity's Zod, silently
+      // dropping the audit row (recordActivitySafely swallows the throw) —
+      // same defensive truncation as sendInvoice's identical audit call.
+      const fullSummary = `Sent email to ${customer.name}`;
+      await recordActivitySafely(
+        d,
+        {
+          orgId,
+          actor,
+          entityType: "customer",
+          entityId: input.customerId,
+          verb: "sent",
+          summary:
+            fullSummary.length > ACTIVITY_SUMMARY_MAX_LEN
+              ? `${fullSummary.slice(0, ACTIVITY_SUMMARY_MAX_LEN - 1)}…`
+              : fullSummary,
+          payload: { simulated },
+        },
+        { action: "drafting.sendDraft" },
+      );
+    },
+    {
+      action: "sendDraft",
+      revalidate: (input) => [`/customers/${input.customerId}/edit`],
+    },
+  );
+  if (!res.ok) return res;
+  return simulated ? { ok: true, simulated: true } : { ok: true };
 }
