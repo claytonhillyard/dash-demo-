@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from "vitest";
 import type { Db } from "@/db/client";
 import { getSharedDb, resetSharedDb, closeSharedDb } from "../helpers/shared-db";
-import { draftingPrefs } from "@/db/schema";
-import { getDraftingPrefs } from "@/db/drafting";
+import { draftingPrefs, customers } from "@/db/schema";
+import { getDraftingPrefs, getCustomerStyleNote } from "@/db/drafting";
 
 let db: Db;
 
@@ -61,5 +61,59 @@ describe("getDraftingPrefs — demo mode", () => {
       tone: "Warm, concise, plain language",
       signature: "— AIYA Designs",
     });
+  });
+});
+
+// getCustomerStyleNote (slice 37-3) — the customer edit page's targeted
+// reader for one field, kept off `CustomerView` on purpose (see the doc
+// comment on the function itself, src/db/drafting.ts, for the ripple this
+// avoided). Same seedRow-helper convention as test/db/customers.test.ts.
+async function seedCustomer(
+  orgId: number,
+  name: string,
+  extras: Record<string, unknown> = {},
+): Promise<number> {
+  const [row] = await db
+    .insert(customers)
+    .values({ orgId, name, ...extras })
+    .returning();
+  return row!.id;
+}
+
+describe("getCustomerStyleNote", () => {
+  it("returns null when the customer has no style note saved", async () => {
+    const id = await seedCustomer(1, "Alice");
+    expect(await getCustomerStyleNote(db, 1, id)).toBeNull();
+  });
+
+  it("returns the saved style note when one exists", async () => {
+    const id = await seedCustomer(1, "Alice", { styleNote: "Prefers concise, no small talk" });
+    expect(await getCustomerStyleNote(db, 1, id)).toBe("Prefers concise, no small talk");
+  });
+
+  it("returns null when the customer belongs to a different org", async () => {
+    const id = await seedCustomer(999, "Hidden", { styleNote: "Should never leak" });
+    expect(await getCustomerStyleNote(db, 1, id)).toBeNull();
+  });
+
+  it("returns null for an unknown customer id", async () => {
+    expect(await getCustomerStyleNote(db, 1, 9_999_999)).toBeNull();
+  });
+});
+
+describe("getCustomerStyleNote — demo mode", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("always returns null, ignoring any saved row", async () => {
+    // Insert a real row first — the demo branch must short-circuit BEFORE
+    // reading the table, same discipline as getDraftingPrefs's demo test
+    // above, even though the "fixed" demo behavior here is null rather than
+    // a canned constant (DEMO_CUSTOMERS carries no style notes, spec §4).
+    const id = await seedCustomer(1, "Alice", {
+      styleNote: "This real row must never be returned in demo mode",
+    });
+    vi.stubEnv("NEXT_PUBLIC_DEMO_MODE", "true");
+
+    expect(await getCustomerStyleNote(db, 1, id)).toBeNull();
   });
 });

@@ -11,10 +11,12 @@ import { buildHealthInsightPrompt } from "@/lib/customers/healthInsight";
 import { toUtcDay } from "@/lib/sentinel/capture";
 import { getSnapshotTrend, TREND_WINDOW_DAYS, type SnapshotTrend } from "@/lib/sentinel/trend";
 import { generateAiText } from "@/lib/ai/generateAiText";
+import { getDraftingPrefs, getCustomerStyleNote } from "@/db/drafting";
 import { CustomerForm } from "@/components/customers/CustomerForm";
 import { ActivityList } from "@/components/activity/ActivityList";
 import { HealthBadge } from "@/components/customers/HealthBadge";
 import { WatchToggle } from "@/components/watchlists/WatchToggle";
+import { DraftEmailPanel } from "@/components/customers/DraftEmailPanel";
 import { updateCustomer, deleteCustomer } from "@/lib/customers/actions";
 import { getWatchForEntity } from "@/lib/watchlists/queries";
 
@@ -86,6 +88,18 @@ export default async function EditCustomerPage({
   // captureHealthSnapshots (called from the customers LIST page only) this
   // is safe and cheap to call on every edit-page render too.
   const trend = await getSnapshotTrend(db, orgId, id, now);
+
+  // Drafting panel data (slice 37-3): the org's saved voice (tone/signature)
+  // and this customer's style note. Both org-scoped, independent of each
+  // other and of everything above, so they run concurrently. `customer.email`
+  // is already loaded above (getCustomerById) — reused here as the `hasEmail`
+  // boolean rather than passing the address itself down to a client
+  // component (same structural PII discipline as DraftingContext, src/lib/
+  // drafting/context.ts).
+  const [draftingPrefs, styleNote] = await Promise.all([
+    getDraftingPrefs(db, orgId),
+    getCustomerStyleNote(db, orgId, id),
+  ]);
 
   // AI insight is garnish: a failed call renders nothing, never an error
   // state. PII discipline: buildHealthInsightPrompt's input type has no
@@ -174,6 +188,16 @@ export default async function EditCustomerPage({
           ) : null}
         </div>
       </section>
+      <div className="mt-8">
+        <DraftEmailPanel
+          customerId={id}
+          customerName={customer.name}
+          hasEmail={Boolean(customer.email)}
+          styleNote={styleNote}
+          prefsTone={draftingPrefs?.tone ?? null}
+          prefsSignature={draftingPrefs?.signature ?? null}
+        />
+      </div>
       <section className="mt-8">
         <h2 className="mb-2 text-sm font-semibold text-zinc-200">Activity</h2>
         <ActivityList compact events={activity} />
