@@ -14,14 +14,14 @@ C-8 switched the persistent path from `neon-http` (which throws on `db.transacti
 
 ## One-time setup
 
-1. **Create a Neon project + a branch** (use a throwaway branch first, not production). Copy its pooled connection string — it looks like `postgresql://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/DB?sslmode=require`.
-2. **Apply the migrations offline** (they do NOT run at request time on Neon — only pglite self-migrates):
+1. **Create a Neon project + a branch** (use a throwaway branch first, not production). Neon gives you two connection strings for the branch — a **direct** one (`ep-xxx.REGION…`) and a **pooled** one (`ep-xxx-pooler.REGION…`). Grab both; they're used in different steps below.
+2. **Apply the migrations offline** (they do NOT run at request time on Neon — only pglite self-migrates). Use the **direct (non-pooler)** string here — schema DDL wants a real session, which the PgBouncer transaction-pooler doesn't fully provide:
    ```bash
-   DATABASE_URL='postgresql://…' npm run db:migrate
+   DATABASE_URL='postgresql://…ep-xxx.REGION.aws.neon.tech/DB?sslmode=require' npm run db:migrate
    ```
    This applies everything in `drizzle/` (through `0023_dry_sabra`) to the Neon branch.
 3. **Set the Netlify env vars** (Site config → Environment variables), then redeploy:
-   - `DATABASE_URL` = the Neon pooled string.
+   - `DATABASE_URL` = the Neon string. **Prefer the pooled (`-pooler`) endpoint** for the running app — it's best-practice for serverless functions. (neon-serverless works against either the direct or pooled host; pooled just handles function concurrency better.)
    - `SESSION_SECRET` = a long random string (required once you're out of demo mode — auth is real now).
    - Leave `NEXT_PUBLIC_DEMO_MODE` **unset** (demo mode short-circuits the DB entirely; setting it would ignore Neon).
    - Optional, to go fully live: `AI_GATEWAY_API_KEY` (real AI drafting/narratives/command routing), `RESEND_API_KEY` + `EMAIL_FROM` (real email sends).
@@ -37,7 +37,7 @@ Sign in (real auth — your seeded user), then:
 4. **Data persists across a redeploy.** Trigger a redeploy (or wait for a cold start) and confirm the customer/invoice/payment you created are still there — proving you're on Neon, not the ephemeral pglite.
 5. **No secrets in logs.** Skim the Netlify function logs for the run above — the connection string must never appear (it's only read from `process.env`, never logged).
 
-If step 1 fails with a WebSocket/connection error, double-check: the connection string is the **pooled** endpoint, `sslmode=require` is present, and `DATABASE_URL` is set on the exact deploy context you're testing (production vs. preview).
+If step 1 fails with a WebSocket/connection error, double-check: `sslmode=require` is present, `DATABASE_URL` is set on the exact deploy context you're testing (production vs. preview), and — if you used the direct endpoint for the app — try the pooled (`-pooler`) one, which tolerates serverless connection churn better. If the one-time `npm run db:migrate` fails, make sure you ran it against the **direct** (non-pooler) string.
 
 ## Rollback
 
