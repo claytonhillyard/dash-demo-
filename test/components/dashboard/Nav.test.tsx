@@ -52,4 +52,9 @@ describe("Nav", () => {
     const link = screen.getByRole("link", { name: "Invoices" });
     expect(link).toHaveAttribute("href", "/invoices");
   });
+  it("links Command to /command (slice 35a)", () => {
+    render(<Nav />);
+    const link = screen.getByRole("link", { name: "Command" });
+    expect(link).toHaveAttribute("href", "/command");
+  });
 });

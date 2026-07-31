@@ -219,8 +219,13 @@ async function getHealthMix(db: Db, orgId: number): Promise<HealthMix | null> {
  * `amount_cents` is a plain integer column (not a SUM aggregate), so
  * drizzle's query builder returns it as a JS number directly — no
  * `Number()` coercion needed, matching `getTrailingProfitMonths`'s comment.
+ *
+ * Exported (slice 35a-1) so the command palette's `revenue_trend` executor
+ * (src/lib/command/registry.ts) can reuse this reader verbatim instead of
+ * re-querying the legacy table itself — same honesty comment, same
+ * no-org-filter/no-demo-branch behavior, one source of truth.
  */
-async function getRecentRevenueMonths(db: Db, n: number): Promise<Array<{ ym: string; cents: number }>> {
+export async function getRecentRevenueMonths(db: Db, n: number): Promise<Array<{ ym: string; cents: number }>> {
   const rows = await db
     .select({ year: revenueMonths.year, month: revenueMonths.month, amountCents: revenueMonths.amountCents })
     .from(revenueMonths)
@@ -235,8 +240,9 @@ async function getRecentRevenueMonths(db: Db, n: number): Promise<Array<{ ym: st
  *  generically parameterized over the table: the two drizzle table objects
  *  don't share a convenient common type for `.from()`/`.orderBy()`, and the
  *  duplication is only a few lines (same tradeoff `getCurrentMonthRevenueCents`
- *  / `getCurrentMonthProfitCents` make in src/db/queries.ts). */
-async function getRecentProfitMonths(db: Db, n: number): Promise<Array<{ ym: string; cents: number }>> {
+ *  / `getCurrentMonthProfitCents` make in src/db/queries.ts). Exported for the
+ *  same slice-35a-1 reason as `getRecentRevenueMonths` above. */
+export async function getRecentProfitMonths(db: Db, n: number): Promise<Array<{ ym: string; cents: number }>> {
   const rows = await db
     .select({ year: profitMonths.year, month: profitMonths.month, amountCents: profitMonths.amountCents })
     .from(profitMonths)

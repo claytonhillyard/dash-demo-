@@ -8,7 +8,7 @@ import { NavItem } from "./NavItem";
 // repurposing the umbrella "Marketing Suite" slot. The standalone entry sits
 // next to "Diamonds" so all owner-entered ledgers cluster together.
 const SECTIONS = [
-  "Dashboard", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
+  "Dashboard", "Command", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
   "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
   "Customers", "Activity", "Watchlists", "Invoices", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
   "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
@@ -17,6 +17,11 @@ const SECTIONS = [
 
 const ROUTES: Record<string, string> = {
   Dashboard: "/",
+  // Slice 35a — read-only AI command palette ("who owes me money?", "how's
+  // my runway?"). Sits right after Dashboard as a top-level launcher,
+  // distinct from the "Command Center" placeholder label below it (an
+  // unrelated future concept with no route yet).
+  Command: "/command",
   Inventory: "/inventory",
   Diamonds: "/diamonds",
   Website: "/website",

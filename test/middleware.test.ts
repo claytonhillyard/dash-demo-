@@ -93,6 +93,10 @@ describe("middleware matcher", () => {
     }
   });
 
+  it("guards /command (slice 35a)", () => {
+    expect(isMatched("/command")).toBe(true);
+  });
+
   it("does not guard the public login page", () => {
     expect(isMatched("/login")).toBe(false);
   });
