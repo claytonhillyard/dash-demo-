@@ -6,13 +6,20 @@ import { CommandPalette } from "@/components/command/CommandPalette";
 // pattern: top-level trackable mock, module factory forwards to it. No
 // next/navigation mock here — the component is deliberately router-free (no
 // useRouter/refresh anywhere), so there's nothing to stub.
+//
+// Slice 35b-3 adds confirmWriteCommand to the same mocked module — the
+// palette's only other import from "@/lib/command/actions", used exclusively
+// by the new `confirm`-kind result's Confirm button.
 const runCommand = vi.fn();
+const confirmWriteCommand = vi.fn();
 vi.mock("@/lib/command/actions", () => ({
   runCommand: (...args: unknown[]) => runCommand(...args),
+  confirmWriteCommand: (...args: unknown[]) => confirmWriteCommand(...args),
 }));
 
 beforeEach(() => {
   runCommand.mockReset();
+  confirmWriteCommand.mockReset();
 });
 
 const HELP_EXAMPLES = ["who owes me money", "how's my runway", "show at-risk customers"];
@@ -189,6 +196,115 @@ describe("CommandPalette — help result (router miss)", () => {
     // The empty-state block is replaced by history once a result lands, so
     // exactly one should remain.
     expect(screen.getAllByRole("button", { name: "how's my runway" })).toHaveLength(1);
+  });
+});
+
+describe("CommandPalette — confirm result (write commands)", () => {
+  // Mirrors the exact shape runCommand's write branch returns (spec §3.1,
+  // src/lib/command/registry.ts's `confirm` CommandResult variant) — a
+  // record_payment preview, chosen because it exercises every field
+  // (multiple detail rows + a warning), same rationale as the plan's own
+  // "escalating side-effect severity" ordering (spec §4 table).
+  const CONFIRM_RESULT = {
+    kind: "confirm",
+    commandId: "record_payment",
+    resolvedParams: { invoiceId: 42, amountCents: 50000, method: "cash", receivedDate: "2026-07-31" },
+    summary: "Record a $500.00 cash payment on INV-2026-0001 — brings the balance to $0.00.",
+    details: [
+      ["Invoice", "INV-2026-0001"],
+      ["Amount", "$500.00"],
+      ["Method", "cash"],
+      ["Date", "2026-07-31"],
+      ["Balance after", "$0.00"],
+    ],
+    warning: "Records a payment against this invoice.",
+  } as const;
+
+  function askConfirm() {
+    runCommand.mockResolvedValue({ ok: true, result: CONFIRM_RESULT, command: "record_payment" });
+    render(<CommandPalette helpExamples={HELP_EXAMPLES} />);
+    ask("record a $500 cash payment on INV-2026-0001");
+  }
+
+  it("renders the summary, every detail row, the warning, and Confirm/Cancel buttons", async () => {
+    askConfirm();
+
+    expect(await screen.findByText(CONFIRM_RESULT.summary)).toBeInTheDocument();
+    for (const [label, value] of CONFIRM_RESULT.details) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText(value)).toBeInTheDocument();
+    }
+    expect(screen.getByText(CONFIRM_RESULT.warning)).toBeInTheDocument();
+    // findByRole (not getByRole): the Confirm button's own label is tied to
+    // the SAME shared `pending` flag as the top Ask button's "Asking…" —
+    // isPending isn't guaranteed to have flipped back to false in the exact
+    // tick `findByText` above resolved (the file's established
+    // waitForEnabledButton rationale), so poll for the settled "Confirm"
+    // name rather than asserting on it synchronously.
+    expect(await screen.findByRole("button", { name: /^confirm$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+  });
+
+  it("clicking Confirm calls confirmWriteCommand with the exact commandId and resolvedParams from the result", async () => {
+    confirmWriteCommand.mockResolvedValue({ ok: true });
+    askConfirm();
+    await screen.findByRole("button", { name: /^confirm$/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+    await waitFor(() =>
+      expect(confirmWriteCommand).toHaveBeenCalledWith({
+        commandId: CONFIRM_RESULT.commandId,
+        resolvedParams: CONFIRM_RESULT.resolvedParams,
+      }),
+    );
+  });
+
+  it("clicking Cancel makes no confirmWriteCommand call and discards the card", async () => {
+    askConfirm();
+    await screen.findByRole("button", { name: /^cancel$/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    expect(confirmWriteCommand).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /^confirm$/i })).toBeNull();
+    expect(screen.queryByText(CONFIRM_RESULT.summary)).toBeNull();
+  });
+
+  it('shows a "Simulated" note (and keeps the summary visible) when confirmWriteCommand resolves ok with simulated:true', async () => {
+    confirmWriteCommand.mockResolvedValue({ ok: true, simulated: true });
+    askConfirm();
+    await screen.findByRole("button", { name: /^confirm$/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+    expect(await screen.findByText("Done.")).toBeInTheDocument();
+    expect(screen.getByText(/simulated/i)).toBeInTheDocument();
+    expect(screen.getByText(CONFIRM_RESULT.summary)).toBeInTheDocument();
+  });
+
+  it("shows the delegate's error inside the card on {ok:false} and keeps Confirm available for retry", async () => {
+    confirmWriteCommand.mockResolvedValue({ ok: false, error: "Payment exceeds the remaining balance ($0.00 left)" });
+    askConfirm();
+    await screen.findByRole("button", { name: /^confirm$/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Payment exceeds the remaining balance ($0.00 left)");
+    expect(screen.getByText(CONFIRM_RESULT.summary)).toBeInTheDocument();
+    await waitForEnabledButton(/^confirm$/i);
+  });
+
+  it("asking a new question while a confirm card is unconfirmed replaces it — the old write evaporates with no call", async () => {
+    askConfirm();
+    await screen.findByRole("button", { name: /^confirm$/i });
+
+    runCommand.mockResolvedValueOnce({ ok: true, result: { kind: "stat", label: "L", value: "V" }, command: "runway" });
+    ask("how's my runway");
+
+    await screen.findByText("V");
+    expect(screen.queryByRole("button", { name: /^confirm$/i })).toBeNull();
+    expect(confirmWriteCommand).not.toHaveBeenCalled();
   });
 });
 
