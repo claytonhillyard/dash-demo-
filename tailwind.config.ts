@@ -6,6 +6,13 @@ const config: Config = {
     extend: {
       colors: {
         bg: "hsl(var(--bg))",
+        // The primary text token. Without this, ~387 `text-text`/`text-text/NN`
+        // classes across the app emitted no rule and silently inherited the
+        // body color (so muted variants like `text-text/70` rendered at full
+        // brightness). Defining it makes those alpha variants actually mute
+        // (review chip). `--text` has a single definition in globals.css — no
+        // light-theme variant — so this is unambiguous.
+        text: "hsl(var(--text))",
         surface: "hsl(var(--surface))",
         "surface-2": "hsl(var(--surface-2))",
         border: "hsl(var(--border))",

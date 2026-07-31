@@ -31,6 +31,9 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 // test seam — inject an isolated pglite db (mirrors the company actions pattern)
 let testDb: Db | null = null;
 export async function __setTestDb(db: Db | null): Promise<void> {
+  // Test seam only. "use server" exports are POST-invokable; outside the
+  // test runner this must do nothing so it can't poison db() in prod (review chip).
+  if (process.env.NODE_ENV !== "test" && !process.env.VITEST) return;
   testDb = db;
 }
 function db(): Db {
