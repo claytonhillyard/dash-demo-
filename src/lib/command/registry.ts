@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
+import type { WriteCommandId } from "./writeRegistry";
 import { isDemoMode } from "@/lib/demo/mode";
 import { getReceivablesRows, getTrailingProfitMonths } from "@/db/runway";
 import { computeReceivablesAging, computeRunway, daysBetweenUtc } from "@/lib/runway/compute";
@@ -27,17 +28,45 @@ import type { HealthBand } from "@/lib/customers/healthScore";
  * `HELP_EXAMPLES` via page props (static strings, safe for the client
  * bundle) and live results via the `runCommand` server action. Structural
  * verification of that boundary is a task-35a-3 review probe.
+ *
+ * Slice 35b-2 adds ONE new `CommandResult` variant below (`confirm`) for
+ * WRITE commands (src/lib/command/writeRegistry.ts) — everything else in
+ * this file is unmodified read-only 35a-1 territory. `confirm` only ever
+ * carries a preview (`WritePreview`'s `ok:true` fields, verbatim) that
+ * `runCommand` (./actions.ts) builds by calling a write command's `preview`
+ * — never its `execute` — so constructing a `confirm` result is itself
+ * still a read-only act. The only import this file takes on from
+ * writeRegistry.ts is the `WriteCommandId` TYPE (erased at compile time),
+ * so the client-bundle boundary documented above is unaffected: registry.ts
+ * still never pulls writeRegistry.ts's db-graph-and-three-"use server"-
+ * actions module in as a VALUE.
  */
 
 // ---------------------------------------------------------------------------
-// Types — spec §3, verbatim.
+// Types — spec §3, verbatim (extended by spec §3.1 for the `confirm` variant).
 // ---------------------------------------------------------------------------
 
 export type CommandResult =
   | { kind: "stat"; label: string; value: string; detail?: string }
   | { kind: "table"; title: string; columns: string[]; rows: string[][]; links?: Array<string | null> } // links[i] = href for row i
   | { kind: "list"; title: string; items: Array<{ text: string; href?: string }> }
-  | { kind: "help"; intro: string; examples: string[] };
+  | { kind: "help"; intro: string; examples: string[] }
+  // Slice 35b-2 (spec §3.1) — a WRITE command's preview, awaiting the
+  // human's Confirm click. `resolvedParams` are EXACTLY the concrete params
+  // the underlying guarded action's own Zod expects (the write command
+  // def's `preview` return value, unchanged) — the palette's eventual
+  // Confirm button (task 35b-3) passes them straight through to
+  // `confirmWriteCommand({commandId, resolvedParams})` (./actions.ts)
+  // without interpreting or rebuilding them. Nothing has mutated by the
+  // time this result exists; see runCommand's write branch below.
+  | {
+      kind: "confirm";
+      commandId: WriteCommandId;
+      resolvedParams: unknown;
+      summary: string;
+      details: Array<[string, string]>;
+      warning?: string;
+    };
 
 export type CommandDef<P> = {
   id: CommandId;
