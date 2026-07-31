@@ -56,8 +56,20 @@ export const dynamic = "force-dynamic";
 // src/db/inventory.ts's own `zeroCounts()` so the inventory shape can never
 // drift from the reader's real empty case. Module-level (not per-request)
 // since both are plain constants with no db/orgId dependency.
-const EMPTY_INVENTORY_SUMMARY: InventorySummary = { counts: zeroCounts(), total: 0, updatedAt: null };
-const EMPTY_DIAMOND_SUMMARY: DiamondSummary = { naturalIndex: null, labIndex: null, points: [], updatedAt: null };
+// Object.freeze so these shared module-level fallbacks can't have their
+// top-level fields reassigned across requests by a future consumer (review
+// nit — safe today, footgun tomorrow). RSC consumers only read/.map these.
+const EMPTY_INVENTORY_SUMMARY = Object.freeze({
+  counts: zeroCounts(),
+  total: 0,
+  updatedAt: null,
+}) as InventorySummary;
+const EMPTY_DIAMOND_SUMMARY = Object.freeze({
+  naturalIndex: null,
+  labIndex: null,
+  points: [],
+  updatedAt: null,
+}) as DiamondSummary;
 
 export default async function Home() {
   const db = await ensureDbReady();
@@ -96,14 +108,15 @@ export default async function Home() {
   // per-id queries run concurrently rather than sequentially. `unreadByDealId`
   // is already batched in a single SQL call, so it stays as-is.
   //
-  // C-7 hardening pass: intentionally left un-wrapped by safePanel (scoped
-  // to the FIRST Promise.all above). `activeDeals` degrading to [] already
-  // makes `dealIds` [] too, and every fetch below already has a proven
-  // zero-dealIds short-circuit (e.g. getUnreadCountsForOrg returns
-  // `new Map()` before touching the db when dealIds.length === 0) — the
-  // same path a real "org has 0 open deals" render already exercises. A
-  // genuinely mid-flight per-deal failure (activeDeals resolves fine, but
-  // one of ITS four per-id reads then throws) is NOT degraded by this slice.
+  // C-7 hardening pass: the four per-DEAL fetches are left un-wrapped —
+  // `activeDeals` degrading to [] makes `dealIds` [] too, so they map over
+  // nothing (and getUnreadCountsForOrg returns `new Map()` before touching
+  // the db when dealIds.length === 0). A genuinely mid-flight per-deal
+  // failure (activeDeals resolves, but one of its four per-id reads throws)
+  // is NOT degraded by this slice — documented residual. `getTodaysBidsForOwner`
+  // is the exception: it's DEAL-INDEPENDENT (runs unconditionally, no
+  // dealIds short-circuit), so it IS a standalone 500 vector — wrapped with
+  // safePanel like the first block (review finding).
   const dealIds = activeDeals.map((d) => d.id);
   const [
     unreadByDealId,
@@ -118,7 +131,7 @@ export default async function Home() {
     Promise.all(dealIds.map((id) => getDealThreadModeForOwner(db, orgId, id))),
     Promise.all(dealIds.map((id) => getBidsForDeal(db, orgId, id))),
     Promise.all(dealIds.map((id) => getDealBidModeForOwner(db, orgId, id))),
-    getTodaysBidsForOwner(db, orgId),
+    safePanel("todaysBids", getTodaysBidsForOwner(db, orgId), []),
   ]);
   const threadsByDealId = new Map<number, DealMessageView[]>();
   dealIds.forEach((id, i) => threadsByDealId.set(id, threadsResults[i]));
