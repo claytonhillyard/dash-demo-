@@ -153,18 +153,22 @@ async function run<T>(
  * `toUtcDay(new Date())` works because both sides are "YYYY-MM-DD" (ISO
  * calendar dates sort lexicographically same as chronologically).
  *
- * The overpay guard re-reads `SUM(amount_cents)` INSIDE `db.transaction()`
- * rather than trusting any pre-transaction read. Honest scope of that guard
- * (review F2): on pglite (the desktop/dev deployment) the client serializes
- * transactions, so the race is genuinely closed; on server Postgres READ
- * COMMITTED two concurrent transactions could both read the old sum — a
- * `SELECT … FOR UPDATE` on the invoice row would be needed there. Today
- * that's moot: the neon-http driver throws on `transaction()` entirely, so
- * a server deployment fails closed ("Server error") rather than overpaying.
- * Tracked as a follow-up alongside the codebase-wide neon-http/transaction
- * question. The aggregate is a bigint in Postgres, so pglite/pg return it
- * as a string; `Number()` it, same as the `paid_cents: string | number`
- * pattern in src/db/invoices.ts's `getInvoices`.
+ * The overpay guard takes a `SELECT … FOR UPDATE` row lock on the invoice
+ * FIRST, then re-reads `SUM(amount_cents)` — both INSIDE `db.transaction()`
+ * — rather than trusting any pre-transaction read. Honest scope of that
+ * guard (review F2, closed in C-8): on pglite (the desktop/dev deployment)
+ * the client serializes transactions, so the race was already closed there;
+ * on server Postgres under READ COMMITTED, two concurrent transactions
+ * could previously both read the old sum before either committed — that gap
+ * is now closed by the FOR UPDATE row lock, which blocks a second
+ * concurrent recordPayment on the SAME invoice until the first transaction
+ * commits or rolls back. This only works because src/db/client.ts now runs
+ * the Neon path on drizzle-orm/neon-serverless (real transactions over
+ * WebSocket) — the previous neon-http driver threw on `transaction()`
+ * entirely, so this guard could never even run against a server deployment.
+ * The aggregate is a bigint in Postgres, so pglite/pg return it as a
+ * string; `Number()` it, same as the `paid_cents: string | number` pattern
+ * in src/db/invoices.ts's `getInvoices`.
  */
 export async function recordPayment(raw: unknown): Promise<ActionResult> {
   return run(
@@ -197,6 +201,20 @@ export async function recordPayment(raw: unknown): Promise<ActionResult> {
       }
 
       await d.transaction(async (tx) => {
+        // Row lock FIRST, before the SUM: pins this invoice row for the rest
+        // of the transaction so a second concurrent recordPayment on the
+        // SAME invoice blocks here (on real Postgres) until this transaction
+        // commits or rolls back, instead of racing the SUM below. Org-scoped
+        // like every other invoice lookup in this file. The row's columns
+        // aren't needed again — the invoice data already loaded above is
+        // still valid, since totalCents/status can't change underneath a
+        // held row lock.
+        await tx
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(and(eq(invoices.id, invoice.id), eq(invoices.orgId, orgId)))
+          .for("update");
+
         const [row] = await tx
           .select({ paid: sql<string | number>`COALESCE(SUM(${payments.amountCents}), 0)` })
           .from(payments)
