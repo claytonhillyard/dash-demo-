@@ -5,12 +5,17 @@ vi.mock("@/lib/ai/generateAiText", () => ({ generateAiText: vi.fn() }));
 import { generateAiText } from "@/lib/ai/generateAiText";
 import { routeByRules, routeCommand } from "@/lib/command/route";
 import { COMMANDS, type CommandId } from "@/lib/command/registry";
+import { WRITE_COMMANDS, WRITE_COMMAND_IDS } from "@/lib/command/writeRegistry";
 
 /**
- * Router tests (spec §4, §7 rows 2-3). `routeByRules` is pure — no mocks
- * needed. `routeCommand`'s AI path is exercised entirely against a mocked
+ * Router tests (spec §4, §7 rows 2-3; write-command routing added §5/§7
+ * row 3 in slice 35b-2). `routeByRules` is pure — no mocks needed.
+ * `routeCommand`'s AI path is exercised entirely against a mocked
  * `generateAiText` seam (same mocking shape as test/lib/drafting/
- * generate.test.ts): these tests never hit a real model or the DB.
+ * generate.test.ts): these tests never hit a real model or the DB. Routing
+ * a write command is itself still read-only (this file never calls
+ * `.preview`/`.execute` on anything) — only `.id`/`.params`, the exact same
+ * shape a read command's routing produces.
  */
 
 // ---------------------------------------------------------------------------
@@ -34,6 +39,88 @@ describe("routeByRules — every command's own example phrasings route back to i
         expect(routed.id, `"${example}" should route to ${id}, got ${routed.id}`).toBe(id);
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Slice 35b-2 — write commands (spec §5). Same self-consistency idiom as the
+// read-only block above, over WRITE_COMMANDS instead of COMMANDS: every
+// write command's own example phrasings (writeRegistry.ts, landed 35b-1)
+// must route back to that same write id, with no exceptions needed (unlike
+// the read side's one deliberate overdue_invoices/unpaid_by_customer
+// override above).
+// ---------------------------------------------------------------------------
+
+describe("routeByRules — every WRITE command's own example phrasings route back to it", () => {
+  it("loops WRITE_COMMANDS and asserts each example self-routes", () => {
+    for (const id of WRITE_COMMAND_IDS) {
+      for (const example of WRITE_COMMANDS[id].examples) {
+        const routed = routeByRules(example);
+        expect(routed.id, `"${example}" should route to ${id}, got ${routed.id}`).toBe(id);
+      }
+    }
+  });
+});
+
+describe("routeByRules — write command param extraction (spec §5)", () => {
+  it('record_payment: a $-amount + method extract exactly ({invoice, amount, method})', () => {
+    expect(routeByRules("record a $500 cash payment on INV-2026-0001")).toEqual({
+      id: "record_payment",
+      params: { invoice: "INV-2026-0001", amount: "$500", method: "cash" },
+    });
+  });
+
+  it("record_payment: a bare number with no $ and no method word still extracts the amount", () => {
+    expect(routeByRules("log a payment of 250 on INV-2026-0002")).toEqual({
+      id: "record_payment",
+      params: { invoice: "INV-2026-0002", amount: "250" },
+    });
+  });
+
+  it("record_payment: a comma-grouped $-amount + a different method word", () => {
+    expect(routeByRules("paid $1,000 via wire on INV-2026-0003")).toEqual({
+      id: "record_payment",
+      params: { invoice: "INV-2026-0003", amount: "$1,000", method: "wire" },
+    });
+  });
+
+  it('add_customer_note: "note that X ..." splits into {customer, note}', () => {
+    expect(routeByRules("note that Tanaka prefers concise emails")).toEqual({
+      id: "add_customer_note",
+      params: { customer: "Tanaka", note: "prefers concise emails" },
+    });
+  });
+
+  it("send_invoice: an INV- reference extracts {invoice}", () => {
+    expect(routeByRules("send invoice INV-2026-0001")).toEqual({
+      id: "send_invoice",
+      params: { invoice: "INV-2026-0001" },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Read/write disambiguation (spec §5): an imperative action verb routes to
+// the write; a bare noun stays a read. These are the exact tie rules this
+// file's header comment documents — locked here empirically rather than
+// just asserted in prose.
+// ---------------------------------------------------------------------------
+
+describe("routeByRules — read/write disambiguation", () => {
+  it('"payments" (bare noun, no verb) stays a read: recent_activity', () => {
+    expect(routeByRules("payments").id).toBe("recent_activity");
+  });
+
+  it('"record a payment" (imperative verb) becomes a write: record_payment', () => {
+    expect(routeByRules("record a payment").id).toBe("record_payment");
+  });
+
+  it('"invoices" (bare noun, no verb) stays a read: overdue_invoices', () => {
+    expect(routeByRules("invoices").id).toBe("overdue_invoices");
+  });
+
+  it('"send invoice INV-1" (imperative verb) becomes a write: send_invoice', () => {
+    expect(routeByRules("send invoice INV-1").id).toBe("send_invoice");
   });
 });
 
@@ -198,6 +285,21 @@ describe("routeCommand — AI path", () => {
     expect(routed).toEqual({ id: "customer_lookup", params: { query: "Tanaka" } });
   });
 
+  it("a write-command JSON validates against its own routeParams and routes exactly as given (slice 35b-2)", async () => {
+    vi.mocked(generateAiText).mockResolvedValueOnce({
+      ok: true,
+      text: '{"command":"record_payment","params":{"invoice":"INV-2026-0001","amount":"$500","method":"cash"}}',
+      model: "m",
+      simulated: false,
+      durationMs: 5,
+    });
+    const routed = await routeCommand("irrelevant — the mock decides", 1);
+    expect(routed).toEqual({
+      id: "record_payment",
+      params: { invoice: "INV-2026-0001", amount: "$500", method: "cash" },
+    });
+  });
+
   it("fenced JSON (```json ... ```) still parses", async () => {
     vi.mocked(generateAiText).mockResolvedValueOnce({
       ok: true,
@@ -276,6 +378,54 @@ describe("routeCommand — AI path", () => {
     const routed = await routeCommand("show at-risk customers", 1);
     expect(routed).toEqual(routeByRules("show at-risk customers"));
     expect(routed.id).toBe("at_risk_customers");
+  });
+
+  it("a bad-write-params AI JSON (wrong type for a required field) falls back to routeByRules(question)", async () => {
+    vi.mocked(generateAiText).mockResolvedValueOnce({
+      ok: true,
+      // amount must be a string per record_payment's routeParams — this is
+      // deliberately the wrong type (a number), same class of failure as
+      // the read-side "Zod-invalid params" test above.
+      text: '{"command":"record_payment","params":{"invoice":"INV-2026-0001","amount":500}}',
+      model: "m",
+      simulated: false,
+      durationMs: 5,
+    });
+    const routed = await routeCommand("how's my runway", 1);
+    expect(routed).toEqual(routeByRules("how's my runway"));
+    expect(routed.id).toBe("runway");
+  });
+
+  it("write ids survive the Object.hasOwn whitelist for every one of the 3 write commands", async () => {
+    for (const id of WRITE_COMMAND_IDS) {
+      vi.mocked(generateAiText).mockResolvedValueOnce({
+        ok: true,
+        text: `{"command":"${id}","params":{}}`,
+        model: "m",
+        simulated: false,
+        durationMs: 5,
+      });
+      // Every write def's routeParams requires at least one field, so `{}`
+      // fails validation here — the point isn't a clean route, it's that
+      // the id itself passes the whitelist (Object.hasOwn(WRITE_COMMANDS,
+      // id) — not rejected the way "__proto__"/"delete_everything" are
+      // above) and falls through to the SAME routeByRules(question)
+      // fallback a Zod-param failure always takes, never a throw.
+      const routed = await routeCommand("how's my runway", 1);
+      expect(routed).toEqual(routeByRules("how's my runway"));
+    }
+  });
+
+  it("garbage AI command id AND an unroutable fallback question both fail -> help end to end", async () => {
+    vi.mocked(generateAiText).mockResolvedValueOnce({
+      ok: true,
+      text: '{"command":"delete_everything","params":{}}',
+      model: "m",
+      simulated: false,
+      durationMs: 5,
+    });
+    const routed = await routeCommand("zzxxqq flibberflobber", 1);
+    expect(routed).toEqual({ id: "help" });
   });
 
   it("a seam error falls back to routeByRules(question)", async () => {
@@ -360,7 +510,7 @@ describe("routeCommand — the prompt's only dynamic content is the question", (
     expect(firstArg.user).toBe("org:42");
   });
 
-  it("the static catalog names every command id", async () => {
+  it("the static catalog names every command id, read AND write (slice 35b-2)", async () => {
     vi.mocked(generateAiText).mockResolvedValue({
       ok: true,
       text: '{"command":"help","params":{}}',
@@ -371,6 +521,9 @@ describe("routeCommand — the prompt's only dynamic content is the question", (
     await routeCommand("anything", 1);
     const system = vi.mocked(generateAiText).mock.calls[0]![0].system!;
     for (const id of Object.keys(COMMANDS)) {
+      expect(system).toContain(id);
+    }
+    for (const id of WRITE_COMMAND_IDS) {
       expect(system).toContain(id);
     }
   });
