@@ -287,7 +287,9 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | C-3 | Add `orgs.module: enum` column | core | proposed | open | Lets UI conditionally load AIYA pieces |
 | C-4 | Module registry pattern in code (`src/modules/aiya-jewelry/`) | core | proposed | open | Mechanical refactor; see MODULES.md |
 | C-5 | Move WinJewel-specific UI strings (e.g. "Diamond Index") behind module config | aiya-jewelry | proposed | open | Brand layer |
-| C-6 | Migrate legacy single-tenant `revenue_months`/`profit_months`/`revenue_transactions` to org-scoped | core | proposed | open | Slice-2-era tables, no org_id; slice-33 runway reads them as-is (documented in src/db/runway.ts). Also: dashboard-wide per-panel failure degradation (no try/catch in page.tsx, chipped in slice 33) and the Tailwind `text` color gap (text-text/* classes silently no-op sitewide, ~356 usages). |
+| C-6 | Migrate legacy single-tenant `revenue_months`/`profit_months`/`revenue_transactions` to org-scoped | core | proposed | open | Slice-2-era tables, no org_id; slice-33 runway reads them as-is (documented in src/db/runway.ts). Needs a migration + ripple through the runway/investor readers. |
+| C-7 | Hardening pass: `__setTestDb` prod guard + dashboard per-panel degradation + Tailwind `text` token | core | claimed 2026-07-31 | **this tab** | Three accumulated chips, all headlessly verifiable: no-op the test-seam export outside test env (7 action files); try/catch each panel fetch in page.tsx so one failing reader can't 500 the dashboard; define `text: hsl(var(--text))` so ~356 silently-dead `text-text/*` classes finally render. No migration. |
+| C-8 | Neon transaction driver (neon-http → neon-serverless) + `FOR UPDATE` on the overpay guard | core | proposed | open | The real-deploy blocker: neon-http throws on transaction() so recordPayment/35b confirms fail closed on live Postgres. Needs a real Neon deploy smoke-test to verify — hence its own row, not bundled into C-7. |
 
 ## 10. Coordination protocol between the two tabs
 
