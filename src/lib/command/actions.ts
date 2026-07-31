@@ -29,6 +29,9 @@ import { WRITE_COMMANDS, type WriteCommandId, type ActionResult } from "./writeR
 // src/lib/drafting/actions.ts / src/lib/payments/actions.ts.
 let testDb: Db | null = null;
 export async function __setTestDb(d: Db | null): Promise<void> {
+  // Test seam only. "use server" exports are POST-invokable; outside the
+  // test runner this must do nothing so it can't poison db() in prod (review chip).
+  if (process.env.NODE_ENV !== "test" && !process.env.VITEST) return;
   testDb = d;
 }
 function db(): Db {

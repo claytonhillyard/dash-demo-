@@ -38,7 +38,12 @@ import { recordActivitySafely } from "@/lib/activity/recordActivitySafely";
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 let testDb: Db | null = null;
-export async function __setTestDb(db: Db | null): Promise<void> { testDb = db; }
+export async function __setTestDb(db: Db | null): Promise<void> {
+  // Test seam only. "use server" exports are POST-invokable; outside the
+  // test runner this must do nothing so it can't poison db() in prod (review chip).
+  if (process.env.NODE_ENV !== "test" && !process.env.VITEST) return;
+  testDb = db;
+}
 function db(): Db { return testDb ?? getDb(); }
 
 /** Demo-guard, session re-assert + orgId resolve, validate, run, revalidate; never throw to UI.
