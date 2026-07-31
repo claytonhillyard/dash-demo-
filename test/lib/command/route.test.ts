@@ -250,6 +250,21 @@ describe("routeCommand — AI path", () => {
     expect(routed.id).toBe("runway");
   });
 
+  it("an inherited Object.prototype key as command id falls back to rules, never throws (review)", async () => {
+    for (const bad of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+      vi.mocked(generateAiText).mockResolvedValueOnce({
+        ok: true,
+        text: `{"command":"${bad}","params":{}}`,
+        model: "m",
+        simulated: false,
+        durationMs: 5,
+      });
+      const routed = await routeCommand("how's my runway", 1);
+      expect(routed).toEqual(routeByRules("how's my runway"));
+      expect(routed.id).toBe("runway");
+    }
+  });
+
   it("Zod-invalid params fall back to routeByRules(question)", async () => {
     vi.mocked(generateAiText).mockResolvedValueOnce({
       ok: true,

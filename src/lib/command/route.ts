@@ -326,7 +326,12 @@ function parseRouterResponse(text: string): RoutedCommand | null {
   const command = (raw as Record<string, unknown>).command;
   if (typeof command !== "string") return null;
   if (command === "help") return { id: "help" };
-  if (!(command in COMMANDS)) return null;
+  // Object.hasOwn, not `in` (review): `in` walks the prototype chain, so a
+  // model returning {"command":"__proto__"} (or "constructor"/"toString"/…)
+  // would pass the whitelist and then throw on `COMMANDS[id].params` — this
+  // keeps the guard to genuine own command ids, matching the doc contract
+  // ("returns null on an unknown command id").
+  if (!Object.hasOwn(COMMANDS, command)) return null;
 
   const id = command as CommandId;
   const paramsInput = (raw as Record<string, unknown>).params ?? {};
