@@ -56,6 +56,12 @@ export function CommandPalette({ helpExamples }: { helpExamples: string[] }) {
   const nextId = useRef(0);
 
   function ask(raw: string) {
+    // Gate on `pending` so the Enter key matches the buttons' disabled state
+    // (review): without this, pressing Enter during an in-flight Confirm
+    // fires a concurrent runCommand. Harmless today (the confirmed write
+    // still runs exactly once), but keeping every submit path single-flight
+    // removes the reasoning burden for anyone extending this later.
+    if (pending) return;
     const trimmed = raw.trim();
     if (!trimmed) return;
     setError(null);
