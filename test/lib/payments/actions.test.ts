@@ -288,6 +288,48 @@ describe("recordPayment — overpay guard", () => {
     });
     expect(res).toEqual({ ok: true });
   });
+
+  it("still enforces the exact remaining-balance boundary after the FOR UPDATE row lock (C-8)", async () => {
+    // Proves the SELECT ... FOR UPDATE lock added ahead of the SUM (C-8,
+    // src/lib/payments/actions.ts) didn't change the guard's outcome:
+    // remaining + 1 stays rejected, exactly-remaining stays accepted — now
+    // against a non-zero remaining balance (after a partial payment), not
+    // just the fresh-invoice boundary the other tests above cover. pglite
+    // has a single writer, so it can't force a true concurrent race; the
+    // lock's multi-writer correctness on real Postgres is a deploy
+    // smoke-test item (docs/DEPLOY-NEON.md), not something provable here.
+    const invoice = await issuedInvoice({ totalCents: 100_000 });
+    const partial = await recordPayment({
+      invoiceId: invoice.id,
+      amountCents: 35_000,
+      method: "cash",
+      receivedDate: "2026-01-05",
+    });
+    expect(partial).toEqual({ ok: true });
+
+    const remaining = 100_000 - 35_000;
+    const overByOne = await recordPayment({
+      invoiceId: invoice.id,
+      amountCents: remaining + 1,
+      method: "wire",
+      receivedDate: "2026-01-06",
+    });
+    expect(overByOne).toEqual({
+      ok: false,
+      error: `Payment exceeds the remaining balance (${formatCentsExact(remaining)} left)`,
+    });
+
+    const exact = await recordPayment({
+      invoiceId: invoice.id,
+      amountCents: remaining,
+      method: "wire",
+      receivedDate: "2026-01-06",
+    });
+    expect(exact).toEqual({ ok: true });
+
+    const rows = await db.select().from(payments).where(eq(payments.invoiceId, invoice.id));
+    expect(rows).toHaveLength(2);
+  });
 });
 
 describe("recordPayment — receivedDate validation", () => {
