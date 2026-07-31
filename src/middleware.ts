@@ -39,5 +39,8 @@ export const config = {
     // isn't). `:path*` covers the bare list, /invoices/new, and
     // /invoices/[id]/edit in one entry.
     "/invoices/:path*",
+    // Slice 35a — read-only AI command palette. A single page with no
+    // subroutes, same shape as /activity and /watchlists above.
+    "/command",
   ],
 };
