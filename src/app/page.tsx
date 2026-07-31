@@ -2,10 +2,11 @@ import { Shell } from "@/components/dashboard/Shell";
 import { QuotesProvider } from "@/components/dashboard/QuotesProvider";
 import { TickerStrip } from "@/components/market/TickerStrip";
 import { DashboardGrid } from "./DashboardGrid";
+import { safePanel } from "./safePanel";
 import { ensureDbReady } from "@/db/client";
 import { getCurrentOrgId } from "@/lib/auth/getCurrentOrgId";
-import { getInventorySummary, getSharedInventoryForOrg } from "@/db/inventory";
-import { getDiamondSummary } from "@/db/diamonds";
+import { getInventorySummary, getSharedInventoryForOrg, zeroCounts, type InventorySummary } from "@/db/inventory";
+import { getDiamondSummary, type DiamondSummary } from "@/db/diamonds";
 import { getOrgActivity } from "@/db/activityEvents";
 import { getActiveDeals } from "@/lib/deals/queries";
 import { getCircleNamesForOrg, getCircleIdsForOrg } from "@/lib/circles/queries";
@@ -49,6 +50,15 @@ import { computeReceivablesAging, computeRunway, daysBetweenUtc, type Receivable
 
 export const dynamic = "force-dynamic";
 
+// C-7 hardening pass: genuine empty/zero shapes for safePanel's fallback
+// when the corresponding reader throws. Built from each reader's own return
+// type (InventorySummary / DiamondSummary) rather than guessed, and reuses
+// src/db/inventory.ts's own `zeroCounts()` so the inventory shape can never
+// drift from the reader's real empty case. Module-level (not per-request)
+// since both are plain constants with no db/orgId dependency.
+const EMPTY_INVENTORY_SUMMARY: InventorySummary = { counts: zeroCounts(), total: 0, updatedAt: null };
+const EMPTY_DIAMOND_SUMMARY: DiamondSummary = { naturalIndex: null, labIndex: null, points: [], updatedAt: null };
+
 export default async function Home() {
   const db = await ensureDbReady();
   const orgId = await getCurrentOrgId();
@@ -56,27 +66,44 @@ export default async function Home() {
     invSummary, dia, activeDeals, circleNamesById, viewerCircleIdList, websiteTrend, sharedInventory,
     activityEvents, receivablesRows, trailingProfitCents,
   ] =
+    // C-7 hardening pass: every fetch below is an independent dashboard
+    // panel with no cross-dependency on one another (the SECOND Promise.all
+    // further down, for per-deal data, is different — see the note above
+    // its `dealIds` line). Each is wrapped in safePanel so one reader
+    // throwing degrades ONLY that panel to its genuine empty/zero shape
+    // (Sentry-captured, never silent) instead of failing the entire
+    // dashboard render.
     await Promise.all([
-      getInventorySummary(db, orgId),
-      getDiamondSummary(db, orgId),
-      getActiveDeals(db, orgId, 5),
-      getCircleNamesForOrg(db, orgId),
-      getCircleIdsForOrg(db, orgId),
-      getWebsiteSnapshotTrend(db, orgId, 8),
-      getSharedInventoryForOrg(db, orgId, 5),
-      getOrgActivity(db, orgId, { limit: 10 }),
+      safePanel("inventorySummary", getInventorySummary(db, orgId), EMPTY_INVENTORY_SUMMARY),
+      safePanel("diamondSummary", getDiamondSummary(db, orgId), EMPTY_DIAMOND_SUMMARY),
+      safePanel("activeDeals", getActiveDeals(db, orgId, 5), []),
+      safePanel("circleNames", getCircleNamesForOrg(db, orgId), new Map<number, string>()),
+      safePanel("circleIds", getCircleIdsForOrg(db, orgId), []),
+      safePanel("websiteSnapshotTrend", getWebsiteSnapshotTrend(db, orgId, 8), []),
+      safePanel("sharedInventory", getSharedInventoryForOrg(db, orgId, 5), []),
+      safePanel("orgActivity", getOrgActivity(db, orgId, { limit: 10 }), []),
       // Slice 33: receivables aging + trailing profit for the cash-runway
-      // panel. No try/catch here — matches every other fetch in this
-      // Promise.all (none of them degrade individually today; a thrown
-      // error from any one of them already fails the whole page render,
-      // and this doesn't change that).
-      getReceivablesRows(db, orgId),
-      getTrailingProfitMonths(db, 6),
+      // panel. computeReceivablesAging([], ...) and computeRunway({
+      // trailingProfitCents: [], ...}) both have an explicit empty-input
+      // base case (src/lib/runway/compute.ts), so a degraded fetch here
+      // still renders a coherent zero-balance / insufficient-history panel
+      // rather than 500ing.
+      safePanel("receivablesRows", getReceivablesRows(db, orgId), []),
+      safePanel("trailingProfitMonths", getTrailingProfitMonths(db, 6), []),
     ]);
 
   // Slice 10 + 16: per-deal fetches. Parallelized via Promise.all so the 4
   // per-id queries run concurrently rather than sequentially. `unreadByDealId`
   // is already batched in a single SQL call, so it stays as-is.
+  //
+  // C-7 hardening pass: intentionally left un-wrapped by safePanel (scoped
+  // to the FIRST Promise.all above). `activeDeals` degrading to [] already
+  // makes `dealIds` [] too, and every fetch below already has a proven
+  // zero-dealIds short-circuit (e.g. getUnreadCountsForOrg returns
+  // `new Map()` before touching the db when dealIds.length === 0) — the
+  // same path a real "org has 0 open deals" render already exercises. A
+  // genuinely mid-flight per-deal failure (activeDeals resolves fine, but
+  // one of ITS four per-id reads then throws) is NOT degraded by this slice.
   const dealIds = activeDeals.map((d) => d.id);
   const [
     unreadByDealId,

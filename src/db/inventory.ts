@@ -28,7 +28,10 @@ export interface SharedInventoryRow {
   updatedAt: Date;
 }
 
-function zeroCounts(): Record<InventoryCategory, number> {
+/** Exported (C-7 hardening pass) so src/app/page.tsx can build the exact
+ *  same zero shape as this reader's own empty case for its safePanel
+ *  degradation fallback, instead of a second, drift-prone reimplementation. */
+export function zeroCounts(): Record<InventoryCategory, number> {
   return Object.fromEntries(INVENTORY_CATEGORIES.map((c) => [c, 0])) as Record<
     InventoryCategory,
     number
