@@ -5,6 +5,9 @@ import { getStore as netlifyGetStore } from "@netlify/blobs";
 export interface BlobStore {
   set(key: string, data: Uint8Array | ArrayBuffer | Blob | string): Promise<void>;
   delete(key: string): Promise<void>;
+  /** Read bytes back for streaming (slice 31). Returns null for a missing
+   *  key — never throws on a plain not-found. */
+  get(key: string): Promise<Uint8Array | null>;
   getSignedUrl(key: string, opts?: { ttl?: number }): Promise<string>;
 }
 
@@ -27,6 +30,15 @@ export function getBlobStore(): BlobStore {
       await real.set(k, d);
     },
     delete: (k) => real.delete(k),
+    // @netlify/blobs' Store.get(key, { type: "arrayBuffer" }) resolves an
+    // ArrayBuffer, or null if the key doesn't exist (verified against the
+    // SDK's own type declarations + its 404 → null runtime branch). Wrap
+    // into a Uint8Array so callers never touch the SDK's ArrayBuffer type
+    // directly.
+    get: async (k) => {
+      const ab = await real.get(k, { type: "arrayBuffer" });
+      return ab ? new Uint8Array(ab) : null;
+    },
     // ⚠ @netlify/blobs v10 exposes NO public signed-URL method on Store.
     // (v8 had `getDownloadUrl({ expiry })`; v10 removed it.) The production
     // path here will be a Next.js route handler that streams via Store.get()

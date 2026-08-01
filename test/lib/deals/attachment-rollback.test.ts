@@ -19,6 +19,7 @@ let storeDeletes: string[] = [];
 const stub: BlobStore = {
   set: async (k) => { storeWrites.push(k); },
   delete: async (k) => { storeDeletes.push(k); },
+  get: async () => null,
   getSignedUrl: async (k) => `https://stub/${k}`,
 };
 

@@ -14,6 +14,7 @@ import { __setTestBlobStore, type BlobStore } from "@/lib/storage/blobStore";
 
 const stub: BlobStore = {
   set: async () => {}, delete: async () => {},
+  get: async () => null,
   getSignedUrl: async (k) => `https://stub/${k}`,
 };
 

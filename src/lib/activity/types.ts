@@ -13,6 +13,7 @@ export const ACTIVITY_ENTITY_TYPES = [
   "org",
   "watchlist",
   "invoice",
+  "document",
 ] as const;
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 
