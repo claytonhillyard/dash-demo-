@@ -97,6 +97,12 @@ describe("middleware matcher", () => {
     expect(isMatched("/command")).toBe(true);
   });
 
+  it("guards /documents incl. subroutes (slice 31-3)", () => {
+    for (const route of ["/documents", "/documents/9602/file"]) {
+      expect(isMatched(route)).toBe(true);
+    }
+  });
+
   it("does not guard the public login page", () => {
     expect(isMatched("/login")).toBe(false);
   });

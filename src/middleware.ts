@@ -42,5 +42,10 @@ export const config = {
     // Slice 35a — read-only AI command palette. A single page with no
     // subroutes, same shape as /activity and /watchlists above.
     "/command",
+    // Slice 31-3 — document vault. `:path*` covers the bare list and
+    // /documents/[id]/file (the streaming download route also enforces its
+    // own getCurrentOrgId() 401 independently — defense in depth, same
+    // relationship every other admin route here has with the matcher).
+    "/documents/:path*",
   ],
 };

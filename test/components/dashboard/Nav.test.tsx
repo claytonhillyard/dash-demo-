@@ -57,4 +57,9 @@ describe("Nav", () => {
     const link = screen.getByRole("link", { name: "Command" });
     expect(link).toHaveAttribute("href", "/command");
   });
+  it("links Documents to /documents (slice 31-3)", () => {
+    render(<Nav />);
+    const link = screen.getByRole("link", { name: "Documents" });
+    expect(link).toHaveAttribute("href", "/documents");
+  });
 });
