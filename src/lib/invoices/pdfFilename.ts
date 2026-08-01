@@ -8,10 +8,10 @@
  * files may only export HTTP-method handlers — a named helper export fails
  * the build's route-type validation.
  */
-export function sanitizePdfFilename(invoiceNumber: string): string {
+export function sanitizePdfFilename(invoiceNumber: string, fallback = "invoice"): string {
   const ascii = invoiceNumber
     .replace(/[^\x20-\x7e]/g, "")
     .replace(/"/g, "")
     .trim();
-  return ascii === "" ? "invoice" : ascii;
+  return ascii === "" ? fallback : ascii;
 }

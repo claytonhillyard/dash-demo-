@@ -72,7 +72,7 @@ export async function GET(
   }
 
   const ext = EXT_BY_MIME[doc.mimeType] ?? "bin";
-  const filename = sanitizePdfFilename(doc.title);
+  const filename = sanitizePdfFilename(doc.title, "document");
 
   return new NextResponse(Buffer.from(bytes), {
     status: 200,

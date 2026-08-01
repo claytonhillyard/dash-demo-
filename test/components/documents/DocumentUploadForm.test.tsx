@@ -70,6 +70,28 @@ describe("DocumentUploadForm — submit", () => {
     expect(file.name).toBe("nda.pdf");
   });
 
+  it("blocks a file over 10MB client-side with a friendly error, without calling the action (review F1)", async () => {
+    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "big.pdf", {
+      type: "application/pdf",
+    });
+    render(<DocumentUploadForm />);
+    fillForm({ file: big, title: "Huge scan" });
+    fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+
+    expect(await screen.findByText(/10MB max/i)).toBeInTheDocument();
+    expect(uploadDocument).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an error (not a silent re-enable) when the action call itself rejects", async () => {
+    uploadDocument.mockRejectedValueOnce(new Error("Body exceeded 10mb limit"));
+    render(<DocumentUploadForm />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+
+    expect(await screen.findByText(/upload failed/i)).toBeInTheDocument();
+    await waitFor(() => expect(refresh).not.toHaveBeenCalled());
+  });
+
   it("clears the title/file inputs, shows a success line, and refreshes on {ok:true}", async () => {
     uploadDocument.mockResolvedValueOnce({ ok: true, id: 42 });
     render(<DocumentUploadForm />);

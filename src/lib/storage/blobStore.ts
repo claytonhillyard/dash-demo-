@@ -42,12 +42,12 @@ export function getBlobStore(): BlobStore {
     // merely starts with the right magic bytes.
     //
     // Import-cycle note: this imports a VALUE (DEMO_PDF_BYTES) from
-    // src/lib/demo/seed.ts. Safe because seed.ts's own top-level imports are
-    // ALL `import type` (verified — grep '^import' src/lib/demo/seed.ts),
-    // which TypeScript erases entirely at runtime; seed.ts has zero runtime
-    // imports of its own, so there is no path back from seed.ts to this
-    // module. If a future edit adds a real (non-type) import to seed.ts,
-    // re-check this note before it becomes a cycle.
+    // src/lib/demo/seed.ts. Safe not because seed.ts is import-free (it does
+    // have runtime value imports, e.g. INVENTORY_CATEGORIES from
+    // @/lib/inventory/validation), but because none of seed.ts's runtime
+    // import graph transitively reaches this blobStore module — so there is
+    // no path back. If a future edit makes seed.ts (transitively) import
+    // blobStore, re-check this before it becomes a cycle.
     return {
       set: async () => {},
       delete: async () => {},

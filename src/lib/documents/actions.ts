@@ -37,7 +37,11 @@ function rowsOf<T>(res: unknown): T[] {
 
 // 15 MB — generous for a scanned contract/NDA PDF or a photographed receipt,
 // well under Netlify Blobs' per-object limits.
-const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
+// 10MB — must NOT exceed next.config.mjs's serverActions.bodySizeLimit
+// ("10mb"), or a 10–15MB file rejects at the framework boundary BEFORE this
+// action runs and this friendly check never fires (review F1). Matches
+// uploadDealAttachment's MAX_FILE_BYTES.
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 // A friendly ceiling, not a technical one — keeps the vault list (the
 // default-LIMIT-200 reader, src/db/documents.ts getDocuments) sane and gives
 // an operator a clear signal to prune well before the org nears any real
@@ -140,7 +144,7 @@ export async function uploadDocument(formData: FormData): Promise<UploadDocument
   }
 
   if (fileRaw.size > MAX_DOCUMENT_BYTES) {
-    return { ok: false, error: "File is too large — 15MB max" };
+    return { ok: false, error: "File is too large — 10MB max" };
   }
 
   const d = db();

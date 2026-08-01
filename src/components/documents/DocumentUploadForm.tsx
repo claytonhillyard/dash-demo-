@@ -10,6 +10,11 @@ import { uploadDocument } from "@/lib/documents/actions";
 // @/db/documents: this file must stay a client bundle with NO value import
 // of server-only modules (the 37-F5/35a-3 client-bundle lesson) — only
 // uploadDocument + React.
+// Keep in sync with MAX_DOCUMENT_BYTES in src/lib/documents/actions.ts and
+// next.config.mjs's serverActions.bodySizeLimit ("10mb") — a larger file
+// rejects at the framework boundary before the action runs (review F1).
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 type DocType = "contract" | "nda" | "agreement" | "receipt" | "other";
 const DOC_TYPES: { value: DocType; label: string }[] = [
   { value: "contract", label: "Contract" },
@@ -59,22 +64,43 @@ export function DocumentUploadForm() {
     setError(null);
     setSuccess(false);
 
+    if (!file) {
+      setError("Choose a file to upload");
+      return;
+    }
+    // Client-side size pre-check: a file over the 10MB server-action body
+    // limit rejects at the framework boundary BEFORE uploadDocument runs, and
+    // that rejection would otherwise be swallowed by the transition — a silent
+    // failure (review F1). Catch it here with a friendly message, and keep the
+    // try/catch below as a backstop for any other thrown rejection.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError("File is too large — 10MB max");
+      return;
+    }
+
     const fd = new FormData();
-    if (file) fd.set("file", file);
+    fd.set("file", file);
     fd.set("title", title);
     fd.set("docType", docType);
 
     startTransition(async () => {
-      const res = await uploadDocument(fd);
-      if (res.ok) {
-        setTitle("");
-        setDocType("contract");
-        setFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        setSuccess(true);
-        router.refresh();
-      } else {
-        setError(res.error);
+      try {
+        const res = await uploadDocument(fd);
+        if (res.ok) {
+          setTitle("");
+          setDocType("contract");
+          setFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          setSuccess(true);
+          router.refresh();
+        } else {
+          setError(res.error);
+        }
+      } catch {
+        // A thrown rejection (e.g. the framework body-size limit) never reaches
+        // the {ok,error} contract — surface something rather than silently
+        // re-enabling the button.
+        setError("Upload failed — the file may be too large. 10MB max.");
       }
     });
   }

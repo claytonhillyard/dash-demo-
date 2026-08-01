@@ -191,10 +191,11 @@ describe("uploadDocument — MIME validation (never trust Content-Type)", () => 
 
 describe("uploadDocument — caps", () => {
   it("rejects a file over the size cap", async () => {
-    const big = new Uint8Array(15 * 1024 * 1024 + 1);
+    // 10MB cap matches next.config's serverActions.bodySizeLimit (review F1).
+    const big = new Uint8Array(10 * 1024 * 1024 + 1);
     big.set(PDF_BYTES.subarray(0, 4), 0); // keep the magic bytes valid
     const res = await uploadDocument(defaultFD({ bytes: big }));
-    expect(res).toEqual({ ok: false, error: "File is too large — 15MB max" });
+    expect(res).toEqual({ ok: false, error: "File is too large — 10MB max" });
     expect(storeWrites).toHaveLength(0);
   });
 
