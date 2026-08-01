@@ -124,6 +124,7 @@ describe("resolveSignedUrl", () => {
     const stub: BlobStore = {
       set: async () => {},
       delete: async () => {},
+      get: async () => null,
       getSignedUrl: async (key) => `https://stub/${key}?signed=1`,
     };
     __setTestBlobStore(stub);
@@ -145,6 +146,7 @@ describe("resolveSignedUrl", () => {
     const stub: BlobStore = {
       set: async () => {},
       delete: async () => {},
+      get: async () => null,
       getSignedUrl: async () => "not-reached",
     };
     __setTestBlobStore(stub);

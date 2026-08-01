@@ -1,3 +1,9 @@
+// Environment pin (slice 31): this file is pure data/logic (no DOM), and the
+// default jsdom environment gives typed arrays (Uint8Array) their own vm
+// realm — cross-realm `instanceof Uint8Array` then fails even though the
+// bytes are correct (see the DEMO_PDF_BYTES + pdf-lib check below). node
+// avoids that realm split; nothing above 786 lines here touches the DOM.
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { seedInventorySummary, seedDiamondSummary } from "@/lib/demo/seed";
 import { INVENTORY_CATEGORIES } from "@/lib/inventory/validation";
@@ -782,5 +788,48 @@ describe("DEMO_PAYMENTS (slice 29)", () => {
   it("getSeedPaymentsByInvoiceId returns [] for invoices with no seeded payments (9301 draft, 9303 void)", () => {
     expect(getSeedPaymentsByInvoiceId(DEMO_AIYA_ORG_ID, 9301)).toEqual([]);
     expect(getSeedPaymentsByInvoiceId(DEMO_AIYA_ORG_ID, 9303)).toEqual([]);
+  });
+});
+
+import { DEMO_DOCUMENTS, getSeedDocumentById, DEMO_PDF_BYTES } from "@/lib/demo/seed";
+
+describe("DEMO_DOCUMENTS (slice 31)", () => {
+  it("every row resolves via getSeedDocumentById by its own (orgId, id), and belongs to a valid docType on AIYA", () => {
+    const validTypes = new Set(["contract", "nda", "agreement", "receipt", "other"]);
+    expect(DEMO_DOCUMENTS.length).toBeGreaterThanOrEqual(2);
+    expect(DEMO_DOCUMENTS.length).toBeLessThanOrEqual(3);
+    for (const doc of DEMO_DOCUMENTS) {
+      expect(getSeedDocumentById(doc.orgId, doc.id)).toEqual(doc);
+      expect(validTypes.has(doc.docType)).toBe(true);
+      expect(doc.orgId).toBe(DEMO_AIYA_ORG_ID);
+      expect(doc.id).toBeGreaterThanOrEqual(9601);
+    }
+  });
+
+  it("getSeedDocumentById returns null for a missing id or a cross-org lookup", () => {
+    expect(getSeedDocumentById(DEMO_AIYA_ORG_ID, 999_999)).toBeNull();
+    expect(getSeedDocumentById(999_999, DEMO_DOCUMENTS[0].id)).toBeNull();
+  });
+
+  it("has both a customer-linked row (an existing DEMO_CUSTOMERS id) and an org-level row, and more than one mimeType", () => {
+    const customerIds = new Set(DEMO_CUSTOMERS.map((c) => c.id));
+    expect(
+      DEMO_DOCUMENTS.some((d) => d.customerId !== null && customerIds.has(d.customerId)),
+    ).toBe(true);
+    expect(DEMO_DOCUMENTS.some((d) => d.customerId === null)).toBe(true);
+    expect(new Set(DEMO_DOCUMENTS.map((d) => d.mimeType)).size).toBeGreaterThan(1);
+  });
+});
+
+describe("DEMO_PDF_BYTES (slice 31)", () => {
+  it("starts with the %PDF magic bytes", () => {
+    const prefix = Buffer.from(DEMO_PDF_BYTES.slice(0, 4)).toString("latin1");
+    expect(prefix).toBe("%PDF");
+  });
+
+  it("is a genuinely loadable single-page PDF (parses via pdf-lib)", async () => {
+    const { PDFDocument } = await import("pdf-lib");
+    const doc = await PDFDocument.load(DEMO_PDF_BYTES);
+    expect(doc.getPageCount()).toBe(1);
   });
 });

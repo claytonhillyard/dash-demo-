@@ -10,9 +10,9 @@ import { NavItem } from "./NavItem";
 const SECTIONS = [
   "Dashboard", "Command", "Command Center", "TradeNet Exchange", "Circles", "Market Intelligence",
   "Inventory", "Diamonds", "Website", "Gold & Metals", "Orders & Deals",
-  "Customers", "Activity", "Watchlists", "Invoices", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
+  "Customers", "Activity", "Watchlists", "Invoices", "Documents", "Clients & CRM", "Finances", "Payments", "POS System", "Crypto Wallet",
   "Converter Hub", "Reports & Analytics", "Marketing Suite", "Social & Inbox",
-  "Calendar & Tasks", "Documents", "Settings",
+  "Calendar & Tasks", "Settings",
 ];
 
 const ROUTES: Record<string, string> = {
@@ -43,6 +43,13 @@ const ROUTES: Record<string, string> = {
   // Watchlists, closing out the customer-facing record cluster that starts
   // at Customers.
   Invoices: "/invoices",
+  // Slice 31 — org-scoped document vault (contracts/NDAs/receipts). Sits
+  // right after Invoices, same "closes out the record cluster starting at
+  // Customers" placement rationale as Invoices' own comment above. Was
+  // previously a routeless placeholder further down this list (next to
+  // "Calendar & Tasks"/"Settings"); this slice gives it a real destination
+  // and moves it up here to match.
+  Documents: "/documents",
 };
 
 export function Nav() {

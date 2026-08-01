@@ -27,6 +27,7 @@ const stub: BlobStore = {
     storeWrites.push({ key: k, bytes: size });
   },
   delete: async (k) => { storeDeletes.push(k); },
+  get: async () => null,
   getSignedUrl: async (k) => `https://stub/${k}`,
 };
 

@@ -1417,3 +1417,103 @@ export function getSeedPaymentsByInvoiceId(orgId: number, invoiceId: number): Pa
     .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate) || b.id - a.id)
     .map(({ orgId: _orgId, invoiceId: _invoiceId, ...row }) => row);
 }
+
+// --- Slice 31 demo seed: document vault ---
+// Same pattern as DEMO_INVOICES/DEMO_PAYMENTS — a TS constant, not inserted
+// at runtime; src/db/documents.ts short-circuits demo mode and reads this
+// filtered/sorted in-memory. storageKey values below are inert placeholders:
+// the demo-mode BlobStore (wired in slice 31-2) resolves ANY key to
+// DEMO_PDF_BYTES, so the exact string never round-trips to real bytes.
+//
+// 3 rows on DEMO_AIYA_ORG_ID: one linked to customer 2204 (Yuki Tanaka /
+// Ginza Pearl House — an existing DEMO_CUSTOMERS + DEMO_ACTIVITY row, so the
+// demo story stays coherent), two org-level. Varied docType (nda, agreement,
+// other) and mimeType (pdf, pdf, jpeg).
+import type { DocumentType } from "@/db/documents";
+
+export type DemoDocument = {
+  id: number;
+  orgId: number;
+  customerId: number | null;
+  title: string;
+  docType: DocumentType;
+  storageKey: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedByLabel: string;
+  createdAt: Date;
+};
+
+export const DEMO_DOCUMENTS: DemoDocument[] = [
+  {
+    id: 9601,
+    orgId: DEMO_AIYA_ORG_ID,
+    customerId: 2204,
+    title: "AIYA–Ginza Pearl NDA",
+    docType: "nda",
+    storageKey: "demo/org/1/documents/9601.pdf",
+    mimeType: "application/pdf",
+    sizeBytes: 128_450,
+    uploadedByLabel: "owner@aiya.demo",
+    createdAt: HOURS_AGO(30),
+  },
+  {
+    id: 9602,
+    orgId: DEMO_AIYA_ORG_ID,
+    customerId: null,
+    title: "Master Consignment Agreement",
+    docType: "agreement",
+    storageKey: "demo/org/1/documents/9602.pdf",
+    mimeType: "application/pdf",
+    sizeBytes: 245_900,
+    uploadedByLabel: "owner@aiya.demo",
+    createdAt: HOURS_AGO(96),
+  },
+  {
+    id: 9603,
+    orgId: DEMO_AIYA_ORG_ID,
+    customerId: null,
+    title: "2026 Insurance Certificate",
+    docType: "other",
+    storageKey: "demo/org/1/documents/9603.jpg",
+    mimeType: "image/jpeg",
+    sizeBytes: 96_300,
+    uploadedByLabel: "owner@aiya.demo",
+    createdAt: HOURS_AGO(200),
+  },
+];
+
+/** Demo-mode helper used by `getDocumentForDownload` — null when the row
+ *  doesn't exist OR exists in a different org (same contract as the SQL
+ *  query). Returns the FULL row (including storageKey) — unlike
+ *  DocumentRow, the download path is the one place storageKey is meant to
+ *  leak out of the seed layer, mirroring the real reader's contract. */
+export function getSeedDocumentById(orgId: number, id: number): DemoDocument | null {
+  return DEMO_DOCUMENTS.find((d) => d.id === id && d.orgId === orgId) ?? null;
+}
+
+/**
+ * A tiny, byte-accurate, valid single-page PDF (US Letter, no content
+ * stream) — hand-built with correct xref offsets and verified against
+ * pdf-lib's parser (see test/lib/demo/seed.test.ts). Serves as the
+ * demo-mode BlobStore's canned response — slice 31-2 wires
+ * `getBlobStore().get()` in demo mode to return this for ANY key — so a
+ * demo download is a real, openable PDF, not just a buffer that happens to
+ * start with the right magic bytes.
+ */
+const DEMO_PDF_TEXT =
+  "%PDF-1.4\n" +
+  "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n" +
+  "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n" +
+  "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n" +
+  "xref\n" +
+  "0 4\n" +
+  "0000000000 65535 f \n" +
+  "0000000009 00000 n \n" +
+  "0000000058 00000 n \n" +
+  "0000000115 00000 n \n" +
+  "trailer\n<< /Size 4 /Root 1 0 R >>\n" +
+  "startxref\n186\n" +
+  "%%EOF";
+
+export const DEMO_PDF_BYTES: Uint8Array = new TextEncoder().encode(DEMO_PDF_TEXT);

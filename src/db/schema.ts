@@ -756,3 +756,34 @@ export const draftingPrefs = pgTable(
     orgUnique: uniqueIndex("drafting_prefs_org_unique").on(t.orgId),
   }),
 );
+
+// Slice 31: documents — org-scoped document vault (contracts, NDAs, signed
+// agreements, receipts). customerId is an OPTIONAL link: a document can be
+// org-level or tied to a customer; set null on customer delete (the doc
+// outlives the link — same onDelete rationale as
+// inventoryItems.visibilityCircleId above). storageKey points at the
+// slice-17 blob primitive; it is never selected by the list reader
+// (src/db/documents.ts `getDocuments`) — only `getDocumentForDownload`
+// exposes it, for the streaming download route (slice 31-2).
+export const documents = pgTable(
+  "documents",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    docType: text("doc_type", {
+      enum: ["contract", "nda", "agreement", "receipt", "other"],
+    }).notNull(),
+    storageKey: text("storage_key").notNull(),
+    mimeType: text("mime_type").notNull(), // application/pdf | image/jpeg | image/png | image/webp
+    sizeBytes: integer("size_bytes").notNull(),
+    uploadedByLabel: text("uploaded_by_label").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgCreatedIdx: index("documents_org_created_idx").on(t.orgId, t.createdAt),
+  }),
+);
