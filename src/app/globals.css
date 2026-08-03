@@ -3,26 +3,58 @@
 @tailwind utilities;
 
 :root {
-  --bg: 222 30% 5%;
-  --surface: 222 24% 8%;
-  --surface-2: 220 22% 11%;
-  --border: 220 18% 16%;
+  /* Tell the browser this is a dark UI. Without it every NATIVE control —
+     <select>, <input type="date">, checkboxes, autofill — renders in
+     light-mode chrome against a near-black page (150+ controls app-wide).
+     Single highest-impact line in this file. */
+  color-scheme: dark;
+  accent-color: hsl(43 74% 60%);
+
+  /* Elevation ladder. Previously bg/surface/surface-2 sat within ~3% lightness
+     of each other, so panels barely separated from the page and the whole grid
+     read flat. Widened into genuine steps. */
+  --bg: 222 32% 4%;
+  --surface: 222 22% 9%;
+  --surface-2: 220 20% 13%;
+  --surface-3: 220 18% 17%;
+  --border: 220 16% 20%;
+  --border-strong: 220 14% 28%;
+
+  /* One metal. Gold is the AIYA brand anchor and the ONLY UI accent. */
   --gold: 43 74% 60%;
   --gold-deep: 38 65% 46%;
-  --gold-soft: 43 60% 70%;
-  --teal: 168 64% 52%;
-  --text: 210 20% 90%;
+  --gold-soft: 43 60% 74%;
   --gold-intensity: 0.8;
+
+  /* Text ramp — SOLID tokens, not opacity steps. Composited `text-text/40`
+     landed at ~3.3:1 (below WCAG AA) once --text was finally defined; each
+     step here is measured against --bg instead. */
+  --text: 210 20% 93%;        /* primary     ~16:1 */
+  --text-muted: 213 14% 74%;  /* secondary    ~9:1 */
+  --text-dim: 215 12% 60%;    /* tertiary   ~5.2:1 — AA for body text */
+
+  /* Status. Lightened so they clear AA on the dark surfaces (bad was 4.2:1). */
+  --ok: 152 55% 58%;
+  --warn: 41 88% 62%;
+  --bad: 2 72% 66%;
+
+  /* Retained for the ambient wash + chart series ONLY — never UI accents.
+     (test/tailwind.test.ts asserts these tokens exist; keep them defined.) */
+  --teal: 168 64% 52%;
   --accent-purple: 268 60% 62%;
   --accent-blue: 205 80% 58%;
   --accent-pink: 330 70% 64%;
 }
+
 [data-amoled="true"] {
   --bg: 0 0% 0%;
-  --surface: 0 0% 4%;
-  --surface-2: 0 0% 6%;
-  --border: 0 0% 14%;
+  --surface: 0 0% 5%;
+  --surface-2: 0 0% 8%;
+  --surface-3: 0 0% 11%;
+  --border: 0 0% 15%;
+  --border-strong: 0 0% 22%;
 }
+
 [data-reduce-motion="true"] * {
   animation: none !important;
   transition: none !important;
@@ -36,11 +68,60 @@ html, body {
 /* Atmospheric depth: a faint gold aurora top-left + cool depth bottom-right,
    fixed so the dense grid floats over a lit room rather than flat black. */
 body {
-  min-height: 100vh;
+  min-height: 100dvh; /* dvh, not vh — avoids the iOS Safari viewport jump */
   background-image:
     radial-gradient(120% 80% at 0% -10%, hsl(var(--gold) / 0.06), transparent 55%),
     radial-gradient(90% 70% at 100% 110%, hsl(var(--accent-blue) / 0.05), transparent 60%);
   background-attachment: fixed;
+}
+
+/* Film grain. Breaks the digital flatness of large dark fields — the cheapest
+   thing that stops a dark UI reading as flat #111. Fixed, non-interactive. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+[data-reduce-motion="true"] body::after { display: none; }
+
+/* Keyboard focus. There were ZERO focus-visible rings app-wide and at least
+   one `focus:outline-none` with no replacement — a keyboard user had no idea
+   where they were. Gold ring, offset so it reads on page and panel alike. */
+:focus-visible {
+  outline: 2px solid hsl(var(--gold) / 0.85);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Interactive elements settle rather than snap: 92 of 96 hover states had no
+   transition at all. Short + ease-out so a dense grid never feels laggy. */
+a, button, select, input, textarea, [role="button"], summary {
+  transition:
+    color 120ms ease-out,
+    background-color 120ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 180ms ease-out,
+    opacity 120ms ease-out;
+}
+
+/* Tabular figures. Money/quantity columns must align digit-for-digit — there
+   were ZERO uses of this app-wide despite it being a financial dashboard. */
+.nums, .tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Display type wants negative tracking + tight leading at large sizes. */
+.display {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+  text-wrap: balance;
 }
 
 /* Gold-foil text for the wordmark / hero numerals. */
@@ -57,16 +138,33 @@ body {
   color: transparent;
 }
 
-/* Hairline-bordered, faintly elevated panel surface with a top sheen. */
+/* Hairline-bordered, elevated panel surface with a top sheen. The shadow is
+   now TINTED with the page hue rather than pure black, and hover lifts the
+   surface as well as the border so panels feel physical. */
 .surface-card {
   background:
-    linear-gradient(180deg, hsl(var(--surface-2) / 0.7), hsl(var(--surface))) ,
+    linear-gradient(180deg, hsl(var(--surface-2) / 0.75), hsl(var(--surface))),
     hsl(var(--surface));
   border: 1px solid hsl(var(--border));
-  box-shadow: 0 1px 0 0 hsl(0 0% 100% / 0.03) inset, 0 8px 24px -16px hsl(0 0% 0% / 0.8);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 1px 0 0 hsl(0 0% 100% / 0.04) inset,
+    0 1px 2px -1px hsl(222 40% 2% / 0.9),
+    0 12px 32px -20px hsl(222 45% 2%);
 }
 .surface-card:hover {
-  border-color: hsl(var(--gold) / 0.25);
+  border-color: hsl(var(--gold) / 0.28);
+  box-shadow:
+    0 1px 0 0 hsl(0 0% 100% / 0.06) inset,
+    0 1px 2px -1px hsl(222 40% 2% / 0.9),
+    0 18px 40px -22px hsl(222 45% 2%);
+}
+
+/* Raised inner surface — stat tiles, table headers, inline code. */
+.surface-inset {
+  background: hsl(var(--surface-3) / 0.55);
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 0.5rem;
 }
 
 /* A thin gold rule used under section headers. */
@@ -74,11 +172,32 @@ body {
   background: linear-gradient(90deg, hsl(var(--gold) / 0.5), transparent);
 }
 
+/* Skip link — keyboard users had no way to bypass the nav rail. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10000;
+}
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: hsl(var(--surface-2));
+  border: 1px solid hsl(var(--gold) / 0.5);
+  border-radius: 0.375rem;
+}
+
 /* Refined thin scrollbars for the dense rails. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
+  scrollbar-color: hsl(var(--border-strong)) transparent;
 }
 *::-webkit-scrollbar { width: 6px; height: 6px; }
-*::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
+*::-webkit-scrollbar-thumb { background: hsl(var(--border-strong)); border-radius: 9999px; }
 *::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  body::after { display: none; }
+}
