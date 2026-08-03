@@ -129,6 +129,13 @@ function firstBidOf(rows: PartnerBidRow[]): PartnerBidRow {
  *  actually settled. */
 function decidedAtOf(rows: PartnerBidRow[]): Date {
   const stamped = rows.filter((r): r is PartnerBidRow & { decidedAt: Date } => r.decidedAt !== null);
+  // A group can only reach here via an accepted/rejected row, and every
+  // production setter stamps `decidedAt` alongside the status — but there is
+  // no DB constraint tying the two, so a data anomaly (decided status, NULL
+  // decidedAt) would otherwise reduce an empty array and throw, surfacing as
+  // an opaque "Server error" (review finding). Fall back to the first bid's
+  // timestamp, which reads as a 0-day decision rather than a 500.
+  if (stamped.length === 0) return firstBidOf(rows).createdAt;
   return stamped.reduce((latest, r) => (r.decidedAt.getTime() > latest.decidedAt.getTime() ? r : latest)).decidedAt;
 }
 
@@ -234,7 +241,9 @@ export function computeNegotiationStats(
     decidedGroups.map((rows) => {
       const first = firstBidOf(rows);
       const decidedAt = decidedAtOf(rows);
-      return Math.floor((decidedAt.getTime() - first.createdAt.getTime()) / 86_400_000);
+      // Clamped: clock skew between the bid insert and the decision stamp
+      // could otherwise report a negative "days to decide" (review finding).
+      return Math.max(0, Math.floor((decidedAt.getTime() - first.createdAt.getTime()) / 86_400_000));
     }),
   );
 

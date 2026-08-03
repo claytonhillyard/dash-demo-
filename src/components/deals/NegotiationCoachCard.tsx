@@ -102,7 +102,11 @@ function CoachedVerdict({
         ))}
       </div>
       <p className="text-xs text-text/60" aria-label="coach stat strip">
-        {stats.closes} closes · {stats.winRatePct}% win rate ·{" "}
+        {/* "N of M decided", not "M% win rate": the denominator counts only
+            negotiations you explicitly decided, so deals this partner lost to
+            a competing bidder are not in it. Calling that a win rate would
+            over-claim — and this is advice you act on (review finding). */}
+        {stats.closes} of {stats.decidedDeals} decided ({stats.winRatePct}%) ·{" "}
         {formatCentsExact(stats.avgUpliftCents)} avg uplift · {stats.avgRounds} avg rounds
       </p>
       <div className="flex flex-col items-start gap-0.5 rounded-lg border border-gold/30 bg-gold/5 px-3 py-2">
@@ -122,8 +126,13 @@ function InsufficientVerdict({
 }) {
   return (
     <div className="flex flex-col gap-1">
+      {/* Built as ONE expression, not interleaved JSX children: separate
+          children become separate text nodes, which breaks a contiguous
+          `findByText` regex (and SSR splits them with comment nodes). */}
       <p className="text-text/80 text-sm">
-        Not enough history with {stats.partnerLabel} yet ({stats.closes} closes).
+        {`Not enough history with ${stats.partnerLabel} yet (${stats.closes} ${
+          stats.closes === 1 ? "close" : "closes"
+        }).`}
       </p>
       <p className="text-xs text-text/60">
         Their best bid:{" "}

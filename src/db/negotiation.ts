@@ -3,7 +3,6 @@ import { type Db } from "@/db/client";
 import { isDemoMode } from "@/lib/demo/mode";
 import type { BidStatus } from "@/db/bids";
 import type { PartnerBidRow } from "@/lib/negotiation/compute";
-import { resolveOrgLabel } from "@/lib/auth/orgLabel";
 
 function rowsOf<T>(res: unknown): T[] {
   return (res as { rows: T[] }).rows;
@@ -152,17 +151,21 @@ export async function getDealForCoaching(
  * (`bidder_org_label` is denormalized onto every bid, see src/db/bids.ts) —
  * free, no extra round-trip. When this partner has no pending bid on THIS
  * deal (closed-but-no-longer-bidding, or simply never bid here), it falls
- * back to `resolveOrgLabel` (src/lib/auth/orgLabel.ts), the same org-name
- * reader `postDealMessage`/`postBid` use — safe here because `bidderOrgId`
- * FK-references `orgs.id`, so any real org id resolves to a real name (or
- * that helper's own generic "Org {id}" fallback, never a throw).
+ * back to a LOCAL generic `Org {id}` string.
+ *
+ * ⚠ It deliberately does NOT call `resolveOrgLabel` here (review finding).
+ * `bidderOrgId` is caller-supplied and is not validated against any
+ * relationship to the owner — resolving it against `orgs` would turn this
+ * action into a cross-tenant name oracle: iterating `bidderOrgId` would map
+ * the whole orgs table id -> name for any authenticated caller. No
+ * negotiation DATA leaks either way (every history/bid query is scoped
+ * `d.org_id = ownerOrgId`, so an unrelated partner just yields []), but org
+ * names are not ours to hand out. Every other `orgs.name` read in this
+ * codebase is gated to the caller's own org or to circle membership.
  *
  * Demo mode filters `DEMO_BIDS` (src/lib/demo/seed.ts) instead — same
- * reason as `getPartnerBidHistory`/`getDealForCoaching` above — and never
- * calls `resolveOrgLabel` at all (there is no live `orgs` table to lean on
- * in a real demo deployment): an unmatched demo id falls back to the same
- * generic "Org {id}" shape `resolveOrgLabel` itself would produce, just
- * built locally instead of round-tripping a query that would find nothing.
+ * reason as `getPartnerBidHistory`/`getDealForCoaching` above — and lands on
+ * the same generic "Org {id}" fallback.
  *
  * ⚠ Same "owner-only analytic read, not a viewer predicate" distinction as
  * `getPartnerBidHistory` above — do not merge this with `getBidsForDeal`'s
@@ -196,6 +199,6 @@ export async function getPartnerPendingBidsOnDeal(
       AND b.status = 'pending'
   `);
   const rows = rowsOf<{ price_cents: number; bidder_org_label: string }>(res);
-  const partnerLabel = rows[0]?.bidder_org_label ?? (await resolveOrgLabel(db, bidderOrgId));
+  const partnerLabel = rows[0]?.bidder_org_label ?? `Org ${bidderOrgId}`;
   return { priceCents: rows.map((r) => r.price_cents), partnerLabel };
 }

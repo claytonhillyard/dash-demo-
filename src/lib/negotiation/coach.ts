@@ -52,7 +52,11 @@ export function buildCoachPrompt(stats: NegotiationStats): { system: string; pro
         ]
       : [
           `Partner: ${stats.partnerLabel}`,
-          `Prior closes with this partner: ${stats.closes} of ${stats.decidedDeals} decided negotiations (${stats.winRatePct}% win rate)`,
+          // Deliberately NOT phrased as a "win rate": the denominator counts
+          // only negotiations the owner explicitly decided, so deals this
+          // partner lost to a competing bidder are excluded. Feeding the model
+          // "100% win rate" would have it tell the owner something false.
+          `Prior closes with this partner: ${stats.closes} of ${stats.decidedDeals} negotiations that reached an explicit decision (${stats.winRatePct}%)`,
           `Average uplift per close (positive = moved toward your favor): ${formatCentsExact(stats.avgUpliftCents)}`,
           `Average rounds per negotiation: ${stats.avgRounds}`,
           `Median days to decide: ${stats.medianDaysToDecide}`,
@@ -97,8 +101,8 @@ export function simulatedCoaching(stats: NegotiationStats): string {
       : `conceding about ${formatCentsExact(Math.abs(stats.avgUpliftCents))} against your favor`;
 
   return [
-    `${stats.partnerLabel} has closed ${stats.closes} of ${stats.decidedDeals} negotiated deals with you ` +
-      `(${stats.winRatePct}% win rate), typically ${directionClause} over ${stats.avgRounds} round(s) ` +
+    `${stats.partnerLabel} has closed ${stats.closes} of ${stats.decidedDeals} negotiations that reached a decision with you ` +
+      `(${stats.winRatePct}%), typically ${directionClause} over ${stats.avgRounds} round(s) ` +
       `and about ${stats.medianDaysToDecide} day(s) to decide.`,
     `Their current best pending bid is ${formatBestClause(stats.currentBestCents)} against your ask of ` +
       `${formatCentsExact(stats.askCents)} — counter at ${formatCentsExact(stats.suggestedCounterCents)}.`,

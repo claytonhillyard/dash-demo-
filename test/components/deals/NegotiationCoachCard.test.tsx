@@ -104,7 +104,8 @@ describe("NegotiationCoachCard — insufficient history", () => {
     render(<NegotiationCoachCard {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /coach me/i }));
 
-    expect(await screen.findByText(/Not enough history with Ginza Pearl yet \(1 closes\)/i)).toBeInTheDocument();
+    // Singular "close" — the count is pluralized (review nit).
+    expect(await screen.findByText(/Not enough history with Ginza Pearl yet \(1 close\)/i)).toBeInTheDocument();
     // What IS known: their best bid + our ask.
     expect(screen.getByText(/\$11,000\.00/)).toBeInTheDocument();
     expect(screen.getByText(/\$12,000\.00/)).toBeInTheDocument();
