@@ -263,7 +263,7 @@ These need answers before the relevant slices kick off. Either tab can propose; 
 | 39 | Predictive reorder via market triggers | core | proposed | open | Depends on inventory + market |
 | 40 | Replayable Decisions (snapshot + branch) | core | proposed | open | Big lift; possibly split |
 | 41 | Investor update auto-generator | core | shipped: `a2e622f` | this-tab | Read-only, no migration/deps. /company/projections card → one-page PDF: aggregates-only KPI grid (structural PII prevention) + AI narrative (deterministic simulated + painted banner when keyless). ~52 tests (1967 green). Review: approve, no blockers — first slice with zero code Criticals/Majors found. |
-| 42 | Negotiation Coach AI (in-thread) | core | proposed | open | Depends on 32/35/10/16 |
+| 42 | Negotiation Coach AI (in-thread) | core | claimed 2026-07-31 | **this tab** | Deals domain now OPEN (the other tab is dead — Clayton confirmed 2026-07-31). On-demand (button → action, not per-render) coaching in the bids tab: pure stats over prior decided bids with THIS partner + AI garnish w/ deterministic fallback. Read-only, owner-only. |
 | 43 | Team performance coaching | core | proposed | open | Depends on team / employee data |
 | 44 | Multi-modal search (image → match) | core | proposed | open | Depends on 34 Pinecone |
 | 45 | GIA/IGI cert lookup integration | aiya-jewelry | proposed | open | Module-specific |
