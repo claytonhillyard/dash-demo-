@@ -1517,3 +1517,144 @@ const DEMO_PDF_TEXT =
   "%%EOF";
 
 export const DEMO_PDF_BYTES: Uint8Array = new TextEncoder().encode(DEMO_PDF_TEXT);
+
+// --- Slice 42 demo seed: negotiation-coach partner bid history ---
+// Same pattern as DEMO_PAYMENTS/DEMO_DOCUMENTS — a TS constant, not
+// inserted at runtime; src/db/negotiation.ts short-circuits demo mode and
+// reads this filtered in-memory (there's no SQL to lean on for the seed).
+//
+// UNLIKE getBidsForDeal (which demo-branches to `[]`), this history feeds
+// the negotiation coach's stats directly, so it must be a REAL, verdict-
+// producing dataset (demo-is-canonical — see the loud comment on
+// getPartnerBidHistory in src/db/negotiation.ts for why the two demo
+// branches deliberately differ).
+//
+// Story: Mehta Diamonds (DEMO_PARTNER_ORG_IDS.MEHTA) has closed 3 prior
+// SELL deals with AIYA — varied uplift, 2-3 rounds each, every close a
+// reject-then-(re-bid-and-)accept sequence so avgRounds/medianDaysToDecide
+// are non-trivial. The demo's "current" deal is 109 (getSeedDeals() —
+// Mehta already has a pending bid there per DEMO_BIDS), so
+// getSeedPartnerBidHistory(AIYA, MEHTA, 109) returns exactly these rows.
+// dealId values 9801-9803 are synthetic "prior deal" references,
+// deliberately NOT rows in getSeedDeals(): this history feeds the coach's
+// aggregate stats only, never a deal detail page, so there is nothing for a
+// demo user to cross-reference and no risk of contradicting deal
+// 101/103/104's own seeded status.
+import type { PartnerBidRow } from "@/lib/negotiation/compute";
+
+export type DemoPartnerBidHistoryRow = PartnerBidRow & {
+  id: number;
+  ownerOrgId: number;
+  bidderOrgId: number;
+};
+
+export const DEMO_PARTNER_BID_HISTORY: DemoPartnerBidHistoryRow[] = [
+  // Close 1 (deal 9801): $10,800 rejected -> $11,400 accepted.
+  // uplift (SELL) = 1_140_000 - 1_080_000 = 60_000 ($600). 2 rounds.
+  {
+    id: 9701,
+    ownerOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    dealId: 9801,
+    dealKind: "SELL",
+    dealPriceCents: 1_150_000,
+    bidPriceCents: 1_080_000,
+    status: "rejected",
+    createdAt: HOURS_AGO(90 * 24),
+    decidedAt: HOURS_AGO(88 * 24),
+  },
+  {
+    id: 9702,
+    ownerOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    dealId: 9801,
+    dealKind: "SELL",
+    dealPriceCents: 1_150_000,
+    bidPriceCents: 1_140_000,
+    status: "accepted",
+    createdAt: HOURS_AGO(87 * 24),
+    decidedAt: HOURS_AGO(85 * 24),
+  },
+  // Close 2 (deal 9802): $25,500 rejected -> $26,800 rejected -> $27,600
+  // accepted. uplift = 2_760_000 - 2_550_000 = 210_000 ($2,100). 3 rounds —
+  // the toughest negotiation of the three.
+  {
+    id: 9703,
+    ownerOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    dealId: 9802,
+    dealKind: "SELL",
+    dealPriceCents: 2_800_000,
+    bidPriceCents: 2_550_000,
+    status: "rejected",
+    createdAt: HOURS_AGO(70 * 24),
+    decidedAt: HOURS_AGO(69 * 24),
+  },
+  {
+    id: 9704,
+    ownerOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    dealId: 9802,
+    dealKind: "SELL",
+    dealPriceCents: 2_800_000,
+    bidPriceCents: 2_680_000,
+    status: "rejected",
+    createdAt: HOURS_AGO(68 * 24),
+    decidedAt: HOURS_AGO(66 * 24),
+  },
+  {
+    id: 9705,
+    ownerOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    dealId: 9802,
+    dealKind: "SELL",
+    dealPriceCents: 2_800_000,
+    bidPriceCents: 2_760_000,
+    status: "accepted",
+    createdAt: HOURS_AGO(65 * 24),
+    decidedAt: HOURS_AGO(63 * 24),
+  },
+  // Close 3 (deal 9803): $5,800 rejected -> $6,050 accepted.
+  // uplift = 605_000 - 580_000 = 25_000 ($250). 2 rounds.
+  {
+    id: 9706,
+    ownerOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    dealId: 9803,
+    dealKind: "SELL",
+    dealPriceCents: 620_000,
+    bidPriceCents: 580_000,
+    status: "rejected",
+    createdAt: HOURS_AGO(40 * 24),
+    decidedAt: HOURS_AGO(39 * 24),
+  },
+  {
+    id: 9707,
+    ownerOrgId: DEMO_AIYA_ORG_ID,
+    bidderOrgId: DEMO_PARTNER_ORG_IDS.MEHTA,
+    dealId: 9803,
+    dealKind: "SELL",
+    dealPriceCents: 620_000,
+    bidPriceCents: 605_000,
+    status: "accepted",
+    createdAt: HOURS_AGO(38 * 24),
+    decidedAt: HOURS_AGO(36 * 24),
+  },
+];
+
+/** Demo-mode helper used by `getPartnerBidHistory` — filters
+ *  `DEMO_PARTNER_BID_HISTORY` by owner + bidder, excludes `excludeDealId`,
+ *  and strips the seed-only `id`/`ownerOrgId`/`bidderOrgId` fields down to
+ *  the bare `PartnerBidRow` shape (same stripping idiom as
+ *  `getSeedPaymentsByInvoiceId`). Any (ownerOrgId, bidderOrgId) pair
+ *  outside the authored Mehta/AIYA story returns `[]`, same as a real org
+ *  with no history. */
+export function getSeedPartnerBidHistory(
+  ownerOrgId: number,
+  bidderOrgId: number,
+  excludeDealId: number,
+): PartnerBidRow[] {
+  return DEMO_PARTNER_BID_HISTORY.filter(
+    (r) => r.ownerOrgId === ownerOrgId && r.bidderOrgId === bidderOrgId && r.dealId !== excludeDealId,
+  ).map(({ id: _id, ownerOrgId: _ownerOrgId, bidderOrgId: _bidderOrgId, ...row }) => row);
+}
