@@ -6,6 +6,7 @@ export const AI_FEATURES = [
   "health-score", // slice 36
   "drafting", // slice 37
   "investor-update", // slice 41
+  "negotiation-coach", // slice 42
   "smoke-test", // diagnostics / tests
 ] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
