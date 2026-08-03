@@ -25,6 +25,14 @@ export type DealThreadAccordionProps = {
    * pass it explicitly so non-posters never see an input.
    */
   canPost?: boolean;
+  /**
+   * The deal's BUY/SELL kind (slice 42). Required — threaded straight
+   * through to DealBidsTab, which needs it to pick the negotiation coach
+   * card's "leading bidder" (SELL wants the highest pending price, BUY the
+   * lowest); there's no safe default to fall back to, so every caller must
+   * supply the deal's real kind rather than guess.
+   */
+  dealKind: "BUY" | "SELL";
   /** Server actions, passed in so the component is testable without next/server. */
   actions: {
     postMessage: (input: { dealId: number; body: string }) => Promise<
@@ -155,6 +163,7 @@ export function DealThreadAccordion(props: DealThreadAccordionProps) {
           viewerOrgId={props.viewerOrgId}
           isOwner={props.isOwner}
           currentBidMode={props.currentBidMode ?? null}
+          dealKind={props.dealKind}
           bids={props.bids ?? []}
           actions={props.bidActions ?? defaultBidActions}
         />

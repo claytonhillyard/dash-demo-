@@ -219,6 +219,7 @@ export function DealRoomPanel({
                   viewerOrgId={viewer}
                   isOwner={isOwner}
                   currentMode={ownerThreadMode}
+                  dealKind={d.kind}
                   messages={threadMessages}
                   canPost={canPost}
                   actions={{

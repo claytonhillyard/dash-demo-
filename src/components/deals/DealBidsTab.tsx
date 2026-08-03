@@ -3,6 +3,7 @@
 import { useState, useTransition, useMemo } from "react";
 import type { BidView } from "@/db/bids";
 import { formatPrice, relativeTime } from "@/lib/format/bids";
+import { NegotiationCoachCard } from "./NegotiationCoachCard";
 
 export type DealBidsTabProps = {
   dealId: number;
@@ -10,6 +11,14 @@ export type DealBidsTabProps = {
   isOwner: boolean;
   /** Null when viewer is not the owner (mode selector hidden). */
   currentBidMode: "single" | "history" | null;
+  /**
+   * The deal's BUY/SELL kind (slice 42), threaded down from
+   * DealThreadAccordion (which gets it from DealRoomPanel's `deals` prop).
+   * Required, not defaulted: guessing wrong here silently inverts which
+   * bidder is "leading" (see pickLeadingBidder below), so every caller must
+   * supply the real value rather than fall back to a guess.
+   */
+  dealKind: "BUY" | "SELL";
   bids: BidView[];
   actions: {
     postBid: (input: {
@@ -34,9 +43,46 @@ function statusBadgeClass(status: BidView["status"]): string {
   }
 }
 
+/**
+ * The partner holding the best kind-aware PENDING bid on this deal — the
+ * negotiation coach card's subject (slice 42 spec, Task 42-3). SELL wants
+ * the highest price, BUY wants the lowest; a tie goes to whichever bid was
+ * placed earliest. `null` when there's nothing pending to coach against.
+ *
+ * Deliberately local to this component rather than reusing
+ * src/lib/negotiation/compute.ts's `pendingBest` — that helper ranks bare
+ * cents, not full bid rows (it doesn't know WHICH bidder placed the best
+ * price), and this component must stay off the compute/db import graph per
+ * NegotiationCoachCard's client-bundle rule.
+ */
+function pickLeadingBidder(
+  bids: BidView[],
+  dealKind: "BUY" | "SELL",
+): { bidderOrgId: number; bidderOrgLabel: string } | null {
+  const pendingBids = bids.filter((b) => b.status === "pending");
+  if (pendingBids.length === 0) return null;
+
+  const better = (a: BidView, b: BidView): BidView => {
+    if (a.priceCents !== b.priceCents) {
+      const aWins = dealKind === "SELL" ? a.priceCents > b.priceCents : a.priceCents < b.priceCents;
+      return aWins ? a : b;
+    }
+    // Tie on price — earliest createdAt wins.
+    return a.createdAt.getTime() <= b.createdAt.getTime() ? a : b;
+  };
+
+  const winner = pendingBids.reduce(better);
+  return { bidderOrgId: winner.bidderOrgId, bidderOrgLabel: winner.bidderOrgLabel };
+}
+
 export function DealBidsTab(props: DealBidsTabProps) {
   const [pending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const leadingBidder = useMemo(
+    () => pickLeadingBidder(props.bids, props.dealKind),
+    [props.bids, props.dealKind],
+  );
 
   const visibleBids = useMemo(() => {
     if (!props.isOwner || props.currentBidMode === "history") return props.bids;
@@ -81,6 +127,16 @@ export function DealBidsTab(props: DealBidsTabProps) {
 
       {actionError && (
         <p role="alert" className="text-xs text-rose-400 mb-2">{actionError}</p>
+      )}
+
+      {props.isOwner && leadingBidder && (
+        <div className="mb-3">
+          <NegotiationCoachCard
+            dealId={props.dealId}
+            leadBidderOrgId={leadingBidder.bidderOrgId}
+            leadBidderLabel={leadingBidder.bidderOrgLabel}
+          />
+        </div>
       )}
 
       {visibleBids.length === 0 ? (
